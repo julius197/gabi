@@ -9,6 +9,10 @@
   // ==========================================================
   const lokal = ["localhost", "127.0.0.1"].includes(location.hostname);
   const API = (window.GABI_CONFIG && window.GABI_CONFIG.apiUrl ? window.GABI_CONFIG.apiUrl : "").replace(/\/+$/, "");
+  // Demo-Modus: ?demo=1 oder kein Backend erreichbar/eingerichtet → alles lokal mit Beispieldaten (demo.js)
+  const DEMO_PARAM = new URLSearchParams(location.search).get("demo") === "1";
+  const modus = { demo: false, grund: "" };
+  let demoApi = null;
   const ABSCHNITTE = [
     ["befund", "Befund", "Untersuchung, Tests, Schmerz, Beobachtung"],
     ["massnahmen", "Maßnahmen", "Was in der Behandlung gemacht wurde"],
@@ -18,6 +22,8 @@
   const MIN_DAUER_MS = 800;
   const MAX_DAUER_S = 300;
   const SPEICHER = { zugang: "gabi.zugang", patient: "gabi.patient", entwurf: "gabi.entwurf" };
+  /** Speicher-Schlüssel – im Demo-Modus getrennt, damit Beispieldaten nie in echte Entwürfe geraten. */
+  const schluessel = (name) => (modus.demo ? `${SPEICHER[name]}.demo` : SPEICHER[name]);
 
   const $ = (sel, wurzel = document) => wurzel.querySelector(sel);
   const el = {
@@ -33,6 +39,8 @@
     entwurfTranskript: $("#entwurf-transkript"), speichern: $("#speichern"), verwerfen: $("#verwerfen"),
     ordnerBox: $("#ordner"), suche: $("#suche"), ordnerKopf: $("#ordner-kopf"), ordnerListe: $("#ordner-liste"), leser: $("#leser"),
     toasts: $("#toasts"),
+    demoBanner: $("#demobanner"), demoText: $("#demo-text"), demoZuruecksetzen: $("#demo-zuruecksetzen"),
+    demoVerbinden: $("#demo-verbinden"), demoBeenden: $("#demo-beenden"), demoDiktat: $("#demo-diktat"),
     dialogFrage: $("#dialog-frage"), frageTitel: $("#frage-titel"), frageText: $("#frage-text"), frageJa: $("#frage-ja"), frageNein: $("#frage-nein"),
   };
 
@@ -96,6 +104,10 @@
   class Abbruch extends Error {}
 
   async function api(pfad, { methode = "GET", body, text, code = zugang } = {}) {
+    if (modus.demo) {
+      try { return await demoApi.anfrage(pfad, { methode, body, text }); }
+      catch (e) { throw new Error((e && e.message) || "Fehler im Demo-Modus."); }
+    }
     const headers = { "X-Gabi-Zugang": code };
     let inhalt;
     if (text !== undefined) { headers["Content-Type"] = "text/plain"; inhalt = text; }
@@ -173,7 +185,7 @@
   }
 
   function patientenAuswahl() {
-    const gewaehlt = entwurf.patientId || speicherLesen(localStorage, SPEICHER.patient) || "";
+    const gewaehlt = entwurf.patientId || speicherLesen(localStorage, schluessel("patient")) || "";
     el.patientWahl.innerHTML = "";
     const leer = new Option(patienten.length ? "Bitte wählen …" : "Noch kein Test-Patient – „Neu“", "");
     el.patientWahl.append(leer);
@@ -185,7 +197,7 @@
 
   el.patientWahl.addEventListener("change", () => {
     entwurf.patientId = el.patientWahl.value;
-    speicherSchreiben(localStorage, SPEICHER.patient, entwurf.patientId || null);
+    speicherSchreiben(localStorage, schluessel("patient"), entwurf.patientId || null);
     entwurfMerken();
     knoepfeAktualisieren();
   });
@@ -409,6 +421,23 @@
   el.ptt.addEventListener("click", (e) => e.preventDefault());
   window.addEventListener("blur", () => aufnahmeStoppen());
 
+  // Demo-Modus: Beispieldiktat ohne Mikrofon (gleicher Ablauf wie nach einer Aufnahme)
+  el.demoDiktat.addEventListener("click", () => {
+    if (!modus.demo) return;
+    offeneTranskripte++;
+    entwurfZeigen();
+    statusSetzen("Sprache wird erkannt …", "laeuft");
+    stationSetzen("bereit", bereitText());
+    kette = kette
+      .then(async () => { const d = await demoApi.beispielDiktat(); transkriptAnhaengen(d.text); })
+      .catch((e) => fehlerZeigen(e, "Spracherkennung: "))
+      .finally(() => {
+        offeneTranskripte--;
+        if (aufnahme.phase === "bereit") stationSetzen("bereit", bereitText());
+        if (offeneTranskripte === 0) nachTranskript();
+      });
+  });
+
   // ==========================================================
   // 6 Audio → WAV (16 kHz mono) → Base64: läuft in jedem Browser gleich, Whisper liest es sicher
   // ==========================================================
@@ -502,12 +531,12 @@
 
   function entwurfMerken() {
     const { patientId, rohtext, strukturiert, manuell } = entwurf;
-    speicherSchreiben(sessionStorage, SPEICHER.entwurf, rohtext || strukturiert ? JSON.stringify({ patientId, rohtext, strukturiert, manuell }) : null);
+    speicherSchreiben(sessionStorage, schluessel("entwurf"), rohtext || strukturiert ? JSON.stringify({ patientId, rohtext, strukturiert, manuell }) : null);
   }
 
   function entwurfLaden() {
     try {
-      const d = JSON.parse(speicherLesen(sessionStorage, SPEICHER.entwurf) || "null");
+      const d = JSON.parse(speicherLesen(sessionStorage, schluessel("entwurf")) || "null");
       if (d && (d.rohtext || d.strukturiert)) Object.assign(entwurf, d, { version: 1, strukturVersion: d.strukturiert ? 1 : 0 });
     } catch { /* kaputt */ }
   }
@@ -948,13 +977,65 @@
     route();
   }
 
-  window.addEventListener("hashchange", route);
-  if (!API && !lokal) {
-    zugangZeigen("Server-Adresse fehlt (config.js). Bitte Einrichtung prüfen.");
-    el.zugangKnopf.disabled = true;
-  } else if (zugang) {
-    starten();
-  } else {
-    zugangZeigen();
+  // ---------- Backend prüfen → normal oder Demo ----------
+  const DEMO_TEXTE = {
+    param: "Beispieldaten, nur in diesem Browser – nichts wird an einen Server gesendet.",
+    "nicht-erreichbar": "Server nicht erreichbar. Beispieldaten, nur in diesem Browser – nichts wird gesendet.",
+    "nicht-eingerichtet": "Server noch nicht eingerichtet. Beispieldaten, nur in diesem Browser – nichts wird gesendet.",
+    "keine-adresse": "Server-Adresse fehlt (config.js). Beispieldaten, nur in diesem Browser.",
+  };
+
+  async function backendPruefen() {
+    if (DEMO_PARAM) return "param";
+    if (!API && !lokal) return "keine-adresse";
+    const abbruch = new AbortController();
+    const uhr = setTimeout(() => abbruch.abort(), 6000);
+    try {
+      const r = await fetch(`${API}/api/status`, { cache: "no-store", signal: abbruch.signal });
+      if (!r.ok) return "nicht-erreichbar";
+      const d = (await r.json()) || {};
+      const e = d.eingerichtet || {};
+      // ältere Worker-Versionen kennen „bereit“ noch nicht
+      const bereit = typeof d.bereit === "boolean" ? d.bereit : Boolean(e.zugang && e.supabase);
+      return bereit ? "" : "nicht-eingerichtet";
+    } catch {
+      return "nicht-erreichbar";
+    } finally {
+      clearTimeout(uhr);
+    }
   }
+
+  function demoStarten(grund) {
+    modus.demo = true;
+    modus.grund = grund;
+    demoApi = window.GabiDemo.erstelleApi();
+    zugang = "demo"; // kein Zugangscode im Demo-Modus (wird nicht gespeichert)
+    document.body.classList.add("demo");
+    el.demoText.textContent = DEMO_TEXTE[grund] || DEMO_TEXTE.param;
+    el.demoVerbinden.hidden = grund === "param" || grund === "keine-adresse";
+    el.demoBeenden.hidden = grund !== "param";
+    el.demoBanner.hidden = false;
+    el.demoDiktat.hidden = false;
+    starten();
+  }
+
+  el.demoZuruecksetzen.addEventListener("click", async () => {
+    if (!(await frage("Beispieldaten zurücksetzen?", "Alle Demo-Patienten und -Notizen in diesem Browser werden auf den Anfang zurückgesetzt.", "Zurücksetzen"))) return;
+    demoApi.zuruecksetzen();
+    entwurfLeeren();
+    ordner.notiz = null;
+    toast("Beispieldaten zurückgesetzt.");
+    if (location.hash.startsWith("#/ordner/")) location.hash = "#/ordner"; else route();
+  });
+  el.demoVerbinden.addEventListener("click", () => location.reload());
+  el.demoBeenden.addEventListener("click", () => {
+    location.href = `${location.pathname}${location.hash}`;
+  });
+
+  window.addEventListener("hashchange", route);
+  backendPruefen().then((grund) => {
+    if (grund) demoStarten(grund);
+    else if (zugang) starten();
+    else zugangZeigen();
+  });
 })();

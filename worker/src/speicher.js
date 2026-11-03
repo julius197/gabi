@@ -48,6 +48,7 @@ export function supabaseSpeicher(env) {
   }
 
   return {
+    bereit: () => Boolean(url && schluessel),
     async patienten() {
       const zeilen = await anfrage("patients_test?select=id,kuerzel,pseudonym,erstellt_am,notes(count)&order=kuerzel.asc");
       return zeilen.map(({ notes, ...p }) => ({ ...p, anzahl: notes?.[0]?.count ?? 0 }));
@@ -97,6 +98,7 @@ export function arbeitsspeicher() {
     return { ...rest, kuerzel: p.kuerzel || "", pseudonym: p.pseudonym || "" };
   };
   return {
+    bereit: () => true,
     async patienten() {
       return [...patienten.values()]
         .sort((a, b) => a.kuerzel.localeCompare(b.kuerzel))

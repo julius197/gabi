@@ -14,6 +14,14 @@
 </head>
 <body>
   <div class="testbanner" role="note"><strong>Testversion</strong> – nur Testdaten verwenden</div>
+  <div class="demobanner" id="demobanner" role="status" hidden>
+    <p><strong>Demo-Modus</strong> · <span id="demo-text"></span></p>
+    <div class="demobanner-knoepfe">
+      <button class="knopf klein" type="button" id="demo-zuruecksetzen">Beispieldaten zurücksetzen</button>
+      <button class="knopf klein" type="button" id="demo-verbinden" hidden>Erneut verbinden</button>
+      <button class="knopf klein" type="button" id="demo-beenden" hidden>Demo beenden</button>
+    </div>
+  </div>
 
   <header class="leiste">
     <a class="marke" href="#/aufnahme" aria-label="Gabi – zur Aufnahme">
@@ -69,6 +77,7 @@
         </div>
         <div class="zeit" id="zeit">0:00</div>
         <p class="station-fuss">Loslassen = Text erkennen. Nochmals drücken ergänzt die Notiz.</p>
+        <button class="knopf klein hell" type="button" id="demo-diktat" hidden>Ohne Mikrofon: Beispieldiktat einfügen</button>
       </div>
 
       <div class="entwurf-leer" id="entwurf-leer" aria-hidden="true">Hier erscheint die Notiz:<br>Befund · Maßnahmen · Verlauf · Hausaufgaben</div>
@@ -145,6 +154,7 @@
 
   <script src="config.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="demo.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

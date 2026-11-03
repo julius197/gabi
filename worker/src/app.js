@@ -80,9 +80,12 @@ export function erstelleApp({ speicher, transkribieren, strukturieren }) {
     const m = request.method;
 
     if (pfad === "/api/status" && m === "GET") {
+      const datenbank = typeof speicher.bereit === "function" ? speicher.bereit() : true;
       return json({
         ok: true,
         version: VERSION,
+        // bereit = Zugangscode und Datenbank eingerichtet; sonst startet die Oberfläche im Demo-Modus
+        bereit: Boolean(env.GABI_ZUGANGSCODE) && datenbank,
         eingerichtet: {
           zugang: Boolean(env.GABI_ZUGANGSCODE),
           anthropic: Boolean(env.ANTHROPIC_API_KEY),
