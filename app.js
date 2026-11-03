@@ -40,7 +40,7 @@
     entwurf: $("#entwurf"), entwurfStatus: $("#entwurf-status"), neuHinweis: $("#neu-hinweis"),
     entwurfAbschnitte: $("#entwurf-abschnitte"), entwurfUnklar: $("#entwurf-unklar"), entwurfRoh: $("#entwurf-roh"),
     entwurfTranskript: $("#entwurf-transkript"), speichern: $("#speichern"), verwerfen: $("#verwerfen"),
-    ordnerBox: $("#ordner"), suche: $("#suche"), ordnerKopf: $("#ordner-kopf"), ordnerListe: $("#ordner-liste"), leser: $("#leser"),
+    ordnerBox: $("#ordner"), suche: $("#suche"), sortierung: $("#sortierung"), sortierungFeld: $("#sortierung-feld"), ordnerKopf: $("#ordner-kopf"), ordnerListe: $("#ordner-liste"), leser: $("#leser"),
     toasts: $("#toasts"),
     demoBanner: $("#demobanner"), demoText: $("#demo-text"), demoZuruecksetzen: $("#demo-zuruecksetzen"),
     demoVerbinden: $("#demo-verbinden"), demoBeenden: $("#demo-beenden"), demoDiktat: $("#demo-diktat"),
@@ -646,7 +646,7 @@
   window.addEventListener("blur", () => aufnahmeStoppen());
   document.addEventListener("visibilitychange", () => { if (document.hidden) aufnahmeStoppen(); });
   window.addEventListener("beforeunload", (e) => {
-    const offen = aufnahme.phase !== "bereit" || offeneTranskripte > 0 || strukturLaeuft || speichertGerade;
+    const offen = aufnahme.phase !== "bereit" || offeneTranskripte > 0 || strukturLaeuft || speichertGerade || (ordner.bearbeiten && ordner.geaendert);
     if (offen) { e.preventDefault(); e.returnValue = ""; }
   });
 
@@ -879,8 +879,12 @@
     strukturieren();
   });
 
+  function entwurfHatInhalt() {
+    return Boolean(entwurf.rohtext.trim()) || Boolean(entwurf.strukturiert && ABSCHNITTE.some(([k]) => (entwurf.strukturiert[k] || []).length));
+  }
+
   function knoepfeAktualisieren() {
-    const hatInhalt = Boolean(entwurf.rohtext.trim()) || Boolean(entwurf.strukturiert && ABSCHNITTE.some(([k]) => entwurf.strukturiert[k].length));
+    const hatInhalt = entwurfHatInhalt();
     el.speichern.disabled = !hatInhalt || strukturLaeuft || offeneTranskripte > 0 || speichertGerade;
     const p = patienten.find((x) => x.id === entwurf.patientId);
     el.speichern.textContent = speichertGerade ? "Wird gespeichert …" : p ? `Speichern bei ${p.kuerzel}` : "Speichern";
@@ -939,46 +943,78 @@
   });
 
   // ==========================================================
-  // 8 Notizordner: Patienten → Notizen → Detail, Suche, Bearbeiten
+  // 8 Notizordner: Patienten → Notizen → Detail · Suche · Sortierung · Bearbeiten · Löschen
   // ==========================================================
-  const ordner = { patientId: "", notizId: "", suche: "", notizen: [], notiz: null, bearbeiten: false };
+  const SORTIERUNG = "gabi.sortierung";
+  const ordner = {
+    patientId: "", notizId: "", suche: "", notizen: [], notiz: null,
+    bearbeiten: false, geaendert: false, beschaeftigt: false,
+    sortierung: speicherLesen(localStorage, SORTIERUNG) === "alt" ? "alt" : "neu",
+  };
   const PFEIL = '<svg class="eintrag-pfeil" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   const ZURUECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+  el.sortierung.value = ordner.sortierung;
 
   function notizTitel(n) {
     const s = n.strukturiert || {};
     return (s.befund && s.befund[0]) || (s.massnahmen && s.massnahmen[0]) || (s.verlauf && s.verlauf[0]) || (s.hausaufgaben && s.hausaufgaben[0]) || "(ohne Inhalt)";
   }
 
+  function sortiert(liste) {
+    const richtung = ordner.sortierung === "alt" ? 1 : -1;
+    return [...liste].sort((a, b) => (a.erstellt_am < b.erstellt_am ? -richtung : a.erstellt_am > b.erstellt_am ? richtung : 0));
+  }
+
+  /** Leerer Zustand mit Erklärung und – wo sinnvoll – einem nächsten Schritt. */
+  function leerHtml(text, knopf) {
+    return `<div class="ordner-nichts"><p>${esc(text)}</p>${knopf ? `<button class="knopf klein" type="button" ${knopf.attr}>${esc(knopf.text)}</button>` : ""}</div>`;
+  }
+
   function notizListeHtml(liste, mitKuerzel) {
-    if (!liste.length) return `<p class="ordner-nichts">${ordner.suche ? "Keine Notiz gefunden." : "Noch keine Notizen."}</p>`;
-    return liste.map((n) => `
+    return sortiert(liste).map((n) => `
       <a class="eintrag${n.id === ordner.notizId ? " aktiv" : ""}" href="#/ordner/n/${n.id}">
         <span class="eintrag-titel">${esc(notizTitel(n))}</span>
-        <span class="eintrag-unter">${mitKuerzel ? `${esc(n.kuerzel)} · ` : ""}${esc(zeitText(n.erstellt_am))}${n.strukturiert && n.strukturiert.unklar && n.strukturiert.unklar.length ? " · unklare Stellen" : ""}</span>
+        <span class="eintrag-unter">${mitKuerzel ? `${esc(n.kuerzel)} · ` : ""}${esc(zeitText(n.erstellt_am))}${n.geaendert_am ? " · bearbeitet" : ""}${n.strukturiert && n.strukturiert.unklar && n.strukturiert.unklar.length ? " · unklare Stellen" : ""}</span>
         <span class="eintrag-rechts">${PFEIL}</span>
       </a>`).join("");
   }
 
+  const suchwoerterAnzahl = (q) => String(q || "").toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/\s+/).filter((w) => w.replace(/^-+|-+$/g, "").length >= 2).length;
+
   async function ordnerListeZeigen() {
     const box = el.ordnerListe;
+    el.sortierungFeld.hidden = !(ordner.suche || ordner.patientId);
     try {
       if (ordner.suche) {
-        el.ordnerKopf.innerHTML = `<h2>Suchergebnis</h2>`;
-        const d = await api(`/api/notizen?q=${encodeURIComponent(ordner.suche)}`);
+        if (!suchwoerterAnzahl(ordner.suche)) {
+          el.ordnerKopf.innerHTML = `<h2>Suche</h2>`;
+          box.innerHTML = leerHtml("Bitte mindestens 2 Buchstaben eingeben.");
+          return;
+        }
+        el.ordnerKopf.innerHTML = `<h2>Suche …</h2>`;
+        const q = ordner.suche;
+        const d = await api(`/api/notizen?q=${encodeURIComponent(q)}`);
+        if (q !== ordner.suche) return; // inzwischen weitergetippt
         ordner.notizen = d.notizen;
         el.ordnerKopf.innerHTML = `<h2>${d.notizen.length} ${d.notizen.length === 1 ? "Notiz" : "Notizen"} gefunden</h2>`;
-        box.innerHTML = notizListeHtml(d.notizen, true);
+        box.innerHTML = d.notizen.length
+          ? notizListeHtml(d.notizen, true)
+          : leerHtml(`Keine Notiz zu „${q}“ gefunden.`, { text: "Suche löschen", attr: 'data-ordner="suche-loeschen"' });
       } else if (ordner.patientId) {
         if (!patienten.length) await patientenLaden();
         const p = patienten.find((x) => x.id === ordner.patientId);
-        el.ordnerKopf.innerHTML = `<a class="zurueck" href="#/ordner">${ZURUECK}Alle Test-Patienten</a><span class="chip gruen">${esc(p ? p.kuerzel : "")}</span>`;
         const d = await api(`/api/notizen?patient_id=${encodeURIComponent(ordner.patientId)}`);
         ordner.notizen = d.notizen;
-        box.innerHTML = notizListeHtml(d.notizen, false);
+        el.ordnerKopf.innerHTML = `
+          <a class="zurueck" href="#/ordner">${ZURUECK}Alle Test-Patienten</a>
+          <span class="ordner-kopf-rechts"><span class="chip gruen">${esc(p ? p.kuerzel : "")}</span>
+          <button class="knopf klein" type="button" data-ordner="aufnehmen">+ Notiz</button></span>`;
+        box.innerHTML = d.notizen.length
+          ? notizListeHtml(d.notizen, false)
+          : leerHtml(`Für ${p ? p.kuerzel : "diesen Test-Patienten"} gibt es noch keine Notiz.`, { text: "Notiz aufnehmen", attr: 'data-ordner="aufnehmen"' });
       } else {
         await patientenLaden();
-        el.ordnerKopf.innerHTML = `<h2>Test-Patienten</h2>`;
+        el.ordnerKopf.innerHTML = `<h2>Test-Patienten${patienten.length ? ` (${patienten.length})` : ""}</h2>`;
         box.innerHTML = patienten.length
           ? patienten.map((p) => `
             <a class="eintrag" href="#/ordner/p/${p.id}">
@@ -986,13 +1022,40 @@
               <span class="eintrag-unter">${p.anzahl} ${p.anzahl === 1 ? "Notiz" : "Notizen"}</span>
               <span class="eintrag-rechts">${PFEIL}</span>
             </a>`).join("")
-          : `<p class="ordner-nichts">Noch kein Test-Patient. In „Aufnahme“ über „Neu“ anlegen.</p>`;
+          : leerHtml("Noch kein Test-Patient angelegt.", { text: "Test-Patient anlegen", attr: 'data-ordner="patient-neu"' });
       }
     } catch (e) {
       fehlerZeigen(e);
-      box.innerHTML = `<p class="ordner-nichts">Konnte nicht geladen werden.</p>`;
+      box.innerHTML = leerHtml("Konnte nicht geladen werden.", { text: "Nochmal versuchen", attr: 'data-ordner="neu-laden"' });
     }
   }
+
+  // Knöpfe in leeren Zuständen und im Kopf
+  el.ordnerBox.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ordner]");
+    if (!b) return;
+    const was = b.dataset.ordner;
+    if (was === "suche-loeschen") { el.suche.value = ""; ordner.suche = ""; ordnerListeZeigen(); el.suche.focus(); }
+    else if (was === "neu-laden") ordnerListeZeigen();
+    else if (was === "patient-neu") { location.hash = "#/aufnahme"; setTimeout(() => el.patientNeu.click(), 50); }
+    else if (was === "aufnehmen") {
+      const id = ordner.patientId;
+      if (entwurfHatInhalt() && entwurf.patientId && entwurf.patientId !== id) {
+        toast("Es gibt noch einen offenen Entwurf – bitte erst speichern oder verwerfen.", "warn", 5000);
+      } else {
+        entwurf.patientId = id;
+        speicherSchreiben(localStorage, schluessel("patient"), id);
+        entwurfMerken();
+      }
+      location.hash = "#/aufnahme";
+    }
+  });
+
+  el.sortierung.addEventListener("change", () => {
+    ordner.sortierung = el.sortierung.value === "alt" ? "alt" : "neu";
+    speicherSchreiben(localStorage, SORTIERUNG, ordner.sortierung);
+    if (ordner.notizen.length) el.ordnerListe.innerHTML = notizListeHtml(ordner.notizen, Boolean(ordner.suche));
+  });
 
   function abschnittLeseHtml(titel, punkte) {
     return `<section class="leser-abschnitt"><h3>${titel}</h3>${punkte && punkte.length
@@ -1008,10 +1071,12 @@
         el.leser.innerHTML = `<p class="leser-leer">Lädt …</p>`;
         ordner.notiz = (await api(`/api/notizen/${encodeURIComponent(id)}`)).notiz;
         ordner.bearbeiten = false;
+        ordner.geaendert = false;
       }
     } catch (e) {
-      fehlerZeigen(e);
-      el.leser.innerHTML = `<p class="leser-leer">Notiz nicht gefunden.</p>`;
+      ordner.notiz = null;
+      el.leser.innerHTML = `<div class="leser-leer"><p>Notiz nicht gefunden – vielleicht wurde sie gelöscht.</p><a class="zurueck" href="#/ordner">${ZURUECK}Zum Notizordner</a></div>`;
+      if (!/nicht gefunden/i.test(e.message)) fehlerZeigen(e);
       return;
     }
     const n = ordner.notiz;
@@ -1024,6 +1089,7 @@
       </div>`;
     if (ordner.bearbeiten) {
       el.leser.innerHTML = `${kopf}
+        <p class="bearbeiten-hinweis">Bearbeiten: ein Stichpunkt pro Zeile.</p>
         <div class="abschnitte" id="bearbeiten-abschnitte">${ABSCHNITTE.map(([key, titel, hilfe]) => `
           <div class="abschnitt"><span class="abschnitt-titel"><h3>${titel}</h3><small>${hilfe}</small></span>
           <textarea data-abschnitt="${key}" aria-label="${titel}" rows="${Math.max(2, (s[key] || []).length + 1)}" placeholder="– nichts notiert –">${esc((s[key] || []).join("\n"))}</textarea></div>`).join("")}
@@ -1047,32 +1113,49 @@
     unklarZeigen($("#leser-unklar", el.leser), s.unklar);
   }
 
+  /** Ungespeicherte Änderungen verwerfen? (true = weiter) */
+  async function bearbeitenVerlassen() {
+    if (!ordner.bearbeiten || !ordner.geaendert) return true;
+    const ok = await frage("Änderungen verwerfen?", "Sie haben die Notiz geändert, aber noch nicht gespeichert.", "Verwerfen");
+    if (ok) { ordner.bearbeiten = false; ordner.geaendert = false; }
+    return ok;
+  }
+
+  el.leser.addEventListener("input", (e) => {
+    if (ordner.bearbeiten && e.target.matches("textarea")) ordner.geaendert = true;
+  });
+
   el.leser.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-leser]");
-    if (!b || !ordner.notiz) return;
+    if (!b || !ordner.notiz || ordner.beschaeftigt) return;
     const n = ordner.notiz;
     const was = b.dataset.leser;
     if (was === "pdf") return pdfExport(n);
-    if (was === "bearbeiten") { ordner.bearbeiten = true; return notizZeigen(); }
-    if (was === "abbrechen") { ordner.bearbeiten = false; return notizZeigen(); }
+    if (was === "bearbeiten") { ordner.bearbeiten = true; ordner.geaendert = false; await notizZeigen(); $("#bearbeiten-abschnitte textarea", el.leser)?.focus(); return; }
+    if (was === "abbrechen") { if (await bearbeitenVerlassen()) { ordner.bearbeiten = false; notizZeigen(); } return; }
     if (was === "sichern") {
       const strukturiert = { ...ausFeldern($("#bearbeiten-abschnitte", el.leser)), unklar: (n.strukturiert && n.strukturiert.unklar) || [] };
+      ordner.beschaeftigt = true; // kein doppeltes Absenden
       b.classList.add("laedt");
       try {
         const d = await api(`/api/notizen/${n.id}`, { methode: "PATCH", body: { strukturiert, rohtext: $("#bearbeiten-roh", el.leser).value } });
         ordner.notiz = d.notiz;
         ordner.bearbeiten = false;
+        ordner.geaendert = false;
         await notizZeigen();
         ordnerListeZeigen();
         toast("Änderungen gespeichert.", "erfolg");
       } catch (err) {
         fehlerZeigen(err, "Speichern: ");
         b.classList.remove("laedt");
+      } finally {
+        ordner.beschaeftigt = false;
       }
       return;
     }
     if (was === "loeschen") {
-      if (!(await frage("Notiz löschen?", `Die Notiz vom ${DATUM.format(new Date(n.erstellt_am))} (${n.kuerzel}) wird endgültig gelöscht.`, "Löschen"))) return;
+      if (!(await frage("Notiz löschen?", `Die Notiz vom ${DATUM.format(new Date(n.erstellt_am))} (${n.kuerzel}) wird endgültig gelöscht. Das lässt sich nicht rückgängig machen.`, "Löschen"))) return;
+      ordner.beschaeftigt = true;
       try {
         await api(`/api/notizen/${n.id}`, { methode: "DELETE" });
         ordner.notiz = null;
@@ -1080,6 +1163,8 @@
         location.hash = `#/ordner/p/${n.patient_id}`;
       } catch (err) {
         fehlerZeigen(err, "Löschen: ");
+      } finally {
+        ordner.beschaeftigt = false;
       }
     }
   });
@@ -1091,6 +1176,9 @@
       ordner.suche = el.suche.value.trim();
       ordnerListeZeigen();
     }, 300);
+  });
+  el.suche.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && el.suche.value) { el.suche.value = ""; ordner.suche = ""; ordnerListeZeigen(); }
   });
 
   // ==========================================================
@@ -1110,8 +1198,19 @@
   // ==========================================================
   // 10 Navigation und Start
   // ==========================================================
-  function route() {
+  let letzterHash = location.hash;
+  let routeLaeuft = false;
+
+  async function route() {
     if (!zugang) return zugangZeigen();
+    // Ungespeicherte Bearbeitung: erst fragen, sonst zurück zur Notiz (ohne neuen Seitenwechsel)
+    if (ordner.bearbeiten && ordner.geaendert && location.hash !== letzterHash && !routeLaeuft) {
+      routeLaeuft = true;
+      const weiter = await bearbeitenVerlassen();
+      routeLaeuft = false;
+      if (!weiter) { history.replaceState(null, "", letzterHash || "#/ordner"); return; }
+    }
+    letzterHash = location.hash;
     const teile = location.hash.replace(/^#\/?/, "").split("/");
     const ansicht = teile[0] === "ordner" ? "ordner" : "aufnahme";
     el.zugang.hidden = true;

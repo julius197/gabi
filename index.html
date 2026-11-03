@@ -124,6 +124,13 @@
           <label class="unsichtbar" for="suche">Suche in allen Notizen</label>
           <input class="suche" id="suche" type="search" placeholder="Suche in allen Notizen" autocomplete="off" enterkeyhint="search">
           <div class="ordner-kopf" id="ordner-kopf"></div>
+          <label class="sortierung" id="sortierung-feld" hidden>
+            <span>Sortieren:</span>
+            <select id="sortierung" class="auswahl klein">
+              <option value="neu">Neueste zuerst</option>
+              <option value="alt">Älteste zuerst</option>
+            </select>
+          </label>
           <div class="ordner-liste" id="ordner-liste"></div>
         </aside>
         <article class="leser" id="leser"></article>

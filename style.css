@@ -278,11 +278,15 @@ mark.unklar { padding: 0 3px; border-radius: 4px; background: var(--gelb); color
 .eintrag-rechts { grid-row: 1 / span 2; grid-column: 2; }
 .eintrag-zusatz { font-weight: 500; color: var(--text-3); }
 .eintrag-pfeil { width: 18px; height: 18px; fill: none; stroke: var(--text-3); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.ordner-nichts { padding: 24px 12px; font-size: 15px; color: var(--text-3); text-align: center; }
+.ordner-nichts { display: grid; justify-items: center; gap: 12px; padding: 24px 12px; font-size: 15px; color: var(--text-3); text-align: center; }
+.ordner-kopf-rechts { display: inline-flex; align-items: center; gap: 8px; }
+.sortierung { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 14px; color: var(--text-2); }
+.auswahl.klein { width: auto; height: 36px; padding: 0 32px 0 10px; font-size: 14px; background-position: calc(100% - 17px) 50%, calc(100% - 11px) 50%; }
+.bearbeiten-hinweis { font-size: 14px; color: var(--text-3); }
 
 .leser { display: grid; gap: 16px; align-content: start; padding: 18px 16px; border: 1px solid var(--linie); border-radius: var(--r-gross); background: var(--weiss); }
 .leser:empty { display: none; }
-.leser-leer { display: grid; place-items: center; min-height: 240px; color: var(--text-3); text-align: center; font-size: 15px; }
+.leser-leer { display: grid; place-items: center; align-content: center; gap: 10px; min-height: 240px; color: var(--text-3); text-align: center; font-size: 15px; }
 .leser-kopf { display: grid; gap: 4px; }
 .leser-titel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .leser-zeit { font-size: 14px; color: var(--text-3); }
