@@ -140,7 +140,7 @@
     const aus = [];
     for (const w of werte) {
       if (typeof w !== "string" && typeof w !== "number") continue;
-      const t = glatt(w).replace(/^[-•*–]\s*/, "").trim().slice(0, 600);
+      const t = glatt(w).replace(/^[-•*–]\s*/, "").replace(/[([]\s*unklar\s*[)\]]/gi, "(unklar)").trim().slice(0, 600);
       const k = t.toLowerCase().replace(/[.;,]+$/, "");
       if (!t || gesehen.has(k)) continue;
       gesehen.add(k);
