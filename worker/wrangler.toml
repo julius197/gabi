@@ -1,0 +1,18 @@
+# Gabi-API (Cloudflare Worker)
+# Secrets NICHT hier eintragen – nur per `npx wrangler secret put NAME` (siehe README).
+name = "gabi-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Spracherkennung (Whisper) über Workers AI – kein eigener Schlüssel nötig
+[ai]
+binding = "AI"
+
+[vars]
+ERLAUBTE_ORIGINS = "https://gabi.automatilabs.de,http://localhost:8788,http://127.0.0.1:8788"
+ANTHROPIC_MODELL = "claude-opus-5-5"
+ANTHROPIC_EFFORT = "low"
+
+[observability]
+enabled = false

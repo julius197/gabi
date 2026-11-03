@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://*.workers.dev; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#232C33">
+  <title>Gabi – PhysioWorks (Testversion)</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="testbanner" role="note"><strong>Testversion</strong> – nur Testdaten verwenden</div>
+
+  <header class="leiste">
+    <a class="marke" href="#/aufnahme" aria-label="Gabi – zur Aufnahme">
+      <span class="marke-name">Gabi<span class="marke-punkt">.</span></span>
+      <span class="marke-praxis">PhysioWorks</span>
+    </a>
+    <nav class="ansichten" id="ansichten" aria-label="Bereiche" hidden>
+      <a class="ansicht" data-ansicht="aufnahme" href="#/aufnahme">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        <span>Aufnahme</span>
+      </a>
+      <a class="ansicht" data-ansicht="ordner" href="#/ordner">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Notizordner</span>
+      </a>
+    </nav>
+  </header>
+
+  <main class="app">
+    <!-- Zugang -->
+    <section class="zugang" id="ansicht-zugang" hidden>
+      <form class="karte zugang-karte" id="zugang-form" novalidate>
+        <h1>Willkommen bei Gabi</h1>
+        <p class="karte-text">Sprachnotizen zur Behandlung – Testversion für PhysioWorks. Bitte den Zugangscode eingeben.</p>
+        <label class="feld gross">
+          <span>Zugangscode</span>
+          <input id="zugang-code" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" required>
+        </label>
+        <p class="feld-fehler" id="zugang-fehler" role="alert"></p>
+        <button class="knopf primaer gross voll" type="submit" id="zugang-knopf">Weiter</button>
+      </form>
+    </section>
+
+    <!-- Aufnahme -->
+    <section class="aufnahme-ansicht" id="ansicht-aufnahme" hidden>
+      <div class="patient-zeile">
+        <label class="feld">
+          <span>Test-Patient (Kürzel)</span>
+          <select id="patient-wahl" class="auswahl"></select>
+        </label>
+        <button class="knopf" type="button" id="patient-neu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Neu
+        </button>
+      </div>
+
+      <div class="station" id="station" data-zustand="bereit">
+        <p class="anweisung" id="anweisung" aria-live="polite">Gedrückt halten und sprechen</p>
+        <div class="buehne" id="buehne">
+          <div class="pegelring" aria-hidden="true"></div>
+          <button class="ptt" id="ptt" type="button" aria-label="Gedrückt halten zum Aufnehmen, loslassen zum Erkennen">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+          </button>
+        </div>
+        <div class="zeit" id="zeit">0:00</div>
+        <p class="station-fuss">Loslassen = Text erkennen. Nochmals drücken ergänzt die Notiz.</p>
+      </div>
+
+      <div class="entwurf-leer" id="entwurf-leer" aria-hidden="true">Hier erscheint die Notiz:<br>Befund · Maßnahmen · Verlauf · Hausaufgaben</div>
+      <section class="entwurf" id="entwurf" hidden aria-label="Notiz-Entwurf">
+        <div class="entwurf-kopf">
+          <h2>Notiz-Entwurf</h2>
+          <span class="chip" id="entwurf-status"></span>
+        </div>
+        <div class="neu-hinweis" id="neu-hinweis" hidden>
+          <span>Neuer Text ergänzt – Notiz noch nicht neu erstellt.</span>
+          <button class="knopf klein" type="button" data-aktion="neu-strukturieren">Neu strukturieren</button>
+        </div>
+        <div class="abschnitte" id="entwurf-abschnitte"></div>
+        <div class="pruefliste" id="entwurf-unklar" hidden></div>
+        <details class="transkript" id="entwurf-transkript">
+          <summary>Transkript <span class="summary-hinweis">(erkannter Text, bearbeitbar)</span></summary>
+          <div class="transkript-inhalt">
+            <textarea id="entwurf-roh" rows="6" spellcheck="true"></textarea>
+            <button class="knopf klein" type="button" data-aktion="neu-strukturieren">Aus Transkript neu strukturieren</button>
+          </div>
+        </details>
+        <div class="entwurf-fuss">
+          <button class="knopf gefahr" type="button" id="verwerfen">Verwerfen</button>
+          <button class="knopf primaer gross" type="button" id="speichern">Speichern</button>
+        </div>
+        <p class="ki-hinweis">KI-Entwurf – bitte fachlich prüfen. Stellen mit „(unklar)“ besonders beachten.</p>
+      </section>
+    </section>
+
+    <!-- Notizordner -->
+    <section class="ordner-ansicht" id="ansicht-ordner" hidden>
+      <div class="ordner" id="ordner">
+        <aside class="ordner-spalte" id="ordner-spalte">
+          <label class="unsichtbar" for="suche">Suche in allen Notizen</label>
+          <input class="suche" id="suche" type="search" placeholder="Suche in allen Notizen" autocomplete="off" enterkeyhint="search">
+          <div class="ordner-kopf" id="ordner-kopf"></div>
+          <div class="ordner-liste" id="ordner-liste"></div>
+        </aside>
+        <article class="leser" id="leser"></article>
+      </div>
+    </section>
+  </main>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <dialog class="dialog" id="dialog-patient">
+    <form method="dialog" id="patient-form" novalidate>
+      <h2>Neuer Test-Patient</h2>
+      <p class="dialog-text">Nur Kürzel oder Pseudonym – keine Klarnamen, keine echten Patientendaten.</p>
+      <label class="feld">
+        <span>Kürzel (mit Ziffer, z. B. TP-02)</span>
+        <input id="patient-kuerzel" class="mono" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" required>
+      </label>
+      <label class="feld">
+        <span>Beschreibung (optional, fiktiv)</span>
+        <input id="patient-pseudonym" maxlength="60" autocomplete="off" placeholder="z. B. Testfall Schulter links">
+      </label>
+      <p class="feld-fehler" id="patient-fehler" role="alert"></p>
+      <div class="dialog-knoepfe">
+        <button class="knopf" type="button" data-schliessen>Abbrechen</button>
+        <button class="knopf primaer" type="submit" id="patient-anlegen">Anlegen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="dialog-frage">
+    <h2 id="frage-titel"></h2>
+    <p class="dialog-text" id="frage-text"></p>
+    <div class="dialog-knoepfe">
+      <button class="knopf" type="button" id="frage-nein">Abbrechen</button>
+      <button class="knopf gefahr" type="button" id="frage-ja">OK</button>
+    </div>
+  </dialog>
+
+  <script src="config.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

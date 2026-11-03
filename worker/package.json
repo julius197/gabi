@@ -1,0 +1,18 @@
+{
+  "name": "gabi-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "lokal": "node dev/lokal.mjs",
+    "check": "wrangler deploy --dry-run --outdir .dist",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0"
+  },
+  "devDependencies": {
+    "vitest": "4.1.12",
+    "wrangler": "4.149.0"
+  }
+}
