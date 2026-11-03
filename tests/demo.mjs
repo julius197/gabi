@@ -160,6 +160,27 @@ for (const [fall, antwort, text] of [
   await ctx.close();
 }
 
+// ---------- 2b Kleinstes Handy (320 px): nirgends seitliches Scrollen ----------
+{
+  const ctx = await chrome.newContext({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.goto(`${basis}/?demo=1#/aufnahme`);
+  await page.waitForFunction(() => document.querySelector("#patient-wahl").options.length === 4);
+  const breite = async (wo) => [wo, await page.evaluate(() => document.documentElement.scrollWidth)];
+  const messungen = [await breite("Aufnahme")];
+  await page.click("#demo-diktat");
+  await page.waitForSelector('#station[data-zustand="fertig"]', { timeout: 15000 });
+  messungen.push(await breite("Entwurf"));
+  for (const hash of ["#/ordner", "#/ordner/p/7e3c1a52-0002-4000-8000-000000000002", "#/ordner/n/7e3c1a52-0202-4000-8000-000000000202"]) {
+    await page.evaluate((h) => { location.hash = h; }, hash);
+    await page.waitForTimeout(300);
+    messungen.push(await breite(hash));
+  }
+  const zuBreit = messungen.filter(([, b]) => b > 320);
+  pruefe(!zuBreit.length, `320 px: kein seitliches Scrollen${zuBreit.length ? ` (${zuBreit.map(([w, b]) => `${w}=${b}px`).join(", ")})` : ""}`);
+  await ctx.close();
+}
+
 // ---------- 3 Mikrofon verweigert → klare Anleitung ----------
 {
   const ctx = await chrome.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" });

@@ -222,6 +222,8 @@ mark.unklar { padding: 0 3px; border-radius: 4px; background: var(--gelb); color
 @keyframes drehen { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .station[data-zustand="verarbeitet"] .arbeitsring { animation: none; border-color: #F2B232; } }
 #station-aktion { min-height: 44px; }
+.station .knopf { max-width: 100%; white-space: normal; text-align: center; line-height: 1.25; padding-block: 6px; }
+.aufnahme-ansicht > * { min-width: 0; } /* langer Inhalt darf die Spalte nicht verbreitern */
 
 .mikro-hilfe { border-color: #F2C9C5; background: #FFF8F7; }
 .mikro-hilfe h2 { font-size: 18px; color: var(--rot); }
