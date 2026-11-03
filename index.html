@@ -68,17 +68,27 @@
       </div>
 
       <div class="station" id="station" data-zustand="bereit">
+        <p class="status-pill" aria-hidden="true"><span class="status-punkt"></span><span id="status-text">Bereit</span></p>
         <p class="anweisung" id="anweisung" aria-live="polite">Gedrückt halten und sprechen</p>
         <div class="buehne" id="buehne">
           <div class="pegelring" aria-hidden="true"></div>
+          <div class="arbeitsring" aria-hidden="true"></div>
           <button class="ptt" id="ptt" type="button" aria-label="Gedrückt halten zum Aufnehmen, loslassen zum Erkennen">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
           </button>
         </div>
         <div class="zeit" id="zeit">0:00</div>
-        <p class="station-fuss">Loslassen = Text erkennen. Nochmals drücken ergänzt die Notiz.</p>
+        <button class="knopf hell" type="button" id="station-aktion" hidden></button>
+        <p class="station-fuss">Loslassen = Text erkennen. Nochmals drücken ergänzt die Notiz. Höchstens 5 Minuten am Stück.</p>
         <button class="knopf klein hell" type="button" id="demo-diktat" hidden>Ohne Mikrofon: Beispieldiktat einfügen</button>
       </div>
+
+      <section class="karte mikro-hilfe" id="mikro-hilfe" hidden aria-labelledby="mikro-hilfe-titel">
+        <h2 id="mikro-hilfe-titel">Mikrofon freigeben</h2>
+        <p class="karte-text" id="mikro-hilfe-text"></p>
+        <ol id="mikro-hilfe-schritte"></ol>
+        <button class="knopf primaer" type="button" id="mikro-erneut">Seite neu laden</button>
+      </section>
 
       <div class="entwurf-leer" id="entwurf-leer" aria-hidden="true">Hier erscheint die Notiz:<br>Befund · Maßnahmen · Verlauf · Hausaufgaben</div>
       <section class="entwurf" id="entwurf" hidden aria-label="Notiz-Entwurf">

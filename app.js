@@ -34,6 +34,9 @@
     dialogPatient: $("#dialog-patient"), patientForm: $("#patient-form"), patientKuerzel: $("#patient-kuerzel"),
     patientPseudonym: $("#patient-pseudonym"), patientFehler: $("#patient-fehler"), patientAnlegen: $("#patient-anlegen"),
     station: $("#station"), anweisung: $("#anweisung"), buehne: $("#buehne"), ptt: $("#ptt"), zeit: $("#zeit"),
+    statusText: $("#status-text"), stationAktion: $("#station-aktion"),
+    mikroHilfe: $("#mikro-hilfe"), mikroHilfeTitel: $("#mikro-hilfe-titel"), mikroHilfeText: $("#mikro-hilfe-text"),
+    mikroHilfeSchritte: $("#mikro-hilfe-schritte"), mikroErneut: $("#mikro-erneut"),
     entwurf: $("#entwurf"), entwurfStatus: $("#entwurf-status"), neuHinweis: $("#neu-hinweis"),
     entwurfAbschnitte: $("#entwurf-abschnitte"), entwurfUnklar: $("#entwurf-unklar"), entwurfRoh: $("#entwurf-roh"),
     entwurfTranskript: $("#entwurf-transkript"), speichern: $("#speichern"), verwerfen: $("#verwerfen"),
@@ -103,7 +106,14 @@
   let zugang = speicherLesen(localStorage, SPEICHER.zugang) || "";
   class Abbruch extends Error {}
 
-  async function api(pfad, { methode = "GET", body, text, code = zugang } = {}) {
+  const STATUS_TEXT = (s) =>
+    s === 429 ? "Zu viele Anfragen – bitte kurz warten und nochmal versuchen."
+      : s === 413 ? "Die Daten sind zu groß."
+        : s === 404 ? "Nicht gefunden."
+          : s >= 500 ? `Server-Fehler (${s}). Bitte nochmal versuchen.`
+            : `Fehler ${s}.`;
+
+  async function api(pfad, { methode = "GET", body, text, code = zugang, zeit = 20000 } = {}) {
     if (modus.demo) {
       try { return await demoApi.anfrage(pfad, { methode, body, text }); }
       catch (e) { throw new Error((e && e.message) || "Fehler im Demo-Modus."); }
@@ -112,11 +122,16 @@
     let inhalt;
     if (text !== undefined) { headers["Content-Type"] = "text/plain"; inhalt = text; }
     else if (body !== undefined) { headers["Content-Type"] = "application/json"; inhalt = JSON.stringify(body); }
+    const abbruch = new AbortController();
+    const uhr = setTimeout(() => abbruch.abort(), zeit);
     let r;
     try {
-      r = await fetch(`${API}${pfad}`, { method: methode, headers, body: inhalt, cache: "no-store" });
+      r = await fetch(`${API}${pfad}`, { method: methode, headers, body: inhalt, cache: "no-store", signal: abbruch.signal });
     } catch {
-      throw new Error("Keine Verbindung zum Server. Bitte Internet prüfen.");
+      if (abbruch.signal.aborted) throw new Error("Der Server antwortet nicht (Zeitüberschreitung). Bitte nochmal versuchen.");
+      throw new Error(navigator.onLine === false ? "Kein Internet. Bitte Verbindung prüfen." : "Keine Verbindung zum Server. Bitte Internet prüfen.");
+    } finally {
+      clearTimeout(uhr);
     }
     if (r.status === 401 && code === zugang) {
       zugangVergessen();
@@ -124,7 +139,11 @@
       throw new Abbruch();
     }
     const daten = r.status === 204 ? null : await r.json().catch(() => null);
-    if (!r.ok) throw new Error((daten && daten.fehler) || `Fehler ${r.status}`);
+    if (!r.ok) {
+      const f = new Error((daten && daten.fehler) || STATUS_TEXT(r.status));
+      f.status = r.status;
+      throw f;
+    }
     return daten;
   }
 
@@ -151,6 +170,7 @@
 
   el.zugangForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (el.zugangKnopf.classList.contains("laedt")) return; // kein doppeltes Absenden
     const code = el.zugangCode.value.trim();
     if (!code) { el.zugangFehler.textContent = "Bitte Zugangscode eingeben."; return; }
     el.zugangKnopf.classList.add("laedt");
@@ -218,6 +238,7 @@
 
   el.patientForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (el.patientAnlegen.classList.contains("laedt")) return; // kein doppeltes Absenden
     const kuerzel = el.patientKuerzel.value.trim();
     if (!/^[A-Z0-9-]{2,12}$/.test(kuerzel) || !/[0-9]/.test(kuerzel)) {
       el.patientFehler.textContent = "Kürzel: 2–12 Zeichen (A–Z, 0–9, Bindestrich), mit mindestens einer Ziffer – bitte keine Namen.";
@@ -240,77 +261,228 @@
 
   // ==========================================================
   // 5 Aufnahme: gedrückt halten = aufnehmen, loslassen = erkennen
+  //   Sichtbare Zustände: bereit · nimmt auf · verarbeitet · fertig · Fehler
   // ==========================================================
-  const aufnahme = { phase: "bereit", losgelassen: false, start: 0, rec: null, stream: null, ctx: null, analyser: null, teile: [], mime: "", maxPegel: 0 };
+  const aufnahme = { phase: "bereit", losgelassen: false, zeiger: null, start: 0, rec: null, stream: null, ctx: null, analyser: null, teile: [], mime: "", maxPegel: 0, sperre: null };
   let offeneTranskripte = 0;
   let kette = Promise.resolve();
+  const WARNUNG_AB_S = MAX_DAUER_S - 30;
+  const LABEL = { bereit: "Bereit", startet: "Mikrofon startet", aufnahme: "Nimmt auf", verarbeitet: "Verarbeitet", fertig: "Fertig", fehler: "Fehler" };
+  const meldung = { art: "", text: "", aktion: null, uhr: 0 }; // Fehler oder „gespeichert“ an der Station
 
-  function stationSetzen(zustand, text) {
-    el.station.dataset.zustand = zustand;
-    if (text) el.anweisung.textContent = text;
+  // ---------- Gerät / Browser ----------
+  const UA = navigator.userAgent;
+  const IOS = /iPhone|iPad|iPod/.test(UA) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const ANDROID = /Android/.test(UA);
+  const MAC_SAFARI = !IOS && /Safari/.test(UA) && !/Chrome|Chromium|Edg|OPR|Firefox/.test(UA);
+  const IN_APP = /FBAN|FBAV|Instagram|LinkedInApp|Line\/|; wv\)/.test(UA);
+  // Safari (auch alle Browser auf dem iPhone) nimmt zuverlässig MP4/AAC auf, die anderen WebM/Opus
+  const FORMATE = IOS || MAC_SAFARI
+    ? ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/aac", "audio/webm;codecs=opus", "audio/webm"]
+    : ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+  const FORMAT_GESPERRT = "gabi.format.gesperrt";
+
+  function formatWaehlen() {
+    const gesperrt = (speicherLesen(sessionStorage, FORMAT_GESPERRT) || "").split(",");
+    const geht = (m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } };
+    return FORMATE.find((m) => geht(m) && !gesperrt.includes(m)) || "";
+  }
+  function formatSperren(mime) {
+    if (!mime) return;
+    const alt = (speicherLesen(sessionStorage, FORMAT_GESPERRT) || "").split(",").filter(Boolean);
+    speicherSchreiben(sessionStorage, FORMAT_GESPERRT, [...new Set([...alt, mime])].join(","));
   }
 
-  function bereitText() {
-    if (offeneTranskripte > 0) return "Sprache wird erkannt …";
-    return entwurf.rohtext ? "Gedrückt halten, um zu ergänzen" : "Gedrückt halten und sprechen";
+  // ---------- Anzeige ----------
+  function entwurfAktuell() {
+    return Boolean(entwurf.strukturiert) && entwurf.strukturVersion === entwurf.version;
+  }
+
+  function stationAktualisieren() {
+    let zustand;
+    let text;
+    if (aufnahme.phase === "startet") { zustand = "startet"; text = "Mikrofon startet …"; }
+    else if (aufnahme.phase === "aufnahme") {
+      zustand = "aufnahme";
+      const s = Math.floor((performance.now() - aufnahme.start) / 1000);
+      text = s >= WARNUNG_AB_S ? `Noch ${Math.max(0, MAX_DAUER_S - s)} s – dann wird automatisch erkannt` : "Aufnahme läuft – loslassen zum Erkennen";
+    }
+    else if (aufnahme.phase === "stoppt") { zustand = "verarbeitet"; text = "Aufnahme wird abgeschlossen …"; }
+    else if (offeneTranskripte > 0) { zustand = "verarbeitet"; text = "Sprache wird erkannt …"; }
+    else if (strukturLaeuft) { zustand = "verarbeitet"; text = "Notiz wird geschrieben …"; }
+    else if (meldung.art === "fehler") { zustand = "fehler"; text = meldung.text; }
+    else if (meldung.art === "gespeichert") { zustand = "fertig"; text = meldung.text; }
+    else if (entwurfAktuell()) { zustand = "fertig"; text = "Notiz fertig – bitte prüfen und speichern. Gedrückt halten ergänzt."; }
+    else { zustand = "bereit"; text = entwurf.rohtext ? "Gedrückt halten, um zu ergänzen" : "Gedrückt halten und sprechen"; }
+    el.station.dataset.zustand = zustand;
+    el.statusText.textContent = LABEL[zustand];
+    if (el.anweisung.textContent !== text) el.anweisung.textContent = text;
+    const aktion = zustand === "fehler" ? meldung.aktion : null;
+    el.stationAktion.hidden = !aktion;
+    if (aktion) el.stationAktion.textContent = aktion.text;
+  }
+
+  function meldungSetzen(art, text, aktion = null, dauer = 0) {
+    clearTimeout(meldung.uhr);
+    Object.assign(meldung, { art, text, aktion });
+    if (dauer) meldung.uhr = setTimeout(() => meldungLoeschen(), dauer);
+    stationAktualisieren();
+  }
+  function meldungLoeschen() {
+    clearTimeout(meldung.uhr);
+    Object.assign(meldung, { art: "", text: "", aktion: null });
+    stationAktualisieren();
+  }
+  el.stationAktion.addEventListener("click", () => {
+    const aktion = meldung.aktion;
+    if (!aktion) return;
+    meldungLoeschen();
+    aktion.los();
+  });
+
+  // ---------- Mikrofon-Freigabe: klare Anleitung je Gerät ----------
+  const MIKRO_SCHRITTE = IOS ? [
+    "In der Adressleiste links auf „aA“ bzw. das Seiten-Symbol tippen.",
+    "„Website-Einstellungen“ → „Mikrofon“ → „Erlauben“ wählen.",
+    "Steht dort nichts: iPhone-Einstellungen → (Apps →) Safari → Mikrofon → „Erlauben“.",
+    "Diese Seite neu laden und den Knopf wieder gedrückt halten.",
+  ] : ANDROID ? [
+    "Links in der Adressleiste auf das Schloss- oder Regler-Symbol tippen.",
+    "„Berechtigungen“ → „Mikrofon“ → „Zulassen“ wählen.",
+    "Darf Chrome selbst nicht aufnehmen: Android-Einstellungen → Apps → Chrome → Berechtigungen → Mikrofon.",
+    "Diese Seite neu laden.",
+  ] : MAC_SAFARI ? [
+    "Menü „Safari“ → „Einstellungen für diese Website …“ öffnen.",
+    "Bei „Mikrofon“ „Erlauben“ wählen.",
+    "Mac-Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon: Safari muss eingeschaltet sein.",
+    "Diese Seite neu laden.",
+  ] : [
+    "Links in der Adressleiste auf das Schloss- oder Regler-Symbol klicken.",
+    "Bei „Mikrofon“ „Zulassen“ wählen.",
+    "Am Mac zusätzlich: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon → Browser einschalten.",
+    "Diese Seite neu laden.",
+  ];
+
+  function mikroHilfeZeigen(titel, text, schritte = MIKRO_SCHRITTE) {
+    el.mikroHilfeTitel.textContent = titel;
+    el.mikroHilfeText.textContent = text;
+    el.mikroHilfeSchritte.innerHTML = schritte.map((s) => `<li>${esc(s)}</li>`).join("");
+    el.mikroHilfeSchritte.hidden = !schritte.length;
+    el.mikroHilfe.hidden = false;
+  }
+  function mikroHilfeVerstecken() { el.mikroHilfe.hidden = true; }
+  el.mikroErneut.addEventListener("click", () => location.reload());
+
+  /** Vorab prüfen, ob Aufnehmen überhaupt geht – damit niemand ins Leere drückt. */
+  function aufnahmeMoeglich() {
+    if (!window.isSecureContext) {
+      return { titel: "Sichere Verbindung nötig", text: "Aufnehmen geht nur über https. Bitte https://gabi.automatilabs.de öffnen.", schritte: [] };
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+      return IN_APP
+        ? { titel: "Bitte im Browser öffnen", text: "In dieser App kann nicht aufgenommen werden. Bitte den Link in Safari (iPhone) oder Chrome (Android) öffnen.", schritte: [] }
+        : { titel: "Browser kann nicht aufnehmen", text: "Bitte einen aktuellen Browser verwenden: Safari (iPhone/Mac) oder Chrome.", schritte: [] };
+    }
+    return null;
+  }
+
+  async function mikrofonRechtBeobachten() {
+    const geht = aufnahmeMoeglich();
+    if (geht) {
+      mikroHilfeZeigen(geht.titel, geht.text, geht.schritte);
+      meldungSetzen("fehler", geht.text);
+      return;
+    }
+    try {
+      const recht = await navigator.permissions.query({ name: "microphone" });
+      const pruefen = () => {
+        if (recht.state === "denied") {
+          mikroHilfeZeigen("Mikrofon ist blockiert", "Gabi darf das Mikrofon nicht benutzen. So geben Sie es frei:");
+          meldungSetzen("fehler", "Mikrofon ist blockiert – Anleitung unten.");
+        } else if (!el.mikroHilfe.hidden) {
+          mikroHilfeVerstecken();
+          if (meldung.art === "fehler") meldungLoeschen();
+        }
+      };
+      pruefen();
+      recht.onchange = pruefen;
+    } catch { /* Abfrage nicht unterstützt (z. B. Firefox, ältere Safaris) – Fehler kommt dann beim Drücken */ }
   }
 
   function mikrofonFehler(e) {
-    if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) return "Kein Mikrofon-Zugriff. Bitte im Browser erlauben (Adressleiste → Mikrofon) und neu laden.";
-    if (e && e.name === "NotFoundError") return "Kein Mikrofon gefunden.";
-    return `Mikrofon konnte nicht gestartet werden (${(e && e.name) || "Fehler"}).`;
+    const name = (e && e.name) || "";
+    if (["NotAllowedError", "SecurityError", "PermissionDeniedError"].includes(name)) {
+      mikroHilfeZeigen("Mikrofon ist nicht freigegeben", "Ohne Mikrofon-Freigabe kann Gabi nicht aufnehmen. So geben Sie es frei:");
+      return "Mikrofon ist nicht freigegeben – Anleitung unten.";
+    }
+    if (["NotFoundError", "DevicesNotFoundError"].includes(name)) return "Kein Mikrofon gefunden. Bitte Mikrofon oder Headset anschließen.";
+    if (["NotReadableError", "TrackStartError", "AbortError"].includes(name)) return "Mikrofon ist gerade belegt (z. B. Telefonat oder andere App). Bitte dort beenden und nochmal versuchen.";
+    return `Mikrofon konnte nicht starten (${name || "unbekannter Fehler"}). Bitte Seite neu laden.`;
   }
 
+  async function mikrofonHolen() {
+    // wie Notara: ungefiltertes Signal für die Spracherkennung, nur Lautstärke angleichen
+    const wunsch = { audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: true } };
+    try {
+      return await navigator.mediaDevices.getUserMedia(wunsch);
+    } catch (e) {
+      if (e && (e.name === "OverconstrainedError" || e.name === "TypeError")) return navigator.mediaDevices.getUserMedia({ audio: true });
+      throw e;
+    }
+  }
+
+  // ---------- Aufnahme ----------
   async function aufnahmeStarten() {
     if (aufnahme.phase !== "bereit") return;
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
-      toast("Dieser Browser kann nicht aufnehmen. Bitte Safari oder Chrome verwenden.", "fehler", 6000);
-      return;
-    }
+    const geht = aufnahmeMoeglich();
+    if (geht) { mikroHilfeZeigen(geht.titel, geht.text, geht.schritte); meldungSetzen("fehler", geht.text); return; }
+    meldungLoeschen();
     aufnahme.phase = "startet";
     aufnahme.losgelassen = false;
     aufnahme.maxPegel = 0;
     aufnahme.dauer = undefined;
     const startZeit = performance.now();
-    stationSetzen("startet", "Mikrofon startet …");
+    stationAktualisieren();
     let ctx = null;
     try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { ctx = null; } // direkt in der Geste (Safari)
     let stream;
     try {
-      // wie Notara: ungefiltertes Signal für die Spracherkennung, nur Lautstärke angleichen
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
+      stream = await mikrofonHolen();
     } catch (e) {
       if (ctx) ctx.close().catch(() => {});
       aufnahme.phase = "bereit";
-      stationSetzen("bereit", bereitText());
-      toast(mikrofonFehler(e), "fehler", 8000);
+      meldungSetzen("fehler", mikrofonFehler(e));
       return;
     }
+    mikroHilfeVerstecken();
     if (aufnahme.losgelassen) {
       // Schon losgelassen (z. B. während der Mikrofon-Freigabe) – nichts aufnehmen
       stream.getTracks().forEach((t) => t.stop());
       if (ctx) ctx.close().catch(() => {});
       aufnahme.phase = "bereit";
-      stationSetzen("bereit", bereitText());
+      stationAktualisieren();
       const langeGewartet = performance.now() - startZeit > 700;
       toast(langeGewartet ? "Mikrofon ist bereit. Jetzt gedrückt halten und sprechen." : "Bitte gedrückt halten, bis der Knopf rot ist.", "", 4000);
       return;
     }
-    const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find((m) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) || "";
+    const mime = formatWaehlen();
     let rec;
     try {
       rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
     } catch (e) {
       stream.getTracks().forEach((t) => t.stop());
       if (ctx) ctx.close().catch(() => {});
+      formatSperren(mime);
       aufnahme.phase = "bereit";
-      stationSetzen("bereit", bereitText());
-      toast(`Aufnahme konnte nicht starten (${e.name || "Fehler"}).`, "fehler", 6000);
+      meldungSetzen("fehler", `Aufnahme konnte nicht starten (${e.name || "Fehler"}). Bitte nochmal drücken.`);
       return;
     }
     aufnahme.teile = [];
     rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) aufnahme.teile.push(ev.data); };
     rec.onstop = aufnahmeFertig;
+    rec.onerror = () => aufnahmeStoppen();
+    // Telefonat, Bluetooth-Wechsel o. Ä. beendet das Mikrofon → sauber abschließen
+    stream.getAudioTracks().forEach((t) => { t.onended = () => aufnahmeStoppen(); });
     let analyser = null;
     try {
       if (ctx.state === "suspended") await ctx.resume();
@@ -321,7 +493,9 @@
     } catch { analyser = null; }
     Object.assign(aufnahme, { rec, stream, ctx, analyser, mime: rec.mimeType || mime, start: performance.now(), phase: "aufnahme" });
     rec.start();
-    stationSetzen("aufnahme", "Aufnahme läuft – loslassen zum Erkennen");
+    try { if (navigator.vibrate) navigator.vibrate(20); } catch { /* egal */ }
+    bildschirmWachHalten(true);
+    stationAktualisieren();
     pegelSchleife();
     zeitSchleife();
     if (aufnahme.losgelassen) aufnahmeStoppen();
@@ -332,8 +506,17 @@
     if (aufnahme.phase === "aufnahme" && aufnahme.rec && aufnahme.rec.state !== "inactive") {
       aufnahme.phase = "stoppt";
       aufnahme.dauer = performance.now() - aufnahme.start;
-      aufnahme.rec.stop();
+      try { aufnahme.rec.stop(); } catch { aufnahmeFertig(); }
+      stationAktualisieren();
     }
+  }
+
+  /** Bildschirm während der Aufnahme nicht ausgehen lassen (sonst bricht das iPhone die Aufnahme ab). */
+  async function bildschirmWachHalten(an) {
+    try {
+      if (an && navigator.wakeLock && !aufnahme.sperre) aufnahme.sperre = await navigator.wakeLock.request("screen");
+      else if (!an && aufnahme.sperre) { const s = aufnahme.sperre; aufnahme.sperre = null; await s.release(); }
+    } catch { aufnahme.sperre = null; }
   }
 
   function pegelSchleife() {
@@ -351,11 +534,13 @@
   }
 
   function zeitSchleife() {
-    if (aufnahme.phase !== "aufnahme") return;
+    if (aufnahme.phase !== "aufnahme") { el.zeit.classList.remove("knapp"); return; }
     const s = Math.floor((performance.now() - aufnahme.start) / 1000);
     el.zeit.textContent = mmss(s);
+    el.zeit.classList.toggle("knapp", s >= WARNUNG_AB_S);
+    stationAktualisieren();
     if (s >= MAX_DAUER_S) {
-      toast("Höchstens 5 Minuten am Stück – Aufnahme wird erkannt. Für mehr einfach nochmal drücken.", "warn", 6000);
+      toast("Höchstens 5 Minuten am Stück – die Aufnahme wird jetzt erkannt. Für mehr einfach nochmal drücken.", "warn", 6000);
       aufnahmeStoppen();
       return;
     }
@@ -365,40 +550,72 @@
   function aufnahmeFertig() {
     const { stream, ctx, teile, mime, maxPegel } = aufnahme;
     const dauer = aufnahme.dauer ?? performance.now() - aufnahme.start;
-    stream.getTracks().forEach((t) => t.stop());
-    Object.assign(aufnahme, { phase: "bereit", rec: null, stream: null, analyser: null, ctx: null });
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    Object.assign(aufnahme, { phase: "bereit", rec: null, stream: null, analyser: null, ctx: null, zeiger: null });
+    bildschirmWachHalten(false);
     el.buehne.style.setProperty("--pegel", "0");
     el.zeit.textContent = "0:00";
+    el.zeit.classList.remove("knapp");
     if (dauer < MIN_DAUER_MS) {
       if (ctx) ctx.close().catch(() => {});
-      stationSetzen("bereit", bereitText());
+      stationAktualisieren();
       toast("Zu kurz – bitte gedrückt halten, solange Sie sprechen.", "", 3500);
       return;
     }
     if (ctx && ctx.state === "running" && maxPegel < 0.015) {
       ctx.close().catch(() => {});
-      stationSetzen("bereit", bereitText());
-      toast("Es kam kein Ton an. Bitte Mikrofon prüfen.", "warn", 5000);
+      meldungSetzen("fehler", "Es kam kein Ton an. Bitte Mikrofon prüfen (stumm? anderes Gerät?) und nochmal drücken.");
+      return;
+    }
+    if (!teile.length) {
+      if (ctx) ctx.close().catch(() => {});
+      meldungSetzen("fehler", "Die Aufnahme war leer. Bitte nochmal gedrückt halten und sprechen.");
       return;
     }
     const blob = new Blob(teile, { type: mime || "audio/webm" });
+    let b64 = null; // bleibt erhalten, damit „Nochmal senden“ ohne neue Aufnahme geht
+    const holen = async () => {
+      if (!b64) {
+        try {
+          b64 = await zuWavBase64(blob, ctx);
+        } catch {
+          formatSperren(mime);
+          const f = new Error("Aufnahme konnte nicht gelesen werden. Bitte nochmal aufnehmen – Gabi nimmt jetzt ein anderes Format.");
+          f.keineWiederholung = true;
+          throw f;
+        } finally {
+          if (ctx) ctx.close().catch(() => {});
+        }
+      }
+      const d = await api("/api/transkribieren", { methode: "POST", text: b64, zeit: 180000 });
+      return d && d.text;
+    };
+    transkriptEinreihen(holen);
+  }
+
+  /** Ein Transkript holen (Aufnahme oder Beispieldiktat) und an den Entwurf hängen – der Reihe nach. */
+  function transkriptEinreihen(holen) {
+    meldungLoeschen();
     offeneTranskripte++;
     entwurfZeigen();
     statusSetzen("Sprache wird erkannt …", "laeuft");
-    stationSetzen("bereit", bereitText());
+    stationAktualisieren();
+    knoepfeAktualisieren();
     kette = kette
       .then(async () => {
-        const b64 = await zuWavBase64(blob, ctx);
-        const d = await api("/api/transkribieren", { methode: "POST", text: b64 });
-        const text = String(d.text || "").trim();
-        if (!text) { toast("Kein Text erkannt. Bitte deutlicher oder näher am Mikrofon sprechen.", "warn", 5000); return; }
+        const text = String((await holen()) || "").trim();
+        if (!text) { meldungSetzen("fehler", "Kein Text erkannt. Bitte deutlicher oder näher am Mikrofon sprechen."); return; }
         transkriptAnhaengen(text);
       })
-      .catch((e) => fehlerZeigen(e, "Spracherkennung: "))
+      .catch((e) => {
+        if (e instanceof Abbruch) return;
+        const nochmal = e.keineWiederholung ? null : { text: "Nochmal senden", los: () => transkriptEinreihen(holen) };
+        meldungSetzen("fehler", `Spracherkennung: ${e.message}`, nochmal);
+      })
       .finally(() => {
-        if (ctx) ctx.close().catch(() => {});
         offeneTranskripte--;
-        if (aufnahme.phase === "bereit") stationSetzen("bereit", bereitText());
+        stationAktualisieren();
+        knoepfeAktualisieren();
         if (offeneTranskripte === 0) nachTranskript();
       });
   }
@@ -407,35 +624,37 @@
   el.ptt.addEventListener("pointerdown", (e) => {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
+    if (aufnahme.phase !== "bereit") return; // zweiter Finger o. Ä.
+    aufnahme.zeiger = e.pointerId;
     try { el.ptt.setPointerCapture(e.pointerId); } catch { /* egal */ }
     aufnahmeStarten();
   });
-  for (const art of ["pointerup", "pointercancel", "lostpointercapture"]) el.ptt.addEventListener(art, () => aufnahmeStoppen());
+  for (const art of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    el.ptt.addEventListener(art, (e) => {
+      if (aufnahme.zeiger !== null && e.pointerId !== aufnahme.zeiger) return; // nur der Finger, der gedrückt hat
+      aufnahmeStoppen();
+    });
+  }
   el.ptt.addEventListener("contextmenu", (e) => e.preventDefault());
   // Tastatur: Leertaste oder Enter gedrückt halten
   el.ptt.addEventListener("keydown", (e) => {
-    if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); aufnahmeStarten(); }
+    if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); aufnahme.zeiger = null; aufnahmeStarten(); }
     else if (e.key === " " || e.key === "Enter") e.preventDefault();
   });
   el.ptt.addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); aufnahmeStoppen(); } });
   el.ptt.addEventListener("click", (e) => e.preventDefault());
+  // App gewechselt, Bildschirm aus, Fenster verlassen → Aufnahme sauber beenden
   window.addEventListener("blur", () => aufnahmeStoppen());
+  document.addEventListener("visibilitychange", () => { if (document.hidden) aufnahmeStoppen(); });
+  window.addEventListener("beforeunload", (e) => {
+    const offen = aufnahme.phase !== "bereit" || offeneTranskripte > 0 || strukturLaeuft || speichertGerade;
+    if (offen) { e.preventDefault(); e.returnValue = ""; }
+  });
 
   // Demo-Modus: Beispieldiktat ohne Mikrofon (gleicher Ablauf wie nach einer Aufnahme)
   el.demoDiktat.addEventListener("click", () => {
     if (!modus.demo) return;
-    offeneTranskripte++;
-    entwurfZeigen();
-    statusSetzen("Sprache wird erkannt …", "laeuft");
-    stationSetzen("bereit", bereitText());
-    kette = kette
-      .then(async () => { const d = await demoApi.beispielDiktat(); transkriptAnhaengen(d.text); })
-      .catch((e) => fehlerZeigen(e, "Spracherkennung: "))
-      .finally(() => {
-        offeneTranskripte--;
-        if (aufnahme.phase === "bereit") stationSetzen("bereit", bereitText());
-        if (offeneTranskripte === 0) nachTranskript();
-      });
+    transkriptEinreihen(async () => (await demoApi.beispielDiktat()).text);
   });
 
   // ==========================================================
@@ -526,6 +745,7 @@
   // ==========================================================
   const entwurf = { patientId: "", rohtext: "", strukturiert: null, manuell: false, version: 0, strukturVersion: 0 };
   let strukturLaeuft = false;
+  let speichertGerade = false;
 
   const leereNotiz = () => ({ befund: [], massnahmen: [], verlauf: [], hausaufgaben: [], unklar: [] });
 
@@ -560,7 +780,14 @@
   }
 
   function nachTranskript() {
-    if (!entwurf.rohtext) { if (!entwurf.strukturiert) statusSetzen(""); return; }
+    if (!entwurf.rohtext) {
+      if (!entwurf.strukturiert) { // nichts erkannt und noch kein Entwurf → Fläche wieder ausblenden
+        statusSetzen("");
+        el.entwurf.hidden = true;
+        document.body.classList.remove("mit-entwurf");
+      }
+      return;
+    }
     if (entwurf.version === entwurf.strukturVersion) return;
     if (entwurf.manuell) {
       el.neuHinweis.hidden = false;
@@ -576,10 +803,11 @@
     if (!text) { toast("Noch kein Text – erst aufnehmen oder Transkript eintippen.", "warn"); return; }
     strukturLaeuft = true;
     const version = entwurf.version;
+    meldungLoeschen();
     statusSetzen("Notiz wird geschrieben …", "laeuft");
     knoepfeAktualisieren();
     try {
-      const d = await api("/api/strukturieren", { methode: "POST", body: { rohtext: text } });
+      const d = await api("/api/strukturieren", { methode: "POST", body: { rohtext: text }, zeit: 120000 });
       entwurf.strukturiert = d.strukturiert;
       entwurf.strukturVersion = version;
       entwurf.manuell = false;
@@ -589,7 +817,10 @@
       statusSetzen("Entwurf fertig – bitte prüfen", "gruen");
     } catch (e) {
       statusSetzen("Notiz nicht erstellt", "rot");
-      fehlerZeigen(e, "Notiz: ");
+      if (!(e instanceof Abbruch)) {
+        meldungSetzen("fehler", `Notiz konnte nicht erstellt werden: ${e.message}`, { text: "Nochmal versuchen", los: () => strukturieren() });
+        fehlerZeigen(e, "Notiz: ");
+      }
       if (!entwurf.strukturiert) abschnitteZeigen();
     } finally {
       strukturLaeuft = false;
@@ -651,9 +882,10 @@
 
   function knoepfeAktualisieren() {
     const hatInhalt = Boolean(entwurf.rohtext.trim()) || Boolean(entwurf.strukturiert && ABSCHNITTE.some(([k]) => entwurf.strukturiert[k].length));
-    el.speichern.disabled = !hatInhalt || strukturLaeuft || offeneTranskripte > 0;
+    el.speichern.disabled = !hatInhalt || strukturLaeuft || offeneTranskripte > 0 || speichertGerade;
     const p = patienten.find((x) => x.id === entwurf.patientId);
-    el.speichern.textContent = p ? `Speichern bei ${p.kuerzel}` : "Speichern";
+    el.speichern.textContent = speichertGerade ? "Wird gespeichert …" : p ? `Speichern bei ${p.kuerzel}` : "Speichern";
+    stationAktualisieren();
   }
 
   function entwurfLeeren() {
@@ -667,7 +899,6 @@
     document.body.classList.remove("mit-entwurf");
     statusSetzen("");
     entwurfMerken();
-    stationSetzen(el.station.dataset.zustand, bereitText());
     knoepfeAktualisieren();
   }
 
@@ -679,24 +910,32 @@
   });
 
   el.speichern.addEventListener("click", async () => {
+    if (speichertGerade) return; // kein doppeltes Absenden
     if (!entwurf.patientId) {
       toast("Bitte zuerst einen Test-Patienten wählen oder anlegen.", "warn", 4500);
       el.patientWahl.focus();
       return;
     }
+    if (offeneTranskripte > 0 || strukturLaeuft) { toast("Bitte kurz warten, bis die Notiz fertig ist.", "warn"); return; }
     const strukturiert = entwurf.strukturiert
       ? { ...ausFeldern(el.entwurfAbschnitte), unklar: entwurf.strukturiert.unklar || [] }
       : leereNotiz();
+    speichertGerade = true;
     el.speichern.classList.add("laedt");
+    knoepfeAktualisieren();
     try {
       const d = await api("/api/notizen", { methode: "POST", body: { patient_id: entwurf.patientId, rohtext: entwurf.rohtext, strukturiert } });
+      speichertGerade = false;
       entwurfLeeren();
+      meldungSetzen("gespeichert", `Gespeichert bei ${d.notiz.kuerzel}. Bereit für die nächste Notiz.`, null, 6000);
       patientenLaden().catch(() => {});
       toast(`Gespeichert bei ${d.notiz.kuerzel}.`, "erfolg", 5000, { text: "Ansehen", los: () => { location.hash = `#/ordner/n/${d.notiz.id}`; } });
     } catch (e) {
       fehlerZeigen(e, "Speichern: ");
     } finally {
+      speichertGerade = false;
       el.speichern.classList.remove("laedt");
+      knoepfeAktualisieren();
     }
   });
 
@@ -973,7 +1212,8 @@
       statusSetzen("Entwurf wiederhergestellt", "warn");
       if (entwurf.manuell) el.neuHinweis.hidden = true;
     }
-    stationSetzen("bereit", bereitText());
+    stationAktualisieren();
+    mikrofonRechtBeobachten();
     route();
   }
 
