@@ -1,28 +1,11 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
+import { AUDIO, CODE, ENV, neueApp } from "./hilfen.js";
 import { erstelleApp } from "../src/app.js";
 import { arbeitsspeicher, supabaseSpeicher } from "../src/speicher.js";
 import { claudeStrukturierung } from "../src/strukturierung.js";
 import { bereinigen, whisperTranskription } from "../src/transkription.js";
 import { kuerzelPruefen, normalisieren, suchwoerter } from "../src/notiz.js";
 
-const CODE = "test-zugang-123";
-const ENV = { GABI_ZUGANGSCODE: CODE, ERLAUBTE_ORIGINS: "https://gabi.automatilabs.de", AI: {} };
-const AUDIO = "UklGR".padEnd(400, "A");
-
-function neueApp(extra = {}) {
-  const speicher = arbeitsspeicher();
-  const transkribieren = vi.fn(async () => "Knie rechts Flexion bis 90 Grad");
-  const strukturieren = vi.fn(async () => normalisieren({ befund: ["Flexion Knie rechts bis 90°"], massnahmen: ["MT 20 min"] }));
-  const app = erstelleApp({ speicher, transkribieren, strukturieren, ...extra });
-  const rufe = (pfad, { methode = "GET", body, code = CODE, origin, env = ENV, roh } = {}) => {
-    const headers = {};
-    if (code !== null) headers["X-Gabi-Zugang"] = code;
-    if (origin) headers.Origin = origin;
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    return app(new Request(`https://api.test${pfad}`, { method: methode, headers, body: roh ?? (body === undefined ? undefined : JSON.stringify(body)) }), env);
-  };
-  return { app, rufe, speicher, transkribieren, strukturieren };
-}
 
 afterEach(() => vi.unstubAllGlobals());
 
