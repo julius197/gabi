@@ -59,7 +59,6 @@
   }
   const ZEIT = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const DATUM = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const UHR = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" });
   const zeitText = (iso) => (iso ? ZEIT.format(new Date(iso)) : "");
   const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -1097,76 +1096,15 @@
   // ==========================================================
   // 9 PDF-Export (jsPDF, im Browser – nichts verlässt das Gerät dafür)
   // ==========================================================
-  // Standard-Schriften im PDF kennen nur Westeuropäisch (WinAnsi) – Zeichen außerhalb umschreiben
-  const PDF_ERSATZ = { "→": "->", "←": "<-", "↑": "hoch", "↓": "runter", "≤": "<=", "≥": ">=", "≈": "~", "‑": "-", "−": "-", "✓": "ok", " ": " ", " ": " " };
-  function pdfText(t) {
-    return String(t ?? "")
-      .replace(/[→←↑↓≤≥≈‑−✓  ]/g, (c) => PDF_ERSATZ[c])
-      .replace(/[^\x20-\x7e -ÿ–—‘’‚“”„•…€\n]/g, "");
-  }
-
   function pdfExport(n) {
-    if (!window.jspdf || !window.jspdf.jsPDF) { toast("PDF-Modul nicht geladen. Bitte Seite neu laden.", "fehler"); return; }
-    const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
-    const B = 210, RAND = 20, BREITE = B - 2 * RAND, UNTEN = 297 - 22;
-    const datum = new Date(n.erstellt_am);
-    let y = 22;
-
-    // Kopf: PhysioWorks, Datum, Kürzel
-    doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(35, 44, 51);
-    doc.text("PhysioWorks", RAND, y);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(86, 99, 107);
-    doc.text("Behandlungsnotiz", RAND, y + 7);
-    doc.setFontSize(10.5); doc.setTextColor(35, 44, 51);
-    doc.text(`Datum: ${DATUM.format(datum)}, ${UHR.format(datum)} Uhr`, B - RAND, y - 1, { align: "right" });
-    doc.text(pdfText(`Kürzel: ${n.kuerzel}`), B - RAND, y + 5, { align: "right" });
-    if (n.geaendert_am) {
-      doc.setFontSize(9); doc.setTextColor(135, 147, 154);
-      doc.text(`bearbeitet ${DATUM.format(new Date(n.geaendert_am))}`, B - RAND, y + 10, { align: "right" });
+    if (!window.jspdf || !window.jspdf.jsPDF || !window.GabiPdf) { toast("PDF-Modul nicht geladen. Bitte Seite neu laden.", "fehler"); return; }
+    try {
+      const doc = window.GabiPdf.erstellen(n, { jsPDF: window.jspdf.jsPDF });
+      doc.save(window.GabiPdf.dateiname(n));
+      toast("PDF erstellt.", "erfolg", 2500);
+    } catch (e) {
+      toast(`PDF konnte nicht erstellt werden (${(e && e.name) || "Fehler"}).`, "fehler", 6000);
     }
-    y += 15;
-    doc.setDrawColor(16, 168, 75); doc.setLineWidth(0.8); doc.line(RAND, y, B - RAND, y);
-    y += 10;
-
-    const neueSeite = (bedarf) => { if (y + bedarf > UNTEN) { doc.addPage(); y = 22; } };
-    const s = n.strukturiert || leereNotiz();
-    const abschnitt = (titel, punkte, farbe) => {
-      neueSeite(16);
-      doc.setFont("helvetica", "bold"); doc.setFontSize(12.5); doc.setTextColor(...(farbe || [35, 44, 51]));
-      doc.text(pdfText(titel), RAND, y);
-      y += 6.5;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(11);
-      if (!punkte || !punkte.length) {
-        doc.setTextColor(135, 147, 154);
-        doc.text("– nichts notiert –", RAND + 5, y);
-        y += 9;
-        return;
-      }
-      doc.setTextColor(35, 44, 51);
-      for (const p of punkte) {
-        const zeilen = doc.splitTextToSize(pdfText(p), BREITE - 6);
-        neueSeite(zeilen.length * 5.2 + 1);
-        doc.text("•", RAND + 1, y);
-        doc.text(zeilen, RAND + 6, y);
-        y += zeilen.length * 5.2 + 1.6;
-      }
-      y += 5;
-    };
-    for (const [key, titel] of ABSCHNITTE) abschnitt(titel, s[key]);
-    if (s.unklar && s.unklar.length) abschnitt("Bitte prüfen (unklare Stellen)", s.unklar, [138, 83, 0]);
-
-    // Fuß auf jeder Seite
-    const seiten = doc.getNumberOfPages();
-    for (let i = 1; i <= seiten; i++) {
-      doc.setPage(i);
-      doc.setDrawColor(224, 230, 227); doc.setLineWidth(0.3); doc.line(RAND, 297 - 16, B - RAND, 297 - 16);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(135, 147, 154);
-      doc.text("TESTVERSION – nur Testdaten · KI-Entwurf, fachlich zu prüfen · erstellt mit Gabi", RAND, 297 - 11);
-      doc.text(`Seite ${i} von ${seiten}`, B - RAND, 297 - 11, { align: "right" });
-    }
-    const tag = `${datum.getFullYear()}-${String(datum.getMonth() + 1).padStart(2, "0")}-${String(datum.getDate()).padStart(2, "0")}`;
-    doc.setProperties({ title: `Behandlungsnotiz ${n.kuerzel} ${tag}`, subject: "Testversion – nur Testdaten", creator: "Gabi (PhysioWorks)" });
-    doc.save(`PhysioWorks_${n.kuerzel}_${tag}.pdf`);
   }
 
   // ==========================================================
