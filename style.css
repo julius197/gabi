@@ -59,6 +59,7 @@ button, a, select, summary { touch-action: manipulation; } /* kein Doppeltipp-Zo
   position: sticky; top: 0; z-index: 50; padding: 8px var(--rand); padding-top: calc(8px + env(safe-area-inset-top));
   background: var(--gelb); color: #5C3B00; font-size: 14px; line-height: 1.35; text-align: center;
 }
+body.demo .testbanner { background: #2F6FD0; color: #FFFFFF; } /* Demo-Hinweis bleibt oben sichtbar */
 .demobanner {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px;
   padding: 8px var(--rand); background: #DCEBFF; color: #12355E; font-size: 14px; line-height: 1.35; text-align: center;

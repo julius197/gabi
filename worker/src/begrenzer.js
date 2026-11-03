@@ -1,12 +1,13 @@
 // Einfaches Rate-Limit je IP und Bereich (feste Zeitfenster, im Speicher der Worker-Instanz).
 // Bremst Ausprobieren von Zugangscodes und übermäßige KI-/Spracherkennungs-Kosten. Es speichert keine Inhalte.
 
+// Je IP-Adresse – eine ganze Praxis teilt sich oft eine, darum großzügig für den Alltag, eng für Ausprobieren.
 export const GRENZEN = {
-  status: [60, 60_000], //              /api/status: 60 pro Minute
-  api: [120, 60_000], //                alle anderen Anfragen: 120 pro Minute
-  transkribieren: [40, 10 * 60_000], // Spracherkennung: 40 je 10 Minuten
-  strukturieren: [40, 10 * 60_000], //  KI-Notiz: 40 je 10 Minuten
-  fehlversuch: [10, 15 * 60_000], //    falscher Zugangscode: 10 je 15 Minuten, danach gesperrt
+  status: [120, 60_000], //              /api/status: 120 pro Minute
+  api: [300, 60_000], //                 alle anderen Anfragen: 300 pro Minute
+  transkribieren: [120, 10 * 60_000], // Spracherkennung: 120 je 10 Minuten
+  strukturieren: [120, 10 * 60_000], //  KI-Notiz: 120 je 10 Minuten
+  fehlversuch: [20, 15 * 60_000], //     falscher Zugangscode: 20 je 15 Minuten, danach 15 Minuten gesperrt
 };
 
 export function erstelleBegrenzer({ jetzt = () => Date.now(), maxEintraege = 10_000 } = {}) {

@@ -181,6 +181,83 @@ for (const [fall, antwort, text] of [
   await ctx.close();
 }
 
+// ---------- 2c Robustheit: Server weg, Spracherkennung fällt aus, Verwerfen während der Verarbeitung ----------
+{
+  // Gerät mit gespeichertem Zugangscode: bei Serverproblemen NICHT still in den Demo-Modus
+  const ctx = await chrome.newContext({ viewport: { width: 390, height: 844 } });
+  await ctx.addInitScript(() => { try { localStorage.setItem("gabi.zugang", "test"); } catch { /* egal */ } });
+  const page = await ctx.newPage();
+  await page.route("**/api/status", (route) => route.abort("connectionrefused"));
+  await page.goto(`${basis}/#/aufnahme`);
+  await page.waitForSelector("#ansicht-offline:not([hidden])", { timeout: 15000 });
+  pruefe(await page.isHidden("#demobanner"), "Server weg + gespeicherter Code: „Server nicht erreichbar“ statt Demo-Modus");
+  await ctx.close();
+}
+{
+  // Echte lokale API: Spracherkennung schlägt einmal fehl → Aufnahme bleibt, „Nochmal senden“ klappt
+  const ctx = await chrome.newContext({ viewport: { width: 1366, height: 860 }, permissions: ["microphone"] });
+  await ctx.addInitScript(() => { try { localStorage.setItem("gabi.zugang", "test"); } catch { /* egal */ } });
+  const page = await ctx.newPage();
+  const konsole = konsoleBeobachten(page);
+  let ausfall = true;
+  await page.route("**/api/transkribieren", (route) => (ausfall
+    ? route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ fehler: "Spracherkennung gerade nicht erreichbar. Bitte nochmal versuchen." }) })
+    : route.continue()));
+  await page.goto(`${basis}/#/aufnahme`);
+  await page.waitForSelector("#ansicht-aufnahme:not([hidden])");
+  await page.waitForFunction(() => document.querySelector("#patient-wahl").options.length > 1);
+  await page.selectOption("#patient-wahl", { index: 1 });
+  const k = await page.locator("#ptt").boundingBox();
+  await page.mouse.move(k.x + k.width / 2, k.y + k.height / 2);
+  await page.mouse.down();
+  await page.waitForSelector('#station[data-zustand="aufnahme"]');
+  await page.waitForTimeout(4000);
+  await page.mouse.up();
+  await page.waitForSelector('#station[data-zustand="fehler"]', { timeout: 20000 });
+  const text = await page.textContent("#anweisung");
+  pruefe(/1 Aufnahme noch nicht erkannt/.test(text) && (await page.isVisible("#station-aktion")) && (await page.isVisible("#entwurf")),
+    "Spracherkennung fällt aus: Aufnahme bleibt, Hinweis + „Nochmal senden“ + Verwerfen erreichbar");
+  await page.click("#speichern").catch(() => {}); // leerer Entwurf: Speichern ist gesperrt – darf nichts tun
+  ausfall = false;
+  await page.click("#station-aktion");
+  await page.waitForFunction(() => document.querySelector("#entwurf-roh").value.length > 20, null, { timeout: 120000 });
+  await page.waitForSelector('#station[data-zustand="fertig"]', { timeout: 120000 });
+  pruefe(true, "„Nochmal senden“: dieselbe Aufnahme wird erkannt, ohne neu aufzunehmen");
+  // zweite Aufnahme fällt aus → Speichern fragt nach
+  ausfall = true;
+  const k2 = await page.locator("#ptt").boundingBox(); // der Klick auf „Nochmal senden“ hat die Maus bewegt
+  await page.mouse.move(k2.x + k2.width / 2, k2.y + k2.height / 2);
+  await page.mouse.down();
+  await page.waitForSelector('#station[data-zustand="aufnahme"]');
+  await page.waitForTimeout(2000);
+  await page.mouse.up();
+  await page.waitForSelector('#station[data-zustand="fehler"]', { timeout: 20000 });
+  await page.click("#speichern");
+  await page.waitForSelector("#dialog-frage[open]");
+  pruefe(/Aufnahme fehlt/.test(await page.textContent("#frage-titel")), "Speichern mit fehlender Aufnahme fragt nach");
+  await page.click("#frage-nein");
+  await page.click("#verwerfen");
+  await page.click("#frage-ja");
+  pruefe((await station(page))[0] === "bereit" && (await page.isHidden("#entwurf")), "Verwerfen räumt auch die fehlende Aufnahme weg");
+  pruefe(konsole.filter((m) => !/502|Bad Gateway/.test(m)).length === 0, `Ausfall-Test: keine unerwarteten Konsolenfehler${konsole.length ? ` (${konsole.join(" | ")})` : ""}`);
+  await ctx.close();
+}
+{
+  // Verwerfen, während das Beispieldiktat noch verarbeitet wird → nichts taucht später wieder auf
+  const ctx = await chrome.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await page.goto(`${basis}/?demo=1#/aufnahme`);
+  await page.waitForFunction(() => document.querySelector("#patient-wahl").options.length === 4);
+  await page.click("#demo-diktat");
+  await page.waitForSelector('#station[data-zustand="verarbeitet"]');
+  await page.click("#verwerfen");
+  await page.click("#frage-ja");
+  await page.waitForTimeout(2500);
+  pruefe((await station(page))[0] === "bereit" && (await page.isHidden("#entwurf")) && !(await page.inputValue("#entwurf-roh")),
+    "Verwerfen während der Verarbeitung: verworfener Text kommt nicht zurück");
+  await ctx.close();
+}
+
 // ---------- 3 Mikrofon verweigert → klare Anleitung ----------
 {
   const ctx = await chrome.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" });

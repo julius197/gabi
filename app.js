@@ -44,6 +44,7 @@
     toasts: $("#toasts"),
     demoBanner: $("#demobanner"), demoText: $("#demo-text"), demoZuruecksetzen: $("#demo-zuruecksetzen"),
     demoVerbinden: $("#demo-verbinden"), demoBeenden: $("#demo-beenden"), demoDiktat: $("#demo-diktat"),
+    testbanner: $(".testbanner"), offline: $("#ansicht-offline"), offlineErneut: $("#offline-erneut"), offlineDemo: $("#offline-demo"),
     dialogFrage: $("#dialog-frage"), frageTitel: $("#frage-titel"), frageText: $("#frage-text"), frageJa: $("#frage-ja"), frageNein: $("#frage-nein"),
   };
 
@@ -82,20 +83,25 @@
     setTimeout(() => weg(), dauer);
   }
 
+  let frageOffen = null; // höchstens eine Nachfrage gleichzeitig – eine neue beantwortet die alte mit „Nein“
   function frage(titel, text, ja = "OK") {
+    if (frageOffen) frageOffen(false);
     return new Promise((fertig) => {
       el.frageTitel.textContent = titel;
       el.frageText.textContent = text;
       el.frageJa.textContent = ja;
       const schliessen = (antwort) => {
+        if (frageOffen !== schliessen) return;
+        frageOffen = null;
         el.frageJa.onclick = el.frageNein.onclick = el.dialogFrage.oncancel = null;
-        el.dialogFrage.close();
+        if (el.dialogFrage.open) el.dialogFrage.close();
         fertig(antwort);
       };
+      frageOffen = schliessen;
       el.frageJa.onclick = () => schliessen(true);
       el.frageNein.onclick = () => schliessen(false);
       el.dialogFrage.oncancel = (e) => { e.preventDefault(); schliessen(false); };
-      el.dialogFrage.showModal();
+      try { if (!el.dialogFrage.open) el.dialogFrage.showModal(); } catch { schliessen(false); }
     });
   }
 
@@ -264,10 +270,15 @@
   // ==========================================================
   const aufnahme = { phase: "bereit", losgelassen: false, zeiger: null, start: 0, rec: null, stream: null, ctx: null, analyser: null, teile: [], mime: "", maxPegel: 0, sperre: null };
   let offeneTranskripte = 0;
+  let demoHinweisGezeigt = false;
   let kette = Promise.resolve();
   const WARNUNG_AB_S = MAX_DAUER_S - 30;
   const LABEL = { bereit: "Bereit", startet: "Mikrofon startet", aufnahme: "Nimmt auf", verarbeitet: "Verarbeitet", fertig: "Fertig", fehler: "Fehler" };
   const meldung = { art: "", text: "", aktion: null, uhr: 0 }; // Fehler oder „gespeichert“ an der Station
+  // Nicht erkannte Aufnahmen bleiben hier, bis sie gesendet oder mit dem Entwurf verworfen sind – nie still verloren
+  const unversendet = [];
+  let sendeFehler = "";
+  let stationAktion = null;
 
   // ---------- Gerät / Browser ----------
   const UA = navigator.userAgent;
@@ -309,6 +320,10 @@
     else if (aufnahme.phase === "stoppt") { zustand = "verarbeitet"; text = "Aufnahme wird abgeschlossen …"; }
     else if (offeneTranskripte > 0) { zustand = "verarbeitet"; text = "Sprache wird erkannt …"; }
     else if (strukturLaeuft) { zustand = "verarbeitet"; text = "Notiz wird geschrieben …"; }
+    else if (unversendet.length) {
+      zustand = "fehler";
+      text = `${unversendet.length === 1 ? "1 Aufnahme" : `${unversendet.length} Aufnahmen`} noch nicht erkannt – fehlt in der Notiz. ${sendeFehler}`;
+    }
     else if (meldung.art === "fehler") { zustand = "fehler"; text = meldung.text; }
     else if (meldung.art === "gespeichert") { zustand = "fertig"; text = meldung.text; }
     else if (entwurfAktuell()) { zustand = "fertig"; text = "Notiz fertig – bitte prüfen und speichern. Gedrückt halten ergänzt."; }
@@ -316,9 +331,16 @@
     el.station.dataset.zustand = zustand;
     el.statusText.textContent = LABEL[zustand];
     if (el.anweisung.textContent !== text) el.anweisung.textContent = text;
-    const aktion = zustand === "fehler" ? meldung.aktion : null;
+    const aktion = zustand !== "fehler" ? null
+      : unversendet.length ? { text: "Nochmal senden", los: alleNochmalSenden }
+        : meldung.aktion;
+    stationAktion = aktion;
     el.stationAktion.hidden = !aktion;
     if (aktion) el.stationAktion.textContent = aktion.text;
+  }
+
+  function alleNochmalSenden() {
+    for (const holen of unversendet.splice(0)) transkriptEinreihen(holen);
   }
 
   function meldungSetzen(art, text, aktion = null, dauer = 0) {
@@ -333,9 +355,9 @@
     stationAktualisieren();
   }
   el.stationAktion.addEventListener("click", () => {
-    const aktion = meldung.aktion;
+    const aktion = stationAktion;
     if (!aktion) return;
-    meldungLoeschen();
+    if (aktion === meldung.aktion) meldungLoeschen();
     aktion.los();
   });
 
@@ -478,20 +500,29 @@
     }
     aufnahme.teile = [];
     rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) aufnahme.teile.push(ev.data); };
-    rec.onstop = aufnahmeFertig;
+    rec.onstop = () => aufnahmeFertig(rec);
     rec.onerror = () => aufnahmeStoppen();
     // Telefonat, Bluetooth-Wechsel o. Ä. beendet das Mikrofon → sauber abschließen
     stream.getAudioTracks().forEach((t) => { t.onended = () => aufnahmeStoppen(); });
     let analyser = null;
     try {
-      if (ctx.state === "suspended") await ctx.resume();
+      if (ctx.state === "suspended") await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 1000))]); // WebKit hängt hier manchmal
       analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.6;
       ctx.createMediaStreamSource(stream).connect(analyser);
     } catch { analyser = null; }
+    try {
+      rec.start();
+    } catch (e) {
+      stream.getTracks().forEach((t) => t.stop());
+      if (ctx) ctx.close().catch(() => {});
+      formatSperren(mime);
+      aufnahme.phase = "bereit";
+      meldungSetzen("fehler", `Aufnahme konnte nicht starten (${e.name || "Fehler"}). Bitte nochmal drücken.`);
+      return;
+    }
     Object.assign(aufnahme, { rec, stream, ctx, analyser, mime: rec.mimeType || mime, start: performance.now(), phase: "aufnahme" });
-    rec.start();
     try { if (navigator.vibrate) navigator.vibrate(20); } catch { /* egal */ }
     bildschirmWachHalten(true);
     stationAktualisieren();
@@ -503,9 +534,12 @@
   function aufnahmeStoppen() {
     aufnahme.losgelassen = true;
     if (aufnahme.phase === "aufnahme" && aufnahme.rec && aufnahme.rec.state !== "inactive") {
+      const rec = aufnahme.rec;
       aufnahme.phase = "stoppt";
       aufnahme.dauer = performance.now() - aufnahme.start;
-      try { aufnahme.rec.stop(); } catch { aufnahmeFertig(); }
+      try { rec.stop(); } catch { aufnahmeFertig(rec); }
+      // Wächter: kommt „stop“ nie an, trotzdem abschließen statt hängen zu bleiben
+      setTimeout(() => { if (aufnahme.rec === rec && aufnahme.phase === "stoppt") aufnahmeFertig(rec); }, 4000);
       stationAktualisieren();
     }
   }
@@ -513,9 +547,17 @@
   /** Bildschirm während der Aufnahme nicht ausgehen lassen (sonst bricht das iPhone die Aufnahme ab). */
   async function bildschirmWachHalten(an) {
     try {
-      if (an && navigator.wakeLock && !aufnahme.sperre) aufnahme.sperre = await navigator.wakeLock.request("screen");
-      else if (!an && aufnahme.sperre) { const s = aufnahme.sperre; aufnahme.sperre = null; await s.release(); }
-    } catch { aufnahme.sperre = null; }
+      if (an && navigator.wakeLock && !aufnahme.sperre) {
+        const s = await navigator.wakeLock.request("screen");
+        s.addEventListener("release", () => { if (aufnahme.sperre === s) aufnahme.sperre = null; });
+        if (aufnahme.phase === "aufnahme" && !aufnahme.sperre) aufnahme.sperre = s; // Aufnahme läuft noch?
+        else await s.release();
+      } else if (!an && aufnahme.sperre) {
+        const s = aufnahme.sperre;
+        aufnahme.sperre = null;
+        await s.release();
+      }
+    } catch { /* nicht unterstützt oder abgelehnt – Aufnahme geht trotzdem */ }
   }
 
   function pegelSchleife() {
@@ -546,7 +588,8 @@
     setTimeout(zeitSchleife, 250);
   }
 
-  function aufnahmeFertig() {
+  function aufnahmeFertig(rec) {
+    if (aufnahme.rec !== rec) return; // schon abgeschlossen (z. B. durch den Wächter)
     const { stream, ctx, teile, mime, maxPegel } = aufnahme;
     const dauer = aufnahme.dauer ?? performance.now() - aufnahme.start;
     if (stream) stream.getTracks().forEach((t) => t.stop());
@@ -594,6 +637,7 @@
 
   /** Ein Transkript holen (Aufnahme oder Beispieldiktat) und an den Entwurf hängen – der Reihe nach. */
   function transkriptEinreihen(holen) {
+    const generation = entwurf.generation; // wird der Entwurf verworfen, zählt das Ergebnis nicht mehr
     meldungLoeschen();
     offeneTranskripte++;
     entwurfZeigen();
@@ -602,14 +646,25 @@
     knoepfeAktualisieren();
     kette = kette
       .then(async () => {
+        if (generation !== entwurf.generation) return;
         const text = String((await holen()) || "").trim();
-        if (!text) { meldungSetzen("fehler", "Kein Text erkannt. Bitte deutlicher oder näher am Mikrofon sprechen."); return; }
+        if (generation !== entwurf.generation) return;
+        if (!text) {
+          meldungSetzen("fehler", "Kein Text erkannt. Bitte deutlicher oder näher am Mikrofon sprechen.");
+          toast("Kein Text erkannt – bitte nochmal aufnehmen.", "warn", 5000);
+          return;
+        }
         transkriptAnhaengen(text);
+        if (modus.demo && !demoHinweisGezeigt) {
+          demoHinweisGezeigt = true;
+          toast("Demo-Modus: Statt Ihrer Aufnahme steht hier ein Beispieltext.", "warn", 6000);
+        }
       })
       .catch((e) => {
-        if (e instanceof Abbruch) return;
-        const nochmal = e.keineWiederholung ? null : { text: "Nochmal senden", los: () => transkriptEinreihen(holen) };
-        meldungSetzen("fehler", `Spracherkennung: ${e.message}`, nochmal);
+        if (e instanceof Abbruch || generation !== entwurf.generation) return;
+        if (e.keineWiederholung) meldungSetzen("fehler", `Spracherkennung: ${e.message}`);
+        else { unversendet.push(holen); sendeFehler = e.message; }
+        toast(`Spracherkennung: ${e.message}`, "fehler", 7000);
       })
       .finally(() => {
         offeneTranskripte--;
@@ -646,7 +701,7 @@
   window.addEventListener("blur", () => aufnahmeStoppen());
   document.addEventListener("visibilitychange", () => { if (document.hidden) aufnahmeStoppen(); });
   window.addEventListener("beforeunload", (e) => {
-    const offen = aufnahme.phase !== "bereit" || offeneTranskripte > 0 || strukturLaeuft || speichertGerade || (ordner.bearbeiten && ordner.geaendert);
+    const offen = aufnahme.phase !== "bereit" || offeneTranskripte > 0 || strukturLaeuft || speichertGerade || unversendet.length > 0 || (ordner.bearbeiten && ordner.geaendert);
     if (offen) { e.preventDefault(); e.returnValue = ""; }
   });
 
@@ -742,7 +797,8 @@
   // ==========================================================
   // 7 Entwurf: Transkript sammeln, strukturieren, bearbeiten, speichern
   // ==========================================================
-  const entwurf = { patientId: "", rohtext: "", strukturiert: null, manuell: false, version: 0, strukturVersion: 0 };
+  // generation zählt bei jedem Verwerfen/Speichern hoch: späte Ergebnisse eines alten Entwurfs werden ignoriert
+  const entwurf = { patientId: "", rohtext: "", strukturiert: null, manuell: false, version: 0, strukturVersion: 0, generation: 0 };
   let strukturLaeuft = false;
   let speichertGerade = false;
 
@@ -780,14 +836,19 @@
 
   function nachTranskript() {
     if (!entwurf.rohtext) {
-      if (!entwurf.strukturiert) { // nichts erkannt und noch kein Entwurf → Fläche wieder ausblenden
+      if (unversendet.length) statusSetzen("Aufnahme nicht erkannt", "rot"); // Fläche bleibt: „Verwerfen“ muss erreichbar sein
+      else if (!entwurf.strukturiert) { // nichts erkannt und noch kein Entwurf → Fläche wieder ausblenden
         statusSetzen("");
         el.entwurf.hidden = true;
         document.body.classList.remove("mit-entwurf");
       }
       return;
     }
-    if (entwurf.version === entwurf.strukturVersion) return;
+    if (entwurf.version === entwurf.strukturVersion) { // nichts Neues dazugekommen → Anzeige nicht hängen lassen
+      if (unversendet.length) statusSetzen("Aufnahme fehlt noch", "rot");
+      else if (entwurf.strukturiert) statusSetzen("Entwurf fertig – bitte prüfen", "gruen");
+      return;
+    }
     if (entwurf.manuell) {
       el.neuHinweis.hidden = false;
       statusSetzen("Neuer Text ergänzt", "warn");
@@ -802,19 +863,22 @@
     if (!text) { toast("Noch kein Text – erst aufnehmen oder Transkript eintippen.", "warn"); return; }
     strukturLaeuft = true;
     const version = entwurf.version;
+    const generation = entwurf.generation;
     meldungLoeschen();
     statusSetzen("Notiz wird geschrieben …", "laeuft");
     knoepfeAktualisieren();
     try {
       const d = await api("/api/strukturieren", { methode: "POST", body: { rohtext: text }, zeit: 120000 });
+      if (generation !== entwurf.generation) return; // Entwurf inzwischen verworfen oder gespeichert
       entwurf.strukturiert = d.strukturiert;
       entwurf.strukturVersion = version;
       entwurf.manuell = false;
       el.neuHinweis.hidden = true;
       abschnitteZeigen();
       entwurfMerken();
-      statusSetzen("Entwurf fertig – bitte prüfen", "gruen");
+      statusSetzen(unversendet.length ? "Aufnahme fehlt noch" : "Entwurf fertig – bitte prüfen", unversendet.length ? "rot" : "gruen");
     } catch (e) {
+      if (generation !== entwurf.generation) return;
       statusSetzen("Notiz nicht erstellt", "rot");
       if (!(e instanceof Abbruch)) {
         meldungSetzen("fehler", `Notiz konnte nicht erstellt werden: ${e.message}`, { text: "Nochmal versuchen", los: () => strukturieren() });
@@ -824,7 +888,8 @@
     } finally {
       strukturLaeuft = false;
       knoepfeAktualisieren();
-      if (entwurf.version !== version && offeneTranskripte === 0 && !entwurf.manuell) strukturieren(); // neuer Text kam dazu
+      const neuerText = generation === entwurf.generation && entwurf.version !== version;
+      if (neuerText && offeneTranskripte === 0 && !entwurf.manuell && entwurf.rohtext.trim()) strukturieren(); // neuer Text kam dazu
     }
   }
 
@@ -893,6 +958,8 @@
 
   function entwurfLeeren() {
     Object.assign(entwurf, { rohtext: "", strukturiert: null, manuell: false, version: 0, strukturVersion: 0 });
+    entwurf.generation++;
+    unversendet.length = 0;
     el.entwurfRoh.value = "";
     el.entwurfAbschnitte.innerHTML = "";
     unklarZeigen(el.entwurfUnklar, []);
@@ -920,6 +987,11 @@
       return;
     }
     if (offeneTranskripte > 0 || strukturLaeuft) { toast("Bitte kurz warten, bis die Notiz fertig ist.", "warn"); return; }
+    if (unversendet.length) {
+      const anzahl = unversendet.length === 1 ? "Eine Aufnahme wurde" : `${unversendet.length} Aufnahmen wurden`;
+      if (!(await frage("Aufnahme fehlt in der Notiz", `${anzahl} noch nicht erkannt und fehlt in der Notiz. Trotzdem speichern?`, "Trotzdem speichern"))) return;
+      if (speichertGerade) return;
+    }
     const strukturiert = entwurf.strukturiert
       ? { ...ausFeldern(el.entwurfAbschnitte), unklar: entwurf.strukturiert.unklar || [] }
       : leereNotiz();
@@ -932,7 +1004,7 @@
       entwurfLeeren();
       meldungSetzen("gespeichert", `Gespeichert bei ${d.notiz.kuerzel}. Bereit für die nächste Notiz.`, null, 6000);
       patientenLaden().catch(() => {});
-      toast(`Gespeichert bei ${d.notiz.kuerzel}.`, "erfolg", 5000, { text: "Ansehen", los: () => { location.hash = `#/ordner/n/${d.notiz.id}`; } });
+      toast(`Gespeichert bei ${d.notiz.kuerzel}${modus.demo ? " (Demo – nur in diesem Browser)" : ""}.`, "erfolg", 5000, { text: "Ansehen", los: () => { location.hash = `#/ordner/n/${d.notiz.id}`; } });
     } catch (e) {
       fehlerZeigen(e, "Speichern: ");
     } finally {
@@ -1203,12 +1275,16 @@
 
   async function route() {
     if (!zugang) return zugangZeigen();
+    // Während die Nachfrage offen ist: weitere Seitenwechsel (z. B. zweimal „Zurück“) nicht ausführen
+    if (routeLaeuft) { history.replaceState(null, "", letzterHash || "#/ordner"); return; }
     // Ungespeicherte Bearbeitung: erst fragen, sonst zurück zur Notiz (ohne neuen Seitenwechsel)
-    if (ordner.bearbeiten && ordner.geaendert && location.hash !== letzterHash && !routeLaeuft) {
+    if (ordner.bearbeiten && ordner.geaendert && location.hash !== letzterHash) {
+      const ziel = location.hash;
+      let weiter = false;
       routeLaeuft = true;
-      const weiter = await bearbeitenVerlassen();
-      routeLaeuft = false;
+      try { weiter = await bearbeitenVerlassen(); } finally { routeLaeuft = false; }
       if (!weiter) { history.replaceState(null, "", letzterHash || "#/ordner"); return; }
+      if (location.hash !== ziel) history.replaceState(null, "", ziel);
     }
     letzterHash = location.hash;
     const teile = location.hash.replace(/^#\/?/, "").split("/");
@@ -1262,14 +1338,12 @@
     "keine-adresse": "Server-Adresse fehlt (config.js). Beispieldaten, nur in diesem Browser.",
   };
 
-  async function backendPruefen() {
-    if (DEMO_PARAM) return "param";
-    if (!API && !lokal) return "keine-adresse";
+  async function statusHolen() {
     const abbruch = new AbortController();
-    const uhr = setTimeout(() => abbruch.abort(), 6000);
+    const uhr = setTimeout(() => abbruch.abort(), 8000);
     try {
       const r = await fetch(`${API}/api/status`, { cache: "no-store", signal: abbruch.signal });
-      if (!r.ok) return "nicht-erreichbar";
+      if (!r.ok) return "nicht-erreichbar"; // auch 429/5xx: vorübergehend
       const d = (await r.json()) || {};
       const e = d.eingerichtet || {};
       // ältere Worker-Versionen kennen „bereit“ noch nicht
@@ -1282,12 +1356,32 @@
     }
   }
 
+  async function backendPruefen() {
+    if (DEMO_PARAM) return "param";
+    if (!API && !lokal) return "keine-adresse";
+    const erst = await statusHolen();
+    if (erst !== "nicht-erreichbar") return erst;
+    await new Promise((r) => setTimeout(r, 1500)); // kurzer Aussetzer? einmal nachfassen
+    return statusHolen();
+  }
+
+  /** Gerät war schon im echten Betrieb (Code gespeichert): nie still in den Demo-Modus, sondern fragen. */
+  function offlineZeigen() {
+    el.ansichten.hidden = true;
+    el.aufnahme.hidden = el.ordner.hidden = el.zugang.hidden = true;
+    el.offline.hidden = false;
+  }
+  el.offlineErneut.addEventListener("click", () => location.reload());
+  el.offlineDemo.addEventListener("click", () => { location.href = `${location.pathname}?demo=1#/aufnahme`; });
+
   function demoStarten(grund) {
     modus.demo = true;
     modus.grund = grund;
     demoApi = window.GabiDemo.erstelleApi();
     zugang = "demo"; // kein Zugangscode im Demo-Modus (wird nicht gespeichert)
     document.body.classList.add("demo");
+    el.testbanner.textContent = "";
+    el.testbanner.append(Object.assign(document.createElement("strong"), { textContent: "Demo-Modus" }), " – Beispieldaten, nichts geht an einen Server");
     el.demoText.textContent = DEMO_TEXTE[grund] || DEMO_TEXTE.param;
     el.demoVerbinden.hidden = grund === "param" || grund === "keine-adresse";
     el.demoBeenden.hidden = grund !== "param";
@@ -1311,7 +1405,8 @@
 
   window.addEventListener("hashchange", route);
   backendPruefen().then((grund) => {
-    if (grund) demoStarten(grund);
+    if (grund === "nicht-erreichbar" && zugang) offlineZeigen();
+    else if (grund) demoStarten(grund);
     else if (zugang) starten();
     else zugangZeigen();
   });

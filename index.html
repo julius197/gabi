@@ -55,6 +55,16 @@
       </form>
     </section>
 
+    <!-- Server nicht erreichbar (Gerät war schon im echten Betrieb) -->
+    <section class="zugang" id="ansicht-offline" hidden>
+      <div class="karte zugang-karte" role="alert">
+        <h1>Server nicht erreichbar</h1>
+        <p class="karte-text">Gabi erreicht den Server gerade nicht. Gespeicherte Notizen sind sicher. Bitte Internet prüfen und erneut versuchen.</p>
+        <button class="knopf primaer gross voll" type="button" id="offline-erneut">Erneut versuchen</button>
+        <button class="knopf voll" type="button" id="offline-demo">Demo-Modus öffnen (Beispieldaten)</button>
+      </div>
+    </section>
+
     <!-- Aufnahme -->
     <section class="aufnahme-ansicht" id="ansicht-aufnahme" hidden>
       <div class="patient-zeile">

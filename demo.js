@@ -286,9 +286,10 @@
       if (p === "/api/transkribieren" && methode === "POST") {
         if (!text || String(text).length < 200) throw new DemoFehler(400, "Keine gültige Aufnahme.");
         await warte(700);
-        const diktat = DIKTATE[d.diktat % DIKTATE.length];
-        d.diktat++;
-        merken(d);
+        const frisch = daten(); // nach dem Warten neu lesen – sonst überschreibt eine alte Kopie zwischenzeitliche Änderungen
+        const diktat = DIKTATE[frisch.diktat % DIKTATE.length];
+        frisch.diktat++;
+        merken(frisch);
         return { text: diktat.rohtext };
       }
 
@@ -339,8 +340,9 @@
         const n = { id: uuid(), patient_id: patient.id, rohtext, strukturiert, suchtext: suchtext(patient, rohtext, strukturiert), erstellt_am: new Date(jetzt()).toISOString(), geaendert_am: null };
         d.notizen.push(n);
         merken(d);
+        const antwort = mitPatient(d, n);
         await warte(250);
-        return { notiz: mitPatient(d, n) };
+        return { notiz: antwort };
       }
 
       const treffer = p.match(/^\/api\/notizen\/([^/]+)$/);
