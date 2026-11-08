@@ -152,3 +152,14 @@ describe("Seed-Datei supabase/seed_test.sql", () => {
     for (const p of DEMO.PATIENTEN) expect(DEMO.NOTIZEN.filter((n) => n.kuerzel === p.kuerzel)).toHaveLength(2);
   });
 });
+
+describe("Versionsstempel", () => {
+  it("VERSION in app.js passt zu jedem ?v= in index.html (sonst lädt jeder Start einmal neu oder zeigt „aktualisiert“)", () => {
+    const wurzel = new URL("../../", import.meta.url);
+    const html = readFileSync(new URL("index.html", wurzel), "utf8");
+    const version = /const VERSION = "([^"]+)"/.exec(readFileSync(new URL("app.js", wurzel), "utf8"))[1];
+    const eigene = [...html.matchAll(/(?:src|href)="(style\.css|config\.js|kern\.js|pdf\.js|demo\.js|aufnahme\.js|app\.js)\?v=([^"]+)"/g)];
+    expect(eigene.map((m) => m[1]).sort()).toEqual(["app.js", "aufnahme.js", "config.js", "demo.js", "kern.js", "pdf.js", "style.css"]);
+    for (const m of eigene) expect(`${m[1]}?v=${m[2]}`).toBe(`${m[1]}?v=${version}`);
+  });
+});

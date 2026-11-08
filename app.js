@@ -5,7 +5,7 @@
 (() => {
   "use strict";
 
-  // Übergang v1 → v2: alte Seite (noch im Browser-Cache) mit neuem Skript → einmal frisch laden, dann ist alles v2
+  // In einer fremden Seite eingebettet (GitHub Pages kann kein frame-ancestors setzen): nicht starten
   if (window.top !== window.self) {
     // in einer fremden Seite eingebettet: nicht starten, nur ein Link zum Öffnen im eigenen Tab
     const link = document.createElement("a");
@@ -17,15 +17,31 @@
     document.body.replaceChildren(link);
     return;
   }
-  if (!document.getElementById("ansicht-chat") || !window.GabiKern) {
-    try {
-      if (!sessionStorage.getItem("gabi.frisch-geladen")) {
-        sessionStorage.setItem("gabi.frisch-geladen", "1");
-        location.reload();
-      }
-    } catch { /* Speicher gesperrt – lieber nicht neu laden als endlos */ }
+  // Seite und Skript aus verschiedenen Versionen (Browser-Cache: alte index.html, neue Dateien – oder v1 → v2):
+  // einmal je Version frisch laden; hilft das nicht, ein Hinweis mit Knopf statt einer leeren Seite.
+  // VERSION muss zum ?v= in index.html passen (ein Test prüft das).
+  const VERSION = "2.0.2";
+  const MERKER = `gabi.frisch-geladen.${VERSION}`;
+  let geladenAls = null;
+  try { geladenAls = new URL(document.currentScript.src).searchParams.get("v"); } catch { geladenAls = null; }
+  if (geladenAls !== VERSION || !document.getElementById("ansicht-chat") || !window.GabiKern) {
+    let neuLaden = false;
+    try { if (!sessionStorage.getItem(MERKER)) { sessionStorage.setItem(MERKER, "1"); neuLaden = true; } } catch { /* Speicher gesperrt */ }
+    if (neuLaden) { location.reload(); return; }
+    const box = document.createElement("div");
+    box.className = "veraltet";
+    const satz = document.createElement("p");
+    satz.textContent = "Gabi wurde aktualisiert. Bitte lade die Seite einmal neu.";
+    const knopf = document.createElement("button");
+    knopf.type = "button";
+    knopf.className = "knopf primaer";
+    knopf.textContent = "Neu laden";
+    knopf.addEventListener("click", () => location.reload());
+    box.append(satz, knopf);
+    document.body.replaceChildren(box);
     return;
   }
+  try { sessionStorage.removeItem(MERKER); } catch { /* egal */ } // geklappt: beim nächsten Versionswechsel wieder erlaubt
 
   const K = window.GabiKern;
   const PDF = window.GabiPdf;
@@ -70,6 +86,7 @@
   const warte = (ms) => new Promise((r) => setTimeout(r, ms));
   const GROB = window.matchMedia("(pointer: coarse)").matches;
   const WENIG_BEWEGUNG = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const LAPTOP = window.matchMedia("(min-width: 1024px)");
 
   // ---------- Toasts ----------
   function toast(text, { art = "", dauer = 4000, aktion } = {}) {
@@ -320,21 +337,36 @@
     if (grund !== "param") toast(DEMO_TEXTE[grund], { dauer: 6000 });
   }
 
-  function offlineZeigen() {
+  function offlineZeigen(grund = "nicht-erreichbar") {
     ansichtZeigen("offline");
-    el.offlineTitel.textContent = navigator.onLine === false ? "Kein Internet" : "Server nicht erreichbar";
-    el.offlineText.textContent = navigator.onLine === false
+    const offline = navigator.onLine === false;
+    el.offlineTitel.textContent = offline ? "Kein Internet" : grund === "nicht-eingerichtet" ? "Gabi ist gerade nicht bereit" : "Server nicht erreichbar";
+    el.offlineText.textContent = offline
       ? "Dein Gerät ist offline. Sobald das Internet wieder da ist, geht es hier weiter."
-      : "Gabi erreicht den Server gerade nicht. Versuch es gleich noch einmal – gespeicherte Notizen bleiben erhalten.";
+      : grund === "nicht-eingerichtet"
+        ? "Auf dem Server fehlt gerade noch etwas. Versuch es bitte später noch einmal – gespeicherte Notizen bleiben erhalten."
+        : "Gabi erreicht den Server gerade nicht. Versuch es gleich noch einmal – gespeicherte Notizen bleiben erhalten.";
+  }
+  // „Demo ansehen“ ohne Seitenwechsel – geht auch ohne Internet, alles ist schon geladen
+  const offlineDemo = el.offline.querySelector('a[href*="demo=1"]');
+  if (offlineDemo) {
+    offlineDemo.addEventListener("click", (e) => {
+      e.preventDefault();
+      history.replaceState(null, "", `${location.pathname}?demo=1#/`);
+      demoStarten("param");
+    });
   }
   el.offlineErneut.addEventListener("click", () => start());
   window.addEventListener("online", () => { if (!el.offline.hidden) start(); });
+
+  // Scrollposition steuert die App (nach dem Neuladen sonst „Nochmal versuchen“ unter der Eingabezeile)
+  try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch { /* egal */ }
 
   let gestartet = false;
   function starten() {
     gestartet = true;
     gespraechLaden();
-    patientenLaden().catch(() => {});
+    patientenLaden().catch(() => {}).then(v1EntwurfUebernehmen);
     gruessen();
     route();
     AUFNAHME.rechtBeobachten((s) => { mikroGesperrt = s === "denied"; });
@@ -345,7 +377,7 @@
     if (DEMO_PARAM) return demoStarten("param");
     const grund = await backendPruefen();
     // Auf der echten Adresse nie still in die Demo (die Offline-Seite bietet „Demo ansehen“ an); lokal und in Tests schon
-    if (grund === "nicht-erreichbar" && (zugang || PRODUKTION)) return offlineZeigen();
+    if ((grund === "nicht-erreichbar" || grund === "nicht-eingerichtet") && (zugang || PRODUKTION)) return offlineZeigen(grund);
     if (grund) return demoStarten(grund);
     if (zugang) return starten();
     zugangZeigen();
@@ -403,6 +435,7 @@
         return;
       }
       ordner.geaendert = false;
+      const vorher = letzterHash;
       letzterHash = ziel;
       const notizen = ziel.startsWith("#/notizen");
       ansichtZeigen(notizen ? "notizen" : "chat");
@@ -412,7 +445,8 @@
       el.kopfWechsel.innerHTML = notizen ? `${symbol("chat")}<span class="beschriftung">Gespräch</span>` : `${symbol("notizen")}<span class="beschriftung">Notizen</span>`;
       if (notizen) await notizenZeigen(ziel);
       else gespraechZeigen();
-      if (!notizen || !ziel.includes("/n/")) window.scrollTo(0, notizen ? 0 : document.documentElement.scrollHeight);
+      if (notizen) { if (!ziel.includes("/n/") || vorher !== ziel) window.scrollTo(0, 0); } // Notiz: oben mit Datum und Patient
+      else window.scrollTo(0, chat.nachrichten.length ? document.documentElement.scrollHeight : 0);
     } finally {
       routeLaeuft = false;
       if ((location.hash || "#/") !== letzterHash) route();
@@ -467,6 +501,28 @@
     chat.modus = null; // Diktat-/Such-Modus nicht übernehmen – sonst wird die nächste Frage still zum Diktat
     allesZeigen();
   }
+  /** Noch nicht gespeicherter Entwurf aus v1 (sessionStorage „gabi.entwurf“, Demo „gabi.entwurf.demo“) → Karte im Gespräch. */
+  function v1EntwurfUebernehmen() {
+    const schl = modus.demo ? "gabi.entwurf.demo" : "gabi.entwurf";
+    let alt = null;
+    try { alt = JSON.parse(speicher.lesen("sitzung", schl) || "null"); } catch { alt = null; }
+    if (!alt || typeof alt !== "object") return;
+    speicher.loeschen("sitzung", schl);
+    const rohtext = typeof alt.rohtext === "string" ? alt.rohtext.slice(0, 20000) : "";
+    const s = alt.strukturiert && typeof alt.strukturiert === "object" ? alt.strukturiert : null;
+    const p = s && (chat.patienten || []).find((x) => x.id === alt.patientId);
+    if (p) {
+      const strukturiert = {};
+      for (const [key] of K.ABSCHNITTE) strukturiert[key] = K.stichpunkte(s[key]);
+      strukturiert.unklar = K.stichpunkte(s.unklar);
+      lokaleAntwort(`Aus der Vorversion war noch ein Entwurf für **${p.kuerzel}** offen. Prüf ihn bitte – gespeichert wird erst, wenn du auf „Speichern“ tippst.`,
+        [{ typ: "entwurf", id: neueId(), patient_id: p.id, kuerzel: p.kuerzel, pseudonym: p.pseudonym || "", rohtext, strukturiert }]);
+    } else if (rohtext.trim()) {
+      lokaleAntwort(`Aus der Vorversion war noch ein Diktat offen, das nicht gespeichert wurde:\n\n${rohtext.trim()}\n\nDu kannst es kopieren und hier noch einmal schicken.`);
+    }
+    gespraechMerken();
+  }
+
   function gespraechLeeren() {
     if (chat.laeuft) chat.laeuft.abbruch.abort();
     aufnahmen.clear(); // ohne Karte nicht mehr erreichbar – Speicher freigeben
@@ -586,10 +642,24 @@
     requestAnimationFrame(() => {
       bildAngefragt = false;
       const unten = nahUnten();
+      const mitKarte = [...ausstehend].find((x) => (x.karten || []).some((k) => k.typ === "entwurf" || k.typ === "bericht"));
       for (const x of ausstehend) nachrichtNeuZeichnen(x);
       ausstehend.clear();
-      if (unten) nachUntenRollen();
+      if (!unten) return;
+      if (mitKarte) nachrichtZeigen(mitKarte); else nachUntenRollen();
     });
+  }
+  /** Antwort mit Karte: passt sie nicht ganz in den sichtbaren Bereich, ihren Anfang zeigen (Text + Kartenkopf) – nicht das Ende. */
+  function nachrichtZeigen(n) {
+    const knoten = nachrichtKnoten.get(n.id);
+    if (!knoten) return nachUntenRollen();
+    const kopf = el.kopf && !LAPTOP.matches ? el.kopf.getBoundingClientRect().bottom : 0;
+    const leiste = document.querySelector(".eingabe-bereich");
+    const oben = kopf + 8;
+    const unten = (leiste ? leiste.getBoundingClientRect().top : window.innerHeight) - 8;
+    const r = knoten.getBoundingClientRect();
+    if (r.height > unten - oben) window.scrollTo({ top: Math.max(0, window.scrollY + r.top - oben) });
+    else nachUntenRollen();
   }
   const nahUnten = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
   function nachUntenRollen(sanft = false) {
@@ -825,7 +895,13 @@
     const ohneNotiz = (p) => k.zweck === "bericht" && !(p.anzahl > 0); // Bericht braucht mindestens eine Notiz
     const chips = chat.patienten.map((p) => `<button class="chip${k.gewaehlt === p.id ? " gewaehlt" : ""}" type="button" data-aktion="waehle" data-wert="${esc(p.id)}" ${fertig || ohneNotiz(p) ? "disabled" : ""}${ohneNotiz(p) ? ' title="Noch keine Notiz – kein Bericht möglich"' : ""}><strong>${esc(p.kuerzel)}</strong>${ohneNotiz(p) ? '<span class="stumm">noch keine Notiz</span>' : kurzName(p) ? `<span class="stumm">${esc(kurzName(p))}</span>` : ""}</button>`).join("");
     return `<div class="auswahl-karte" data-karte="${esc(k.id)}"><div class="chip-gruppe">${chips}
-      <button class="chip akzent" type="button" data-aktion="neuer-patient" ${fertig ? "disabled" : ""}>${symbol("person-plus")}Neuer Test-Patient</button></div></div>`;
+      ${k.zweck === "bericht" ? "" : `<button class="chip akzent" type="button" data-aktion="neuer-patient" ${fertig ? "disabled" : ""}>${symbol("person-plus")}Neuer Test-Patient</button>`}</div></div>`;
+  }
+
+  /** Beim Bearbeiten: Prüfpunkte als Textfeld – geklärte Punkte einfach löschen, dann verschwindet auch „zu prüfen“. */
+  function pruefenFeld(wert, zeilen) {
+    return `<section class="abschnitt pruefen"><label class="feld"><span class="augenbraue">${symbol("warn", "klein")}Bitte prüfen – Geklärtes einfach löschen</span>
+      <textarea class="eingabefeld" data-abschnitt="unklar" rows="${Math.max(2, zeilen)}" placeholder="Ein Punkt pro Zeile">${esc(wert)}</textarea></label></section>`;
   }
 
   function punkteHtml(liste) {
@@ -859,7 +935,10 @@
       return `<section class="abschnitt"><h3 class="augenbraue">${titel}</h3>${liste.length ? punkteHtml(liste) : '<p class="abschnitt-leer">Nichts notiert</p>'}</section>`;
     }).join("");
     const unklar = K.stichpunkte(s.unklar);
-    const pruefen = unklar.length && !k.bearbeiten ? `<section class="abschnitt pruefen"><h3 class="augenbraue">${symbol("warn", "klein")}Bitte prüfen</h3>${punkteHtml(unklar)}</section>` : "";
+    const pruefenWert = k.bearbeitung && typeof k.bearbeitung.unklar === "string" ? k.bearbeitung.unklar : unklar.join("\n");
+    const pruefen = !unklar.length ? ""
+      : k.bearbeiten ? pruefenFeld(pruefenWert, unklar.length)
+        : `<section class="abschnitt pruefen"><h3 class="augenbraue">${symbol("warn", "klein")}Bitte prüfen</h3>${punkteHtml(unklar)}</section>`;
     const fuss = k.bearbeiten
       ? `<button class="knopf primaer klein" type="button" data-aktion="entwurf-uebernehmen">${symbol("haken")}Übernehmen</button>
          <button class="knopf leise klein" type="button" data-aktion="entwurf-abbrechen">Abbrechen</button>`
@@ -892,6 +971,23 @@
     </article>`;
   }
 
+  function entwurfAlsText(k) {
+    const s = k.strukturiert || {};
+    const zeilen = [`Notiz-Entwurf · ${k.kuerzel}${k.gespeichert ? " (gespeichert)" : ""}`];
+    for (const [key, titel] of K.ABSCHNITTE) {
+      const liste = K.stichpunkte(s[key]);
+      if (liste.length) zeilen.push("", titel, ...liste.map((x) => `- ${x}`));
+    }
+    const unklar = K.stichpunkte(s.unklar);
+    if (unklar.length) zeilen.push("", "Bitte prüfen", ...unklar.map((x) => `- ${x}`));
+    return zeilen.join("\n");
+  }
+  /** Antwort als Text – mit Entwürfen und Berichten, die darunter als Karte stehen. */
+  function nachrichtAlsText(n) {
+    const karten = (n.karten || []).map((k) => (k.typ === "entwurf" && !k.verworfen ? entwurfAlsText(k) : k.typ === "bericht" ? berichtAlsText(k.bericht || {}) : "")).filter(Boolean);
+    return [K.ohneFormat(n.text || ""), ...karten].filter((x) => x.trim()).join("\n\n");
+  }
+
   function berichtAlsText(b) {
     const zeilen = [`${b.titel} · ${b.kuerzel}${b.pseudonym ? ` · ${b.pseudonym}` : ""}`, `${b.anzahl === 1 ? "1 Notiz" : `${b.anzahl} Notizen`} · ${zeitraum(b)}`, "", "Zusammenfassung", ...(b.zusammenfassung || []).map((p) => `- ${p}`)];
     if (b.art === "verlauf") {
@@ -916,7 +1012,7 @@
     const aktion = b.dataset.aktion;
 
     if (aktion === "wiederholen") return wiederholen(n);
-    if (aktion === "kopieren") return kopieren(K.ohneFormat(n.text), "Antwort kopiert.");
+    if (aktion === "kopieren") return kopieren(nachrichtAlsText(n), "Antwort kopiert.");
     if (aktion === "vorlesen") return vorlesen(n);
     if (aktion === "neu-laden") return location.reload();
     if (!k) return;
@@ -1073,8 +1169,8 @@
     chat.patienten = patienten;
     chat.patientenFehler = "";
     seitenPatientenZeigen();
-    // offene Auswahl-Karten mit der Liste füllen
-    for (const n of chat.nachrichten) if ((n.karten || []).some((k) => k.typ === "auswahl" && !k.gewaehlt)) nachrichtNeuZeichnen(n);
+    // Auswahl-Karten mit der Liste füllen – auch schon beantwortete (nach dem Neuladen standen dort sonst Platzhalter)
+    for (const n of chat.nachrichten) if ((n.karten || []).some((k) => k.typ === "auswahl")) nachrichtNeuZeichnen(n);
     return patienten;
   }
 
@@ -1136,6 +1232,7 @@
   let erkennt = false;
   let mikroGesperrt = false;
 
+  let mikroPerTastatur = false; // Aufnahme per Leertaste/Enter gestartet → danach Fokus zurück aufs Mikrofon
   function eingabeAktualisieren() {
     const laeuft = Boolean(chat.laeuft);
     const hatText = Boolean(el.text.value.trim());
@@ -1144,18 +1241,32 @@
     el.senden.setAttribute("aria-label", laeuft ? "Antwort stoppen" : "Senden");
     el.senden.classList.toggle("stoppt", laeuft);
     el.mikro.disabled = laeuft || erkennt;
+    // per Tastatur aufgenommen: Fokus zurück aufs Mikrofon, sobald es wieder geht (ein gesperrter Knopf verliert ihn)
+    if (!el.mikro.disabled && mikroPerTastatur && (document.activeElement === document.body || !document.activeElement)) {
+      mikroPerTastatur = false;
+      el.mikro.focus();
+    }
     for (const c of document.querySelectorAll("[data-schnell]")) c.disabled = laeuft || erkennt;
   }
 
   el.text.enterKeyHint = GROB ? "enter" : "send";
   el.text.addEventListener("input", () => { autoHoehe(el.text); eingabeAktualisieren(); });
   el.text.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !GROB) { e.preventDefault(); el.eingabe.requestSubmit(); }
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !GROB) {
+      e.preventDefault();
+      if (!chat.laeuft) el.eingabe.requestSubmit(); // während einer Antwort: nichts tun (Doppel-Enter, Vorausschreiben)
+    }
     if (e.key === "Escape" && chat.modus) modusSetzen(null);
+  });
+  // Stoppen nur über den Stopp-Knopf (derselbe Knopf wie Senden) – nie über Enter
+  el.senden.addEventListener("click", (e) => {
+    if (!chat.laeuft) return;
+    e.preventDefault();
+    chat.laeuft.abbruch.abort();
   });
   el.eingabe.addEventListener("submit", (e) => {
     e.preventDefault();
-    if (chat.laeuft) { chat.laeuft.abbruch.abort(); return; }
+    if (chat.laeuft) return;
     const text = el.text.value.trim();
     if (!text || erkennt) return;
     el.text.value = "";
@@ -1199,6 +1310,18 @@
   }
 
   const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  /** Hinweis direkt unter der Eingabezeile (dort, wo Blick und Finger gerade sind), danach wieder der normale Satz. */
+  const fussZeile = document.querySelector(".eingabe-fuss");
+  const FUSS_TEXT = fussZeile ? fussZeile.textContent : "";
+  let fussUhr = null;
+  function fussHinweis(text, { art = "", dauer = 5000 } = {}) {
+    if (!fussZeile) return toast(text, { art });
+    clearTimeout(fussUhr);
+    fussZeile.textContent = text;
+    fussZeile.className = `eingabe-fuss hinweis${art ? ` ${art}` : ""}`;
+    fussUhr = setTimeout(() => { fussZeile.textContent = FUSS_TEXT; fussZeile.className = "eingabe-fuss"; }, dauer);
+  }
+
   const aufnahme = AUFNAHME.erstelle({
     beiZustand(phase) {
       el.eingabe.classList.toggle("nimmt-auf", phase === "aufnahme" || phase === "startet");
@@ -1218,9 +1341,9 @@
       if (hilfe) {
         location.hash = "#/";
         lokaleAntwort(hilfe.schritte && hilfe.schritte.length ? "Ich komme gerade nicht ans Mikrofon." : text, [{ typ: "hilfe", id: neueId(), titel: hilfe.titel || AUFNAHME.BLOCKIERT.titel, text: hilfe.text || "", schritte: hilfe.schritte || [] }]);
-      } else toast(text, { art: "fehler", dauer: 6000 });
+      } else fussHinweis(text, { art: "fehler", dauer: 8000 });
     },
-    beiHinweis(text) { toast(text); },
+    beiHinweis(text) { fussHinweis(text); },
     beiVerworfen({ holen }) {
       const m = chat.modus ? { ...chat.modus } : null;
       toast("Aufnahme verworfen.", { dauer: 9000, aktion: { text: "Rückgängig", tun: () => {
@@ -1265,7 +1388,7 @@
           aufnahmen.delete(wiederholung.k.id);
           nachrichtNeuZeichnen(wiederholung.n);
           gespraechMerken();
-        } else toast("Ich habe nichts verstanden. Bitte nochmal deutlich sprechen.", { art: "warn" });
+        } else fussHinweis("Ich habe nichts verstanden. Bitte nochmal deutlich sprechen.", { art: "warn" });
         return;
       }
       erkennt = false;
@@ -1359,7 +1482,7 @@
   el.mikro.addEventListener("pointercancel", loslassen);
   el.mikro.addEventListener("contextmenu", (e) => e.preventDefault());
   el.mikro.addEventListener("keydown", (e) => {
-    if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); aufnahmeBeginnen(); }
+    if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); if (aufnahmeBeginnen()) mikroPerTastatur = true; }
     if (e.key === "Escape") aufnahme.abbrechen();
   });
   el.mikro.addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); aufnahme.stopp(); } });
@@ -1423,6 +1546,7 @@
     const inhalt = el.notizen.querySelector("#ordner-inhalt");
     try {
       const patienten = await patientenLaden();
+      if (ordner.suche.trim() || (location.hash || "#/") !== "#/notizen") return; // inzwischen wird gesucht oder woanders gelesen
       if (!patienten.length) {
         inhalt.innerHTML = leerHtml({ sym: "person-plus", titel: "Noch keine Test-Patienten", text: "Leg einen Test-Patienten mit Kürzel an (z. B. TP-01) – bitte nur erfundene Testdaten.", knopf: `<button class="knopf primaer" type="button" data-ordner="patient-neu">${symbol("plus")}Test-Patient anlegen</button>` });
         return;
@@ -1441,6 +1565,7 @@
 
   let sucheUhr = null;
   async function sucheAusfuehren() {
+    if ((location.hash || "#/") !== "#/notizen") return; // inzwischen woanders hin navigiert
     const inhalt = el.notizen.querySelector("#ordner-inhalt");
     const q = ordner.suche.trim();
     const loeschen = el.notizen.querySelector('[data-ordner="suche-loeschen"]');
@@ -1532,7 +1657,9 @@
       return `<section class="abschnitt"><h3 class="augenbraue">${titel}</h3>${liste.length ? punkteHtml(liste) : '<p class="abschnitt-leer">Nichts notiert</p>'}</section>`;
     }).join("");
     const unklar = K.stichpunkte(s.unklar);
-    const pruefen = unklar.length && !bearbeiten ? `<section class="abschnitt pruefen"><h3 class="augenbraue">${symbol("warn", "klein")}Bitte prüfen</h3>${punkteHtml(unklar)}</section>` : "";
+    const pruefen = !unklar.length ? ""
+      : bearbeiten ? pruefenFeld(unklar.join("\n"), unklar.length)
+        : `<section class="abschnitt pruefen"><h3 class="augenbraue">${symbol("warn", "klein")}Bitte prüfen</h3>${punkteHtml(unklar)}</section>`;
     const aktionen = bearbeiten
       ? `<button class="knopf primaer klein" type="button" data-leser="sichern">${symbol("haken")}Speichern</button><button class="knopf leise klein" type="button" data-leser="abbrechen">Abbrechen</button>`
       : `<button class="knopf sekundaer klein" type="button" data-leser="bearbeiten">${symbol("stift")}Bearbeiten</button>
@@ -1554,12 +1681,21 @@
     if (o && !o.disabled) {
       const was = o.dataset.ordner;
       if (was === "patient-neu") { const p = await patientAnlegenDialog(); if (p) location.hash = `#/notizen/p/${p.id}`; return; }
-      if (was === "suche-loeschen") { ordner.suche = ""; const s = el.notizen.querySelector("#suche"); if (s) { s.value = ""; s.focus(); } uebersichtZeigen(); return; }
+      if (was === "suche-loeschen") {
+        ordner.suche = "";
+        const feld = el.notizen.querySelector("#suche");
+        if (feld) { feld.value = ""; feld.focus(); }
+        const x = el.notizen.querySelector('label.suche [data-ordner="suche-loeschen"]');
+        if (x) x.hidden = true;
+        uebersichtZeigen();
+        return;
+      }
       if (was === "neu-laden") { notizenZeigen(location.hash); return; }
       const p = (chat.patienten || []).find((x) => x.id === o.dataset.id);
       if (!p) return;
       if (was === "diktieren") { location.hash = "#/"; await route(); diktatStarten(p); return; }
       if (was === "bericht") {
+        modusSetzen(null);
         location.hash = "#/";
         await route();
         lokaleAntwort(`Welche Art von Bericht für **${p.kuerzel}**?`, [{ typ: "auswahl", id: neueId(), wahl: "berichtart", patient_id: p.id, kuerzel: p.kuerzel }]);

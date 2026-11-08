@@ -70,8 +70,8 @@ Nur Testdaten. Selbstständig gearbeitet, Entscheidungen unten.
 
 | Was | Ergebnis |
 |---|---|
-| Unit-Tests (`cd worker && npm test`) | **93 grün**: alle 48 bisherigen unverändert + 45 neue – Werkzeug-Auswahl und -Ausführung, Gesprächsschleife mit nachgebauter Anthropic-API (SSE: Werkzeug-Runde, mehrere Werkzeuge, Ersatzmodell mitten in der Antwort, Ablehnung, leere Antwort, Endlosschleife, Rate-Limit-Fehler), Anfrage-Prüfung (Diktat nur aus `aktion.text`), NDJSON-Route inkl. Header/CORS/Logs/Lebenszeichen, feste Abläufe, Deckel für teure Werkzeuge, Abbruch, Bericht-Schema, Praxiswissen-Gleichlauf, Kern (XSS-sichere Formatierung, NDJSON-Leser, Verlauf, Datum), Demo-Assistent (Absichten, gleiche Werkzeuge und Texte wie der Worker, jede Zahl in Praxis-Antworten steht in der Wissensdatei), Bericht-PDF; seit dem Live-Gang: KI-Ausfall beim Bericht → Fehler mit Wiederholen, Fehler-Log ohne Inhalte und ohne Abbrüche, Prompt-Regeln |
-| Ende-zu-Ende (`tests/v2.mjs`, Playwright) | **116 von 116 Prüfungen grün** – Demo komplett auf Handy (390 px) und Laptop (1440 px), jeweils Hell und Dunkel: Diktat per Fake-Mikrofon → Entwurf → Speichern, Frage mit Quellen, Verlaufsbericht + PDF, Heute, Praxiswissen, keine Empfehlungen, Notizordner (Suche, Bearbeiten mit Nachfrage, Löschen, PDF), Zugang mit falschem Code, kein seitliches Scrollen, keine Konsolenfehler, null Server-Anfragen im Demo-Modus; 320 px; automatisch Demo bei fehlendem Backend; Offline-Seite; Mikrofon verweigert (iPhone-Anleitung); Stopp; Neues Gespräch während einer Antwort; Vorlesen (stumm); echte lokale API mit NDJSON-Strom, Fehler + „Nochmal versuchen“, echte Spracherkennung (Whisper lokal) → Entwurf → Speichern; Safari-Engine bis zum PDF; seit dem Live-Gang zusätzlich: Hinweise verdecken weder Mikrofon noch Senden, schließende iPhone-Tastatur beim Halten (nachgebauter `visualViewport`, Gegenprobe ohne Korrektur schlägt fehl), Wegziehen → Rückgängig → Parken, Warnung bei nicht gesendeter Aufnahme, Bearbeitung und Beispiel-Chip nach dem Neuladen, leere Nachsendung, Offline-Seite mit gespeichertem Code, Vorlesen nur mit lokaler Stimme |
+| Unit-Tests (`cd worker && npm test`) | **95 grün**: alle 48 bisherigen unverändert + 47 neue – Werkzeug-Auswahl und -Ausführung, Gesprächsschleife mit nachgebauter Anthropic-API (SSE: Werkzeug-Runde, mehrere Werkzeuge, Ersatzmodell mitten in der Antwort, Ablehnung, leere Antwort, Endlosschleife, Rate-Limit-Fehler), Anfrage-Prüfung (Diktat nur aus `aktion.text`), NDJSON-Route inkl. Header/CORS/Logs/Lebenszeichen, feste Abläufe, Deckel für teure Werkzeuge, Abbruch, Bericht-Schema, Praxiswissen-Gleichlauf, Kern (XSS-sichere Formatierung, NDJSON-Leser, Verlauf, Datum), Demo-Assistent (Absichten, gleiche Werkzeuge und Texte wie der Worker, jede Zahl in Praxis-Antworten steht in der Wissensdatei), Bericht-PDF; seit dem Live-Gang: KI-Ausfall beim Bericht → Fehler mit Wiederholen, Fehler-Log ohne Inhalte und ohne Abbrüche, Prompt-Regeln |
+| Ende-zu-Ende (`tests/v2.mjs`, Playwright) | **141 von 141 Prüfungen grün** – Demo komplett auf Handy (390 px) und Laptop (1440 px), jeweils Hell und Dunkel: Diktat per Fake-Mikrofon → Entwurf → Speichern, Frage mit Quellen, Verlaufsbericht + PDF, Heute, Praxiswissen, keine Empfehlungen, Notizordner (Suche, Bearbeiten mit Nachfrage, Löschen, PDF), Zugang mit falschem Code, kein seitliches Scrollen, keine Konsolenfehler, null Server-Anfragen im Demo-Modus; 320 px; automatisch Demo bei fehlendem Backend; Offline-Seite; Mikrofon verweigert (iPhone-Anleitung); Stopp; Neues Gespräch während einer Antwort; Vorlesen (stumm); echte lokale API mit NDJSON-Strom, Fehler + „Nochmal versuchen“, echte Spracherkennung (Whisper lokal) → Entwurf → Speichern; Safari-Engine bis zum PDF; seit dem Live-Gang zusätzlich: Hinweise verdecken weder Mikrofon noch Senden, schließende iPhone-Tastatur beim Halten (nachgebauter `visualViewport`, Gegenprobe ohne Korrektur schlägt fehl), Wegziehen → Rückgängig → Parken, Warnung bei nicht gesendeter Aufnahme, Bearbeitung und Beispiel-Chip nach dem Neuladen, leere Nachsendung, Offline-Seite mit gespeichertem Code, Vorlesen nur mit lokaler Stimme; nach der Live-Prüfung zusätzlich: Laptop-Kanten bei 1280 × 600 (Enter während einer Antwort, Karte von oben, Mikrofon-Klick, Kopieren, Seitenleiste, Suche), Handy-Kanten (Bericht beendet Diktat-Modus, Notiz öffnet oben, leere Zustände, „Bitte prüfen“ erledigen, Info-Fokus, 320-px-Badge), v1-Entwurf-Übernahme, Versionsstempel, „nicht eingerichtet“ mit Code, Demo ohne Internet |
 | Screenshots | `screenshots/` – je Gerät und Modus: Start, Aufnahme, Entwurf, Antwort, Bericht, Gespräch, Notizen, Notiz, Zugang; dazu Offline, Mikrofon-Hilfe, 320 px |
 | Kontraste | alle Texte ≥ 4,5 : 1 (WCAG AA) in Hell und Dunkel – Fließtext 13 : 1 bzw. 16 : 1, Knöpfe 5,5 : 1 bzw. 7,8 : 1, „(unklar)“ 6,1 : 1 |
 | Worker-Build | `wrangler deploy --dry-run` baut (942 KB, gzip 173 KB) |
@@ -160,11 +160,43 @@ weil der Worker jede Anfrage ohne richtigen Code als Fehlversuch für die IP zä
 | „(laut Notiz)“ hinter Diagnosen (aus Notara) – für Physios unverständlich; PDF sagte „ohne Diagnosen“ über einer Diagnose | Prompt: ärztliche Diagnosen immer mit Quelle („Diagnose laut Verordnung: …“), nie als eigene Feststellung; PDF: „Gabi ergänzt keine eigenen Diagnosen oder Empfehlungen“ |
 | Kleine Texte: „bearbeitet Heute“, „Sichern“ neben „Speichern“, „Erneut“ neben „Nochmal versuchen“, „in 1 Sekunden“, „Gabi ist ausgelastet“ in Gabis eigener Blase, „(?)“, doppelte Klammern im kopierten Bericht, „gefunden zu …“, Suchbegriff klein, „Bitte prüfen (offene Punkte)“ im PDF, „Quellen“ zeigte alle gefundenen Notizen | korrigiert; Überschrift heißt jetzt „Gefundene Notizen“ |
 
-Bewusst gelassen: englische Fehlernamen bei Mikrofonproblemen (helfen bei der Fehlersuche), „Test-Patient“ im
-Ordnerkopf (kein Platz bei 320 px), kontextabhängige Platzhalter.
+Zweite Welle derselben Prüfung (Laptop und Übergang v1 → v2), umgesetzt in `?v=2.0.2`:
 
-**Rückweg zu v1** (falls der echte Claude-Weg am Montag hakt): `git revert --no-commit e9968ff..HEAD && git commit -m "Zurück zu v1"`
-und pushen – der Worker 2.0 bleibt und bedient v1 weiter, Browser-Speicher von v1 und v2 vertragen sich.
+| Fund | Umsetzung |
+|---|---|
+| **Laptop (hoch):** Enter während einer Antwort wirkte wie „Stopp“ – Doppel-Enter brach ab; beim Vorausschreiben ging der Diktat-Entwurf verloren und die nächste Frage wurde zum Diktat | Enter sendet nur, wenn Gabi fertig ist; abbrechen nur über den Stopp-Knopf |
+| Niedrige Laptop-Bildschirme (600–770 px): neuer Entwurf/Bericht „von unten“, Kopf und Befund weggescrollt | passt die Antwort nicht ganz hinein, wird ihr Anfang gezeigt |
+| Mikrofon nur angeklickt: Hinweis „gedrückt halten“ erschien unten links, weit weg | Mikrofon-Hinweise stehen direkt unter der Eingabezeile |
+| Kopieren unter einem Entwurf kopierte nur den Einleitungssatz | kopiert Entwurf bzw. Bericht mit |
+| Suchtreffer: Kürzel und Datum mal mittig, mal rechts; Seitenleiste lief bei langen Beschreibungen seitlich über; kein Abstand über der Notizliste | Layout korrigiert (nur „zu prüfen“ rechts, `minmax(0,1fr)`, Abstand) |
+| Dunkelmodus: „Löschen“ beim Hovern 2,28 : 1; Karten hoben sich beim Hovern nicht | 7,6 : 1; Animation überschreibt den Hover nicht mehr |
+| Tastatur: nach einer Aufnahme per Leertaste verlor das Mikrofon den Fokus; Suche leeren + schnell wegklicken zeigte die falsche Ansicht | Fokus kommt zurück; verspätete Suche zeichnet nicht über eine neue Seite |
+| **Übergang:** ungespeicherter v1-Entwurf verschwand beim Umstieg ohne Hinweis | wird beim Start einmal als Entwurfskarte übernommen („Aus der Vorversion …“) |
+| Cache-Schutz griff nur bei v1 → v2; ein Hotfix (Pages ignoriert `?v=`) oder der Rückweg konnte eine leere Seite zeigen; das Merkzeichen wurde nie gelöscht | Versionsstempel: `VERSION` in app.js muss zum `?v=` passen (Test), sonst einmal je Version neu laden, danach Hinweis „Neu laden“ statt leerer Seite |
+| „Server nicht eingerichtet“ schaltete auf der echten Adresse still in die Demo, auch mit gespeichertem Code | Hinweisseite „Gabi ist gerade nicht bereit“ mit „Demo ansehen“ |
+| „Demo ansehen“ ohne Internet führte auf die Fehlerseite des Browsers | Demo startet im selben Tab |
+| **iPhone:** „Bericht“ im Notizordner ließ einen offenen Diktat-Modus stehen – die nächste Eingabe wurde ein Entwurf beim falschen Patienten | „Bericht“ beendet den Modus |
+| „Bitte prüfen“ / „1 zu prüfen“ ließ sich nie erledigen | beim Bearbeiten als Feld – Geklärtes löschen |
+| Unter 360 px fehlte der Knopf „Testversion“ – kein Abmelden, keine Info | bleibt sichtbar (kleiner) |
+| Nach dem Neuladen schimmerten beantwortete Patienten-Auswahlen als Platzhalter | werden mit der Liste neu gezeichnet |
+| Notiz aus dem Gespräch öffnete unten (Datum, Patient nicht sichtbar); leeres Gespräch im Querformat startete unter dem Kopf; nach dem Neuladen lag „Nochmal versuchen“ unter der Eingabezeile | Notiz öffnet oben; leeres Gespräch oben; die App steuert das Scrollen selbst |
+| Leere Zustände im Notizordner: Seite 20 px seitlich verschiebbar; „Suche löschen“ ließ das × stehen | korrigiert |
+| Verzögerte Suche (250 ms) bzw. verspätet geladene Übersicht überschrieben die gerade geöffnete Seite oder die Suchtreffer | prüfen vor dem Zeichnen, ob die Ansicht noch passt (der zweite Fall fiel beim Testen auf) |
+| Toasts oben verdeckten „Alle Test-Patienten“ bzw. den Kartenkopf | Tipps gehen durch, nur der Knopf im Toast fängt sie |
+| „Neuer Test-Patient“ in der Bericht-Auswahl (Sackgasse); Info-Dialog mit Fokus auf „Zurücksetzen“/„Abmelden“ | entfernt; Fokus auf „Verstanden“ |
+| Demo: „Notiz suchen“ mit „Termin“/„Diagnose“/„Bericht“ sprang in andere Abläufe; Bedienfragen („Wie verwerfe ich eine Aufnahme?“) unbeantwortet | Such-Modus sucht immer; Antworten aus denselben Fakten wie BEDIENUNG |
+
+Bewusst gelassen: englische Fehlernamen bei Mikrofonproblemen (helfen bei der Fehlersuche), „Test-Patient“ im
+Ordnerkopf (kein Platz bei 320 px), kontextabhängige Platzhalter; in der Demo der Zeitraum („letzte Woche“) – die echte
+Gabi versteht ihn, die Demo nimmt die neueste Notiz; „Gefundene Notizen“ zeigt alles, was das Werkzeug geliefert hat.
+Rückweg zu v1: Wer die Seite in den 10 Minuten davor
+geladen hat, kann einmal eine leere Seite sehen (v1 kennt den Versionsstempel nicht) – einmal neu laden hilft.
+
+**Rückweg zu v1** (falls der echte Claude-Weg am Montag hakt):
+`git revert --no-commit e9968ff..HEAD && git checkout HEAD -- _config.yml && git rm -f .nojekyll && git commit -m "Zurück zu v1"`
+und pushen. Die beiden Zwischenschritte halten die internen Dateien weiter unter Verschluss (sonst brächte der Revert
+`.nojekyll` zurück und alles wäre wieder abrufbar). Der Worker 2.0 bleibt und bedient v1 weiter; Browser-Speicher von v1
+und v2 vertragen sich (offene v2-Entwurfskarten gehen in v1 allerdings verloren – vorher speichern).
 
 ## Offen
 

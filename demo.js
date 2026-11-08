@@ -157,6 +157,16 @@
     "Wo sind die beiden Standorte der Praxis?",
   ];
 
+  // Fragen zur Bedienung – dieselben Fakten wie im Prompt-Abschnitt BEDIENUNG der echten Gabi
+  const BEDIENUNG = [
+    { muster: /(verwerf|lösch|wegwerf).*(aufnahme|diktat)|(aufnahme|diktat).*(verwerf|lösch|abbrech)/, text: "Beim Halten des Mikrofons den Finger nach links oder oben wegziehen und loslassen – danach kannst du noch „Rückgängig“ tippen." },
+    { muster: /(verwerf|lösch).*entwurf|entwurf.*(verwerf|lösch)/, text: "Einen Entwurf verwirfst du mit dem Mülleimer oben rechts auf der Karte – gespeichert wird nur, was du mit „Speichern“ bestätigst." },
+    { muster: /(lösch|entfern).*notiz|notiz.*(lösch|entfern)/, text: "Öffne die Notiz unter „Notizen“ und tippe auf „Löschen“ – vorher fragt die App noch einmal nach." },
+    { muster: /abmeld|ausloggen|logout/, text: "Tipp auf „Testversion“ und dann auf „Abmelden“." },
+    { muster: /\bpdf\b|drucken|ausdruck/, text: "Unter jedem Bericht steht „Als PDF“, in einer gespeicherten Notiz „PDF“." },
+    { muster: /wie (diktier|nehm|sprech)|mikro(fon)?\b.*(geht|funktion|benutz)/, text: "Halte das Mikrofon gedrückt, sprich und lass los – daraus wird ein Entwurf, den du prüfst und speicherst." },
+  ];
+
   // Antworten zur Praxis im Demo-Modus – nur Fakten aus knowledge/physioworks.md (ein Test prüft jede Zahl)
   const PRAXIS = [
     { muster: /standort|adresse|anfahrt|kieslingstra|thumenberger|\bwo\b.*(praxis|ihr|seid)/, text: "PhysioWorks hat zwei Standorte in Nürnberg:\n- Kieslingstraße 82, 90491 Nürnberg\n- Thumenberger Weg 89, 90491 Nürnberg" },
@@ -472,6 +482,15 @@
   function absichtErkennen(text, kuerzelListe = []) {
     const t = String(text || "").toLowerCase().trim();
     if (!t) return { art: "unbekannt" };
+    const auftrag = /^suche in meinen notizen:\s*(.+)$/is.exec(String(text || "").trim());
+    if (auftrag) {
+      const roh = auftrag[1];
+      const woerter = suchwoerter(roh);
+      if (woerter.length) {
+        const anzeige = woerter.map((w) => { const i = roh.toLowerCase().indexOf(w); return i >= 0 ? roh.slice(i, i + w.length) : w; }).join(" ");
+        return { art: "suche", suchbegriff: woerter.join(" "), anzeige };
+      }
+    }
     const kuerzel = kuerzelFinden(text, kuerzelListe);
     const hat = (re) => re.test(t);
     if (hat(/diagnose|empfiehl|empfehl|welche übung(en)? soll|was soll (ich|er|sie)|therapievorschlag|prognose|ist das (schlimm|normal)|was fehlt (ihm|ihr)/)) return { art: "rat" };
@@ -488,6 +507,8 @@
     if (kurz && hat(/\b(danke|dankeschön|merci|super|prima|klasse|perfekt|top)\b|vielen dank/)) return { art: "danke" };
     if (kurz && hat(/\b(tschüss|tschüs|ciao|bye)\b|bis (morgen|später|bald|dann)|schönen (abend|tag|feierabend)|gute nacht/)) return { art: "tschuess" };
     if (kurz && hat(/wie geht('?s| es) (dir|ihnen)|wie läuft('?s| es) bei dir/)) return { art: "befinden" };
+    const bedienung = BEDIENUNG.find((x) => x.muster.test(t));
+    if (bedienung) return { art: "praxis", text: bedienung.text };
     if (hat(/wer bist du|wer ist gabi(?!\s*diem)|was kannst du|wie funktionierst|\bhilfe\b/)) return { art: "hilfe" };
     const woerter = suchwoerter(t.replace(FUELLWOERTER, " "));
     if (woerter.length) {

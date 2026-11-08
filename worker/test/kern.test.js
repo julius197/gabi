@@ -206,6 +206,12 @@ describe("Demo-Assistent", () => {
     expect(DEMO.entwurfText("TP-01", 1)).toMatch(/Schau dir bitte den Punkt unter „Bitte prüfen“ an\.$/);
     expect(DEMO.entwurfText("TP-01", 2)).toMatch(/Schau dir bitte die 2 Punkte unter „Bitte prüfen“ an\.$/);
     expect(DEMO.entwurfText("TP-01", 0)).not.toMatch(/Bitte prüfen|unklar/);
+    // Bedienfragen wie bei der echten Gabi (BEDIENUNG)
+    expect(await fall("Wie verwerfe ich eine Aufnahme?")).toMatch(/wegziehen und loslassen.*„Rückgängig“/);
+    expect(await fall("Wie kann ich mich abmelden?")).toMatch(/„Testversion“ und dann auf „Abmelden“/);
+    // Modus „Notiz suchen“: der Begriff wird gesucht – auch „Termin“, „Diagnose“, „Bericht“
+    expect(DEMO.absichtErkennen("Suche in meinen Notizen: Termin", KUERZEL)).toMatchObject({ art: "suche", suchbegriff: "termin", anzeige: "Termin" });
+    expect(await fall("Suche in meinen Notizen: Diagnose")).toMatch(/zu „Diagnose“ gefunden/);
   });
 });
 

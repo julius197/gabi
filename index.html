@@ -14,7 +14,7 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=2.0.1">
+  <link rel="stylesheet" href="style.css?v=2.0.2">
 </head>
 <body>
   <svg width="0" height="0" class="unsichtbar" aria-hidden="true" focusable="false">
@@ -184,7 +184,7 @@
                 <svg class="symbol"><use href="#i-senden"/></svg>
               </button>
             </form>
-            <p class="eingabe-fuss">Gabi kann sich irren – bitte prüfen. Nur Testdaten.</p>
+            <p class="eingabe-fuss" aria-live="polite">Gabi kann sich irren – bitte prüfen. Nur Testdaten.</p>
           </div>
         </div>
       </section>
@@ -238,7 +238,7 @@
         <button class="knopf leise" type="button" id="info-zuruecksetzen" hidden><svg class="symbol"><use href="#i-zuruecksetzen"/></svg>Beispieldaten zurücksetzen</button>
         <button class="knopf leise" type="button" id="info-verbinden" hidden>Mit Server verbinden</button>
         <button class="knopf leise" type="button" id="info-abmelden" hidden>Abmelden</button>
-        <button class="knopf primaer" value="ok">Verstanden</button>
+        <button class="knopf primaer" value="ok" autofocus>Verstanden</button>
       </div>
     </form>
   </dialog>
@@ -246,12 +246,12 @@
   <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
   <!-- ?v=… bei jeder Version erhöhen: GitHub Pages lässt Dateien 10 Minuten im Browser-Cache -->
-  <script src="config.js?v=2.0.1"></script>
+  <script src="config.js?v=2.0.2"></script>
   <script src="vendor/jspdf.umd.min.js?v=4.2.1"></script>
-  <script src="kern.js?v=2.0.1"></script>
-  <script src="pdf.js?v=2.0.1"></script>
-  <script src="demo.js?v=2.0.1"></script>
-  <script src="aufnahme.js?v=2.0.1"></script>
-  <script src="app.js?v=2.0.1"></script>
+  <script src="kern.js?v=2.0.2"></script>
+  <script src="pdf.js?v=2.0.2"></script>
+  <script src="demo.js?v=2.0.2"></script>
+  <script src="aufnahme.js?v=2.0.2"></script>
+  <script src="app.js?v=2.0.2"></script>
 </body>
 </html>

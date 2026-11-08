@@ -235,7 +235,7 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
       return json({
         ok: true,
         version: VERSION,
-        // bereit = Zugangscode und Datenbank eingerichtet; sonst startet die Oberfläche im Demo-Modus
+        // bereit = Zugangscode und Datenbank eingerichtet; sonst lokal Demo-Modus, auf der echten Adresse eine Hinweisseite
         bereit: Boolean(env.GABI_ZUGANGSCODE) && datenbank,
         funktionen: ["notizen", "chat", "bericht"],
         eingerichtet: {

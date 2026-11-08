@@ -12,8 +12,9 @@ Suche, Bearbeiten, Löschen, PDF).
 
 Adresse: **https://gabi.automatilabs.de** (Branch `main`, v2 seit 08.11.2026) · Protokoll: `GABI-V2-LOG.md`.
 
-> **Neue Version veröffentlichen:** in `index.html` die Kennung `?v=…` an `style.css` und allen eigenen Skripten hochzählen –
-> GitHub Pages lässt Dateien 10 Minuten im Browser-Cache, sonst mischen sich alte und neue Dateien.
+> **Neue Version veröffentlichen:** in `index.html` die Kennung `?v=…` an `style.css` und allen eigenen Skripten hochzählen
+> und `VERSION` oben in `app.js` gleich setzen (ein Test prüft das) – GitHub Pages lässt Dateien 10 Minuten im Browser-Cache;
+> passen Seite und Skript nicht zusammen, lädt die App einmal neu.
 > Pages liefert nur die App aus: Notizen, Worker, Tests und Screenshots stehen in `_config.yml` unter `exclude` –
 > neue Dateien oder Ordner, die nicht zur App gehören, dort ergänzen.
 

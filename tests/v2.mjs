@@ -264,6 +264,7 @@ for (const geraet of ["handy", "laptop"]) for (const schema of ["light", "dark"]
     await warte(500);
     messungen.push([h, await breite(page)]);
   }
+  pruefe(await page.isVisible("#test-badge"), "320 px: Knopf „Demo“/„Testversion“ bleibt sichtbar (Info, Abmelden)");
   const zuBreit = messungen.filter(([, b]) => b > 320);
   pruefe(!zuBreit.length, `320 px: kein seitliches Scrollen${zuBreit.length ? ` (${zuBreit.map(([w, b]) => `${w}=${b}px`).join(", ")})` : ""}`);
   await page.screenshot({ path: join(aus, "handy-320-notiz.jpg"), type: "jpeg", quality: 85, fullPage: true });
@@ -278,10 +279,12 @@ for (const [fall, antwort, text] of [
   const page = await ctx.newPage();
   await page.route("**/api/status", antwort);
   await page.goto(`${basis}/#/`);
-  if (LIVE && fall === "nicht erreichbar") {
-    // auf der echten Adresse nie still in die Demo: Offline-Seite mit „Demo ansehen“
+  if (LIVE) {
+    // auf der echten Adresse nie still in die Demo: Hinweisseite mit „Demo ansehen“
     await page.waitForSelector("#ansicht-offline:not([hidden])", { timeout: 20000 });
-    pruefe(await page.isVisible('#ansicht-offline a[href*="demo=1"]'), "Backend nicht erreichbar (echte Adresse): Offline-Seite statt stiller Demo, mit „Demo ansehen“");
+    const titel = await page.textContent("#offline-titel");
+    pruefe(await page.isVisible('#ansicht-offline a[href*="demo=1"]') && (fall === "nicht erreichbar" ? /nicht erreichbar/.test(titel) : /nicht bereit/.test(titel)),
+      `Backend ${fall} (echte Adresse): Hinweisseite statt stiller Demo, mit „Demo ansehen“ („${titel}“)`);
     await ctx.close();
     continue;
   }
@@ -289,6 +292,24 @@ for (const [fall, antwort, text] of [
   const badge = await page.textContent("#test-badge");
   const hinweis = await page.textContent("#toasts");
   pruefe(badge.includes("Demo") && hinweis.includes(text), `Backend ${fall}: automatisch Demo-Modus mit Hinweis`);
+  await ctx.close();
+}
+
+{ // Gerät mit gespeichertem Code + Server nicht eingerichtet → Hinweisseite; „Demo ansehen“ ohne Internet → Demo im selben Tab
+  const ctx = await chrome.newContext({ viewport: { width: 390, height: 844 } });
+  await stumm(ctx);
+  await ctx.addInitScript(() => { try { localStorage.setItem("gabi.zugang", "test"); } catch { /* egal */ } });
+  const page = await ctx.newPage();
+  await page.route("**/api/status", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, bereit: false }) }));
+  await page.goto(`${basis}/#/`);
+  await page.waitForSelector("#ansicht-offline:not([hidden])", { timeout: 20000 });
+  pruefe((await page.textContent("#offline-titel")).includes("nicht bereit") && !(await page.textContent("#test-badge")).includes("Demo"),
+    "Server nicht eingerichtet + gespeicherter Code: Hinweisseite statt stiller Demo");
+  await ctx.setOffline(true);
+  await page.click('#ansicht-offline a[href*="demo=1"]');
+  await page.waitForSelector("#ansicht-chat:not([hidden]) .vorschlag", { timeout: 10000 });
+  pruefe((await page.textContent("#test-badge")).includes("Demo") && page.url().includes("demo=1"), "Ohne Internet: „Demo ansehen“ startet die Demo im selben Tab (keine Fehlerseite)");
+  await ctx.setOffline(false);
   await ctx.close();
 }
 
@@ -432,6 +453,8 @@ for (const [fall, antwort, text] of [
   await page.reload();
   await page.waitForSelector("#ansicht-chat:not([hidden])");
   pruefe(await page.locator('[data-aktion="beispiel"]').last().isDisabled(), "Neuladen: Beispiel-Chip ohne Diktat-Modus gesperrt (keine Sackgasse)");
+  await warte(800);
+  pruefe((await page.locator(".chip-skelett").count()) === 0, "Neuladen: beantwortete Patienten-Auswahlen zeigen die Patienten, keine Platzhalter");
   await page.click('#chips-leiste [data-schnell="diktat"]');
   await page.locator('[data-aktion="waehle"]:has-text("TP-02")').last().click();
   await page.locator('[data-aktion="beispiel"]:not([disabled])').last().click();
@@ -452,6 +475,179 @@ for (const [fall, antwort, text] of [
   pruefe((await page.locator(".karte-entwurf textarea").count()) === 0 && (await page.locator('[data-aktion="entwurf-speichern"]').count()) === 1, "Neuladen: abgebrochene Bearbeitung kommt nicht zurück");
   pruefe(konsole.length === 0, `Push-to-Talk-Kanten: keine Fehler in der Konsole${konsole.length ? ` (${konsole.join(" | ")})` : ""}`);
   await ctx.close();
+}
+
+{ // Handy-Kanten (390 px): Bericht aus dem Ordner beendet den Diktat-Modus, Notiz öffnet oben, leere Zustände, „Bitte prüfen“, Info-Fokus
+  const ctx = await chrome.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await stumm(ctx);
+  const page = await ctx.newPage();
+  const konsole = konsoleBeobachten(page);
+  await page.goto(`${basis}/?demo=1#/`);
+  await page.waitForSelector(".vorschlag");
+  // a) Diktat-Modus für TP-01 offen, dann im Ordner „Bericht“ für TP-02 → Modus endet, nächste Frage ist kein Diktat
+  await page.click('.vorschlag[data-schnell="diktat"]');
+  await page.click('[data-aktion="waehle"]:has-text("TP-01")');
+  await page.waitForSelector("#modus-pill:not([hidden])");
+  await page.evaluate(() => { location.hash = "#/notizen/p/7e3c1a52-0002-4000-8000-000000000002"; });
+  await page.click('[data-ordner="bericht"]');
+  await page.waitForSelector('[data-aktion="waehle"][data-wert="verlauf"]');
+  pruefe(await page.isHidden("#modus-pill"), "Handy: „Bericht“ im Notizordner beendet einen offenen Diktat-Modus (kein Entwurf beim falschen Patienten)");
+  // b) Bericht-Auswahl bietet keinen neuen Test-Patienten an (ohne Notiz kein Bericht)
+  await page.click('#chips-leiste [data-schnell="bericht"]');
+  await page.waitForSelector('.auswahl-karte [data-aktion="waehle"]');
+  pruefe((await page.locator(".auswahl-karte").last().locator('[data-aktion="neuer-patient"]').count()) === 0, "Handy: Bericht-Auswahl ohne „Neuer Test-Patient“ (keine Sackgasse)");
+  // c) Notiz aus dem Gespräch öffnet oben (Datum und Patient sichtbar)
+  for (const f of ["Was steht heute an?", "Hausaufgaben von TP-03", "Was wollte TP-02?"]) { await fragen(page, f); await page.waitForFunction(() => !document.querySelector("#senden.stoppt"), null, { timeout: 20000 }); }
+  await page.locator(".von-gabi .quelle").last().click();
+  await page.waitForSelector(".leser-kopf h1");
+  await warte(300);
+  const kopf = await page.evaluate(() => ({ titel: document.querySelector(".leser-kopf h1").getBoundingClientRect().top, kopf: document.querySelector("#kopf").getBoundingClientRect().bottom }));
+  pruefe(kopf.titel >= kopf.kopf, `Handy: Notiz aus dem Gespräch öffnet oben (Titel ${Math.round(kopf.titel)} px, Kopf bis ${Math.round(kopf.kopf)} px)`);
+  // d) leerer Zustand ohne seitliches Scrollen; „Suche löschen“ blendet auch das × aus
+  await page.evaluate(() => { location.hash = "#/notizen"; });
+  await page.waitForSelector("#suche");
+  await page.fill("#suche", "Ultraschall");
+  await page.waitForSelector(".leer");
+  await warte(300);
+  pruefe((await breite(page)) <= 390, `Handy: „Nichts gefunden“ ohne seitliches Scrollen (${await breite(page)} px)`);
+  await page.click('.leer [data-ordner="suche-loeschen"]');
+  await warte(300);
+  pruefe(await page.isHidden('label.suche [data-ordner="suche-loeschen"]'), "Handy: „Suche löschen“ blendet auch das × im Feld aus");
+  // e) „Bitte prüfen“ lässt sich beim Bearbeiten erledigen
+  await page.evaluate(() => { location.hash = "#/notizen/n/7e3c1a52-0102-4000-8000-000000000102"; });
+  await page.waitForSelector('[data-leser="bearbeiten"]');
+  await page.click('[data-leser="bearbeiten"]');
+  await page.fill('textarea[data-abschnitt="unklar"]', "");
+  await page.click('[data-leser="sichern"]');
+  await page.waitForSelector('[data-leser="bearbeiten"]');
+  await warte(300);
+  pruefe((await page.locator(".leser .pruefen").count()) === 0, "Handy: geklärter Prüfpunkt lässt sich beim Bearbeiten löschen – „Bitte prüfen“ verschwindet");
+  // f) Info-Dialog: Fokus auf „Verstanden“, nicht auf einem zerstörerischen Knopf
+  await page.click("#test-badge");
+  await page.waitForSelector("#dialog-info[open]");
+  const fokus = await page.evaluate(() => document.activeElement && document.activeElement.textContent.trim());
+  await page.keyboard.press("Escape");
+  pruefe(fokus === "Verstanden", `Handy: Info-Dialog öffnet mit Fokus auf „Verstanden“ („${fokus}“)`);
+  pruefe(konsole.length === 0, `Handy-Kanten: keine Fehler in der Konsole${konsole.length ? ` (${konsole.join(" | ")})` : ""}`);
+  await ctx.close();
+}
+
+{ // Laptop-Kanten (1280 × 600): Enter während einer Antwort, Karte von oben, Mikrofon-Klick, Kopieren, Seitenleiste, Suche
+  const ctx = await chrome.newContext({ viewport: { width: 1280, height: 600 }, permissions: ["microphone"] });
+  await stumm(ctx);
+  await ctx.addInitScript(() => {
+    window.__kopiert = [];
+    try { Object.defineProperty(navigator, "clipboard", { value: { writeText: async (t) => { window.__kopiert.push(t); } }, configurable: true }); } catch { /* egal */ }
+  });
+  const page = await ctx.newPage();
+  const konsole = konsoleBeobachten(page);
+  await page.goto(`${basis}/?demo=1#/`);
+  await page.waitForSelector(".vorschlag");
+
+  // a) Doppel-Enter: das zweite Enter während der Antwort bricht nicht ab
+  await page.fill("#eingabe-text", "Was steht heute an?");
+  await page.press("#eingabe-text", "Enter");
+  await warte(300);
+  await page.press("#eingabe-text", "Enter");
+  await antwortAbwarten(page, "Heute ist");
+  pruefe(!/Abgebrochen/.test(await letzteAntwort(page)), "Laptop: zweites Enter während der Antwort bricht nicht ab");
+
+  // b) Vorausschreiben während eines Diktats: Entwurf kommt, die Frage wartet im Feld und geht danach als normale Frage raus
+  await page.click('#chips-leiste [data-schnell="diktat"]');
+  await page.locator('[data-aktion="waehle"]:has-text("TP-03")').last().click();
+  await page.fill("#eingabe-text", "LWS. Finger-Boden-Abstand 8 Zentimeter. Zu Hause Unterarmstütz täglich.");
+  await page.press("#eingabe-text", "Enter");
+  await warte(400);
+  await page.fill("#eingabe-text", "Was wollte TP-02?");
+  await page.press("#eingabe-text", "Enter");
+  await page.waitForSelector(".karte-entwurf:not(.erledigt)", { timeout: 20000 });
+  await antwortAbwarten(page, "Entwurf für TP-03");
+  const wartet = await page.inputValue("#eingabe-text");
+  pruefe(wartet === "Was wollte TP-02?" && (await page.isHidden("#modus-pill")), `Laptop: Enter beim Diktat bricht nicht ab, die Frage wartet im Feld („${wartet}“)`);
+  const kopfEntwurf = await page.evaluate(() => document.querySelector(".karte-entwurf:not(.erledigt) .karte-kopf").getBoundingClientRect().top);
+  pruefe(kopfEntwurf >= 0 && kopfEntwurf < 560, `Laptop 1280 × 600: neuer Entwurf ist von oben zu sehen (Kopf bei ${Math.round(kopfEntwurf)} px)`);
+  await page.locator(".von-gabi:has(.karte-entwurf) [data-aktion='kopieren']").last().click();
+  const kopiert = await page.evaluate(() => window.__kopiert.at(-1) || "");
+  pruefe(/Notiz-Entwurf · TP-03/.test(kopiert) && /Befund|Hausaufgaben/.test(kopiert), "Laptop: Kopieren unter einem Entwurf kopiert den Entwurf mit");
+  await page.press("#eingabe-text", "Enter");
+  await antwortAbwarten(page, "TP-02");
+  const letzteFrage = await page.locator(".von-nutzer").last().textContent();
+  pruefe(letzteFrage.includes("Was wollte TP-02?") && !letzteFrage.includes("Diktat"), "Laptop: die gewartete Frage geht als normale Frage raus, nicht als Diktat");
+
+  // c) Bericht auf niedrigem Bildschirm: Kopf der Karte sichtbar
+  await page.click('#chips-leiste [data-schnell="bericht"]');
+  await page.locator('[data-aktion="waehle"]:has-text("TP-02")').last().click();
+  await page.locator('[data-aktion="waehle"][data-wert="verlauf"]').last().click();
+  await page.waitForSelector(".karte-bericht");
+  await antwortAbwarten(page, "Verlaufsbericht");
+  const kopfBericht = await page.evaluate(() => [...document.querySelectorAll(".karte-bericht .karte-kopf")].pop().getBoundingClientRect().top);
+  pruefe(kopfBericht >= 0 && kopfBericht < 560, `Laptop 1280 × 600: neuer Bericht ist von oben zu sehen (Kopf bei ${Math.round(kopfBericht)} px)`);
+
+  // d) Mikrofon nur angeklickt: Hinweis direkt unter der Eingabezeile
+  const mb = await page.locator("#mikro").boundingBox();
+  await page.mouse.move(mb.x + mb.width / 2, mb.y + mb.height / 2);
+  await page.mouse.down();
+  await warte(150);
+  await page.mouse.up();
+  await page.waitForFunction(() => /gedrückt/.test(document.querySelector(".eingabe-fuss").textContent), null, { timeout: 8000 });
+  pruefe(await page.isVisible(".eingabe-fuss.hinweis"), "Laptop: Klick aufs Mikrofon → Hinweis „gedrückt halten“ direkt unter der Eingabezeile");
+
+  // e) Seitenleiste mit langer Beschreibung, Suchtreffer, schnelles Wegklicken nach dem Leeren der Suche
+  await page.evaluate(() => { location.hash = "#/notizen"; });
+  await page.click('[data-ordner="patient-neu"]');
+  await page.fill("#patient-kuerzel", "TP-07");
+  await page.fill("#patient-pseudonym", "Testfall Knie rechts nach Kreuzband-OP (fiktiv)");
+  await page.click("#patient-anlegen");
+  await page.waitForFunction(() => /TP-07/.test(document.querySelector("#seiten-patienten").textContent));
+  await page.waitForFunction(() => location.hash.startsWith("#/notizen/p/")); // die App öffnet den neuen Patienten
+  const seite = await page.evaluate(() => { const x = document.querySelector("#seiten-patienten"); return { c: x.clientWidth, s: x.scrollWidth }; });
+  pruefe(seite.s <= seite.c + 1, `Laptop: lange Beschreibung verbreitert die Seitenleiste nicht (${seite.s}/${seite.c} px)`);
+  await page.evaluate(() => { location.hash = "#/notizen"; });
+  await page.waitForSelector("#suche");
+  await page.fill("#suche", "theraband");
+  await page.waitForSelector("#ordner-inhalt .notiz-karte");
+  await warte(400);
+  const versatz = await page.evaluate(() => [...document.querySelectorAll("#ordner-inhalt .notiz-karte")].map((k) => k.querySelector(".badge.akzent").getBoundingClientRect().left - k.getBoundingClientRect().left));
+  pruefe(versatz.length > 0 && versatz.every((x) => x < 40), `Laptop: Suchtreffer – Kürzel steht links (${versatz.map(Math.round).join(", ")} px)`);
+  await page.fill("#suche", "");
+  await page.click('#seiten-patienten a:has-text("TP-01")');
+  await warte(700);
+  pruefe(await page.isVisible('a.zurueck:has-text("Alle Test-Patienten")'), "Laptop: Suche leeren und gleich einen Patienten anklicken → Patientenseite bleibt");
+  pruefe(konsole.length === 0, `Laptop-Kanten: keine Fehler in der Konsole${konsole.length ? ` (${konsole.join(" | ")})` : ""}`);
+  await ctx.close();
+}
+
+{ // Übergang: offener v1-Entwurf → Karte; Versionsstempel: andere Version → einmal neu laden, dann Hinweis statt leerer Seite
+  const ctx = await chrome.newContext({ viewport: { width: 390, height: 844 } });
+  await stumm(ctx);
+  await ctx.addInitScript(() => {
+    if (sessionStorage.getItem("test.v1-gesetzt")) return;
+    sessionStorage.setItem("test.v1-gesetzt", "1");
+    sessionStorage.setItem("gabi.entwurf.demo", JSON.stringify({ patientId: "7e3c1a52-0001-4000-8000-000000000001", rohtext: "Knie rechts, Flexion 100 Grad.",
+      strukturiert: { befund: ["Flexion Knie rechts bis 100°"], massnahmen: [], verlauf: [], hausaufgaben: [], unklar: [] }, manuell: false }));
+  });
+  const page = await ctx.newPage();
+  await page.goto(`${basis}/?demo=1#/aufnahme`);
+  await page.waitForSelector(".karte-entwurf", { timeout: 15000 });
+  const text = await page.textContent("#nachrichten");
+  const rest = await page.evaluate(() => sessionStorage.getItem("gabi.entwurf.demo"));
+  pruefe(/Aus der Vorversion/.test(text) && /Flexion Knie rechts bis 100°/.test(text) && rest === null && page.url().endsWith("#/"),
+    "Übergang: offener v1-Entwurf wird als Entwurfskarte übernommen (einmal), v1-Adresse #/aufnahme → #/");
+  await ctx.close();
+
+  const ctx2 = await chrome.newContext({ viewport: { width: 390, height: 844 } });
+  const p2 = await ctx2.newPage();
+  let dokumente = 0;
+  p2.on("framenavigated", (f) => { if (f === p2.mainFrame()) dokumente++; });
+  await p2.route("**/app.js*", async (route) => {
+    const antwort = await route.fetch();
+    await route.fulfill({ response: antwort, body: (await antwort.text()).replace(/const VERSION = "[^"]+"/, 'const VERSION = "9.9.9"') });
+  });
+  await p2.goto(`${basis}/?demo=1#/`);
+  await p2.waitForSelector(".veraltet button", { timeout: 15000 });
+  await warte(800);
+  pruefe(dokumente === 2, `Versionsstempel: Seite und Skript passen nicht → genau einmal neu geladen, dann „Neu laden“ statt leerer Seite (${dokumente} Ladevorgänge)`);
+  await ctx2.close();
 }
 
 // ---------------------------------------------------------------------------
