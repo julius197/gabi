@@ -76,7 +76,7 @@ Nur Testdaten. Selbstständig gearbeitet, Entscheidungen unten.
 | Kontraste | alle Texte ≥ 4,5 : 1 (WCAG AA) in Hell und Dunkel – Fließtext 13 : 1 bzw. 16 : 1, Knöpfe 5,5 : 1 bzw. 7,8 : 1, „(unklar)“ 6,1 : 1 |
 | Worker-Build | `wrangler deploy --dry-run` baut (942 KB, gzip 173 KB) |
 | Code-Review | unabhängiger Review (zweiter Agent) – Funde und Behebung siehe unten |
-| Live | **v2 live seit 08.11.2026, 18:00** (auf „Ja, live schalten“): `main` per Fast-Forward auf `22d8ad1`, GitHub Pages gebaut 18:00:41. Worker 2.0.0 mit den Live-Gang-Korrekturen neu deployt: `/api/status` → `bereit: true`; fremde Herkunft 403, CORS-Vorabfrage 204, falsche Methode 405, ohne Zugangscode 401. Alle 12 ausgelieferten Dateien (unter den Adressen mit `?v=`) identisch mit `main`, 200 und richtige Typen. Danach Live-Prüfung (Workflow, fünf Blickwinkel + Gegenprüfung), siehe „Live-Gang“ |
+| Live | **v2 live seit 08.11.2026, 18:00** (auf „Ja, live schalten“), seit 19:00 als **2.0.2** (`main` = `58a3b0d`). Worker 2.0.0 mit allen Korrekturen deployt: `/api/status` → `bereit: true`; fremde Herkunft 403, CORS-Vorabfrage 204, falsche Methode 405, ohne Zugangscode 401. Alle ausgelieferten App-Dateien identisch mit `main` (200, richtige Typen), interne Dateien 404. **Live-E2E gegen gabi.automatilabs.de: 130 von 130** (ohne den Teil mit lokaler API, ohne Zugangscode). Live-Prüfung: 50 Funde gemeldet, 44 bestätigt, einer hätte Montag blockiert (Enter brach Antworten ab) – alle bestätigten sind in 2.0.1/2.0.2 behoben und auf der Live-Seite nachgemessen |
 
 ## Review-Funde (unabhängiger Code-Review) und Behebung
 
