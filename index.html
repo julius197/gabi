@@ -14,7 +14,7 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=2.0.2">
+  <link rel="stylesheet" href="style.css?v=2.1.0">
 </head>
 <body>
   <svg width="0" height="0" class="unsichtbar" aria-hidden="true" focusable="false">
@@ -48,12 +48,16 @@
     <symbol id="i-zuruecksetzen" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/></symbol>
     <symbol id="i-uhr" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
     <symbol id="i-dokument" viewBox="0 0 24 24"><path d="M7.5 3h6.5l5 5v10.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 18.5v-13A2.5 2.5 0 0 1 7.5 3z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-menue" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
     <symbol id="i-funke" viewBox="0 0 24 24"><path d="M12 3.5l1.7 4.8 4.8 1.7-4.8 1.7L12 16.5l-1.7-4.8L5.5 10l4.8-1.7z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
   </svg>
 
   <div class="app" id="app">
     <!-- Kopf (Handy) bzw. Seitenleiste (Laptop) -->
     <header class="kopf" id="kopf" hidden>
+      <button class="rund-knopf kopf-menue" type="button" id="kopf-menue" aria-label="Gespräche öffnen" aria-haspopup="dialog" aria-controls="schublade" title="Gespräche">
+        <svg class="symbol"><use href="#i-menue"/></svg>
+      </button>
       <div class="kopf-marke">
         <a class="marke" href="#/" aria-label="Gabi – zum Gespräch">
           <span class="marke-wort">Gabi<span class="marke-punkt">.</span></span>
@@ -62,7 +66,7 @@
         <button class="badge badge-test" type="button" id="test-badge" aria-haspopup="dialog">Testversion</button>
       </div>
       <span class="kopf-platz"></span>
-      <a class="knopf sekundaer klein kopf-knopf" id="kopf-wechsel" href="#/notizen">
+      <a class="knopf sekundaer klein kopf-knopf" id="kopf-wechsel" href="#/notizen" aria-label="Notizen">
         <svg class="symbol"><use href="#i-notizen"/></svg><span class="beschriftung">Notizen</span>
       </a>
       <button class="rund-knopf kopf-knopf" type="button" id="kopf-neu" aria-label="Neues Gespräch" title="Neues Gespräch">
@@ -75,6 +79,10 @@
         <a href="#/" data-navi="chat"><svg class="symbol"><use href="#i-chat"/></svg>Gespräch</a>
         <a href="#/notizen" data-navi="notizen"><svg class="symbol"><use href="#i-notizen"/></svg>Notizen</a>
       </nav>
+      <div class="seiten-gespraeche">
+        <h2 class="augenbraue seiten-titel" id="seiten-gespraeche-titel">Gespräche</h2>
+        <nav class="gespraeche-liste" id="seiten-gespraeche" aria-labelledby="seiten-gespraeche-titel"></nav>
+      </div>
       <div class="seiten-patienten" id="seiten-patienten" aria-label="Test-Patienten"></div>
       <div class="seiten-fuss" id="seiten-fuss">
         <p id="seiten-fuss-text">Testversion · nur erfundene Testdaten, keine echten Patientendaten.</p>
@@ -89,7 +97,6 @@
 
       <!-- Zugang -->
       <section class="ansicht zugang" id="ansicht-zugang" hidden>
-        <div class="glanz"></div>
         <div class="zugang-inhalt">
           <div class="zugang-marke">
             <div class="zugang-zeichen" aria-hidden="true">G</div>
@@ -194,10 +201,23 @@
     </main>
   </div>
 
+  <!-- Gesprächsliste am Handy/Tablet (am Laptop steht sie in der Seitenleiste) -->
+  <dialog class="schublade" id="schublade" aria-labelledby="schublade-titel">
+    <div class="schublade-innen">
+      <div class="schublade-kopf">
+        <h2 id="schublade-titel">Gespräche</h2>
+        <button class="rund-knopf" type="button" id="schublade-zu" aria-label="Schließen"><svg class="symbol"><use href="#i-x"/></svg></button>
+      </div>
+      <button class="knopf sekundaer voll schublade-neu" type="button" data-gespraech-neu><svg class="symbol"><use href="#i-neu"/></svg>Neues Gespräch</button>
+      <nav class="gespraeche-liste" id="schublade-liste" aria-labelledby="schublade-titel"></nav>
+    </div>
+  </dialog>
+
   <dialog class="dialog" id="dialog-frage" aria-labelledby="frage-titel">
     <form class="dialog-form" method="dialog">
       <h2 id="frage-titel"></h2>
       <p id="frage-text"></p>
+      <label class="haken-zeile" id="frage-haken-zeile" hidden><input type="checkbox" id="frage-haken"><span id="frage-haken-text"></span></label>
       <div class="dialog-knoepfe">
         <button class="knopf leise" value="nein" id="frage-nein">Abbrechen</button>
         <button class="knopf primaer" value="ja" id="frage-ja">OK</button>
@@ -231,6 +251,7 @@
       <ul class="info-liste" id="info-liste">
         <li id="info-demo" hidden><svg class="symbol"><use href="#i-info"/></svg><span>Demo: vorbereitete Beispielantworten ohne KI. Die echte Gabi versteht freie Fragen und schreibt die Notiz selbst aus deinem Diktat.</span></li>
         <li><svg class="symbol"><use href="#i-schloss"/></svg><span>Nur erfundene Testdaten verwenden – Patienten nur als Kürzel wie TP-01.</span></li>
+        <li><svg class="symbol"><use href="#i-chat"/></svg><span>Gespräche werden nur auf diesem Gerät gespeichert.</span></li>
         <li><svg class="symbol"><use href="#i-funke"/></svg><span>Gabi schlägt Notizen und Berichte vor. Prüf sie immer selbst – Gabi stellt keine Diagnosen und gibt keine Empfehlungen.</span></li>
         <li><svg class="symbol"><use href="#i-uhr"/></svg><span>Termine und Praxissoftware sind noch nicht angebunden.</span></li>
       </ul>
@@ -246,12 +267,13 @@
   <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
   <!-- ?v=… bei jeder Version erhöhen: GitHub Pages lässt Dateien 10 Minuten im Browser-Cache -->
-  <script src="config.js?v=2.0.2"></script>
+  <script src="config.js?v=2.1.0"></script>
   <script src="vendor/jspdf.umd.min.js?v=4.2.1"></script>
-  <script src="kern.js?v=2.0.2"></script>
-  <script src="pdf.js?v=2.0.2"></script>
-  <script src="demo.js?v=2.0.2"></script>
-  <script src="aufnahme.js?v=2.0.2"></script>
-  <script src="app.js?v=2.0.2"></script>
+  <script src="kern.js?v=2.1.0"></script>
+  <script src="pdf.js?v=2.1.0"></script>
+  <script src="demo.js?v=2.1.0"></script>
+  <script src="aufnahme.js?v=2.1.0"></script>
+  <script src="gespraeche.js?v=2.1.0"></script>
+  <script src="app.js?v=2.1.0"></script>
 </body>
 </html>

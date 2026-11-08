@@ -198,6 +198,178 @@ und pushen. Die beiden Zwischenschritte halten die internen Dateien weiter unter
 `.nojekyll` zurück und alles wäre wieder abrufbar). Der Worker 2.0 bleibt und bedient v1 weiter; Browser-Speicher von v1
 und v2 vertragen sich (offene v2-Entwurfskarten gehen in v1 allerdings verloren – vorher speichern).
 
+## v2.1 – Feinschliff (08.11.2026, Branch `gabi-v2-1`, nicht auf `main`)
+
+Auftrag: 2 Bugfixes (Glow, Flackern), 1 Feature (Gesprächsverlauf wie bei ChatGPT), 1 Hilfsdatei (Testdaten zurücksetzen).
+Nur Testdaten. Worker unverändert (2.0.0), Oberfläche 2.1.0.
+
+### A – Glow mit harten Kanten
+- **Ursache (im Code belegt):** `.leer { overflow: hidden }` und darin `.glanz` mit 120 % Breite. Der Verlauf endete am
+  Rand seiner Box, die Box ragte über `.leer` hinaus, `overflow: hidden` schnitt ihn links und rechts gerade ab.
+  Gemessen in der alten Version: Helligkeitssprung von 4–5 Stufen genau an den Rändern von `.leer` (bei 390/768/1440 px).
+- **Fix:** Schein als `::before` (`.leer::before`, `.zugang::before`), `z-index: -1` im eigenen Stapel (`isolation:
+  isolate`), `pointer-events: none`, Box größer als der Inhalt (bis 680 px), aber innerhalb ihres Behälters. Kein
+  `overflow: hidden` mehr an `.leer`, deshalb kein seitliches Scrollen. Der Verlauf hat 11 Stufen auf einer Kosinus-Kurve,
+  der letzte Stopp hat Deckkraft 0. Die erste, lineare Fassung mit 4 Stufen zeigte im hellen Modus Ringe an den Knicken
+  der Kurve. Die Kosinus-Kurve läuft flach aus.
+- **Gemessen** (Pixel für Pixel über die ganze Breite, Text ausgespart): größter Schritt neu 1–2 Stufen (Rundung),
+  vorher 4–5 an den Kanten. Geprüft bei 390/768/1440 px, hell und dunkel, für „Noch keine Notizen“,
+  „Nichts gefunden“ und die Zugangsseite. Die Fehlerzustände nutzen dasselbe `.leer`.
+- **Hinweis:** Im hellen Modus sind beim sehr hellen Grün feine 8-Bit-Abstufungen zu ahnen (Farbtiefe, war vorher auch
+  so). Das sind keine Kanten. Das Begrüßungsgespräch hatte nie einen Schein, da gab es nichts zu korrigieren.
+
+### B – Flackern beim Wechsel in den Notizordner
+- **Ursachen (im Code belegt):**
+  1. `.ansicht { animation: einblenden }`: Bei jedem `hidden → sichtbar` startete die Animation neu. Die ganze Ansicht
+     sprang auf unsichtbar und blendete wieder ein, bei jedem Wechsel Gespräch ↔ Notizen.
+  2. Die Übersicht baute bei jedem Besuch Kopf, Suche und Platzhalter neu auf und ersetzte danach alles durch die Karten.
+  3. Jede Karte hatte `animation: auftauchen` und flog bei jedem Neuaufbau neu ein.
+  4. Die Patientenseite zeigte immer zuerst Platzhalter (bei echter Leitung sichtbar), dann die Karten.
+  5. Die Seitenleiste wurde bei jeder Nachricht neu gezeichnet, das Gespräch bei jeder Rückkehr komplett neu aufgebaut.
+- **Fix:**
+  - Einblenden nur beim ersten Erscheinen nach dem Ladekreis; Karten tauchen nur beim ersten Betreten einer Ansicht auf
+    (`erstesMal`).
+  - `ersetzen()` zeichnet nur, wenn sich der Inhalt geändert hat: ein Aufbau pro Datenstand.
+  - Zwischenspeicher für Patienten, Notizlisten und Notizen: Was einmal geladen wurde, erscheint sofort und wird im
+    Hintergrund aufgefrischt.
+  - Der neue Inhalt wird erst fertig aufgebaut, dann wird umgeschaltet. Der alte Inhalt bleibt bis zu 150 ms stehen,
+    erst danach kommen Platzhalter in der Höhe der echten Karten (`mitFrist`).
+  - Das Gespräch wird nur nach einem Wechsel neu aufgebaut. „Bewegung reduzieren“ gilt weiter.
+- **Gemessen** (10 schnelle Runden mit je 8 Wechseln: Übersicht ↔ Gespräch direkt, Patient, Gespräch, mit „Zurück“ wieder
+  zum Patienten, zurück zur Übersicht; gezählt in jedem Bild):
+
+  | 80 Wechsel | v2.0.2 (main) | v2.1.0 |
+  |---|---|---|
+  | Bilder mit halb durchsichtiger Ansicht | 395 von 719 (Laptop) · 514 von 1003 (Handy) | 0 |
+  | Erneute Einblend-Animationen (Ansicht, Karten, Nachrichten) | 213 · 219 | 0 |
+  | Neuaufbau im Notizordner · Gespräch · Seitenleiste | 80 · 30 · 60 | 20 · 0 · 0 |
+  | Eine Antwort mit „Bewegung reduzieren“: Einblendungen | 23 (blinkt bei jedem Bild) | 2 (die zwei neuen Nachrichten) |
+  | Platzhalter sichtbar · Springen derselben Karte | 0 · 0 (Demo ohne Wartezeit) | 0 · 0 |
+
+  Die Prüfung fand dabei noch einen Fall, den die erste Fassung der Messung verdeckt hatte: CSS-Animationen starten bei
+  jedem `hidden → sichtbar` neu. Ohne Neuaufbau wären in v2.1 neue Nachrichten und erstmals gezeigte Karten bei jeder
+  Rückkehr erneut eingeblendet. Deshalb setzt `beruhigen()` beim Verlassen einer Ansicht alles Gezeigte auf „fertig“.
+  „Bewegung reduzieren“ erzwang das Einblenden mit `!important` und schlug so „schon gezeigt“, deshalb blinkte die
+  laufende Antwort. Die Statuszeile blendet nur bei neuem Status ein.
+
+  Mit echter Leitung: Antwortet der Server in 60 ms, gibt es keinen Platzhalter. Bei 700 ms bleibt der alte Inhalt
+  150 ms stehen, dann kommt der Platzhalter. Ein zweiter Besuch kommt sofort aus dem Zwischenspeicher, auch bei
+  langsamer Leitung.
+
+### C – Gesprächsverlauf wie bei ChatGPT
+- **Speicher nur auf dem Gerät:** `gespraeche.js`, IndexedDB „gabi“ (Demo: „gabi-demo“), Stores `meta` (Liste ohne Inhalt)
+  und `inhalt`. Ohne IndexedDB geht es mit localStorage (`gabi.` bzw. `gabi.demo.`), notfalls nur im Arbeitsspeicher, dann
+  mit Hinweis. Eine Schreibprobe beim Start erkennt private Fenster, die nicht schreiben lassen.
+  **Nie Worker oder Supabase.** In der Adresse steht nur die ID (`#/gespraech/<id>`). Der Seitentitel bleibt bewusst fest:
+  Ein Gesprächstitel landete sonst im Browserverlauf und in dessen Synchronisierung.
+- **Bedienung:**
+  - Laptop: Seitenleiste mit „Gespräche“ (eigener Scrollbereich), darunter die Test-Patienten (höchstens 26 % der Höhe).
+  - Handy und Tablet: ☰ öffnet die Schublade (`<dialog>`). Sie schließt mit Esc, Tipp daneben oder Eintrag antippen;
+    beim Schließen geht der Fokus zurück aufs Menü.
+  - Gruppen: Heute, Gestern, Letzte 7 Tage, Älter. Sortiert wird nach letzter Aktivität; Kalendertage gelten auch über
+    die Zeitumstellung. Das aktive Gespräch ist grün hinterlegt.
+  - Umbenennen per Stift: Enter übernimmt, Esc bricht ab, leer bedeutet keine Änderung, die Reihenfolge bleibt.
+  - Löschen fragt mit Titel nach, auch „Alle Gespräche löschen“. Offene Entwürfe werden in der Rückfrage genannt.
+- **Titel** lokal aus der ersten Nutzernachricht, höchstens 40 Zeichen, an der Wortgrenze gekürzt; „Diktat TP-01: …“,
+  „Suche: …“.
+- **Leere Gespräche** (nur Gabis Rückfragen) werden nicht gespeichert. Gespeichert wird ab der ersten Nachricht, einem
+  Entwurf (z. B. aus v1) oder einer zurückgestellten Aufnahme.
+- **Limit 50:** Die am längsten unbenutzten fliegen raus, mit Hinweis. Das offene Gespräch nie, Gespräche mit offenem
+  Entwurf zuletzt.
+- **Übernahme v2.0:** Das bisherige Gespräch des Tabs (sessionStorage) wird erster Eintrag und bleibt offen. Die alte
+  Kopie wird erst nach erfolgreichem Speichern gelöscht. Eine unterbrochene Antwort zeigt „Nochmal versuchen“.
+- **Wechsel während einer Antwort:** Die Antwort wird abgebrochen und bleibt im alten Gespräch als „Abgebrochen.“.
+  Jede Antwort ist fest an ihr Gespräch gebunden (keine Geisternachrichten), der Diktat-/Such-Modus endet beim Wechsel.
+  Kommt eine Aufnahme erst nach dem Wechsel an, wartet sie im eigenen Gespräch mit „Jetzt senden“ (nie im falschen).
+  Speichern eines Entwurfs bleibt am eigenen Gespräch.
+- **Speichern:** sofort, also ohne Zeitfenster, in dem ein Neuladen etwas verliert. Nur Tippen in einer Karte wird
+  gebündelt (300 ms), beim Verlassen und im Hintergrund wird alles sofort gesichert.
+- **Mehrere Tabs:** BroadcastChannel. Neue Gespräche erscheinen im anderen Tab; dort Gelöschtes wird hier nicht wieder
+  angelegt. Wird das offene Gespräch woanders gelöscht, zeigt dieser Tab ein leeres und einen Hinweis.
+- **Abmelden** fragt „Gespräche auf diesem Gerät auch löschen“ (Häkchen vorbelegt). Mit Häkchen wird die Ablage
+  geleert, ohne bleiben die Gespräche. Demo-Zurücksetzen löscht auch die Demo-Gespräche. Info-Dialog: „Gespräche
+  werden nur auf diesem Gerät gespeichert.“
+- **Kopfzeile Handy:** ☰ links. „Notizen“ wird erst ab 440 px ausgeschrieben, nichts wird gequetscht. Unter 360 px
+  steht „Neues Gespräch“ nur in der Schublade, so passt alles bis 320 px.
+- **Geändertes Verhalten:** „Neues Gespräch“ fragt nicht mehr nach (nichts geht verloren). Aus dem Notizordner
+  „Diktieren“/„Bericht“ öffnet das offene Gespräch, wie bisher.
+
+### Unabhängige Prüfung (Workflow: 5 Blickwinkel, je ein Gegenprüfer, der jeden Fund zu widerlegen versucht)
+
+26 Funde, **25 bestätigt**: 1 Blocker, 2 hoch, 10 mittel, 12 niedrig. Ein Fund wurde verworfen: „Alle löschen“ mit
+36 px sei zu klein, das ist kein Fehler. Am Handy hat es trotzdem 44 px bekommen. Alle 25 sind behoben, nachgestellt mit
+den Skripten der Prüfer.
+
+| Blickwinkel | Bestätigt | Wichtigste Funde → Behebung |
+|---|---|---|
+| Zustand | 5 | **Blocker:** Kam die Spracherkennung erst nach „Abmelden + Gespräche löschen“ zurück, brachte sie das gelöschte Gespräch samt sendbarer Aufnahme wieder → Sitzungszähler (`verwaist`): nichts aus einer früheren Sitzung oder einem gelöschten Gespräch wird gespeichert oder geparkt · Zurück auf einen alten „#/“-Eintrag legte ein neues Gespräch an und brach die laufende Antwort ab → „#/“ zeigt das offene Gespräch, neue Gespräche legen nur die Knöpfe an · zwei Tabs mit einer Entwurfskarte in Bearbeitung überschrieben sich → `zusammenfuehren` · Aufnahme in gelöschtes Gespräch geparkt · v1-Diktat benannte ein bestehendes Gespräch um → eigenes Gespräch |
+| Datenschutz | 5 | Löschen und Abmelden ließen Reste in localStorage/sessionStorage → `resteLoeschen`; hing IndexedDB dabei, bleibt eine Marke, der nächste Start löscht zuerst · nach „Alle löschen“ in Tab A speicherte Tab B sein neues Gespräch nie · zwei Tabs überschrieben sich gegenseitig (auch den Namen) · v2.0-Übernahme verwarf ein dort liegendes v1-Diktat · Abmelden ließ Demo-Gespräche liegen |
+| Ruhe (B/A) | 6 | **hoch:** Karten (und Nachrichten) blendeten bei jeder Rückkehr neu ein, weil CSS-Animationen bei `hidden → sichtbar` neu starten → `beruhigen()` · „Bewegung reduzieren“ ließ die laufende Antwort blinken (`!important`) · im Bearbeiten-Modus verlassene Notiz blieb später hängen · Platzhalter zu niedrig (78 statt 102 px, Zeile fehlte) · Suche ohne Treffer zeigte kurz Platzhalter |
+| Handy/Barrierefreiheit | 7 | **hoch:** Patienten in der Seitenleiste bei vielen Gesprächen zusammengedrückt (jetzt alle 3 sichtbar bei 50 Gesprächen und 1366 × 768) · Umbenennen per Wegklicken verschluckte den Klick und stahl den Fokus · Dunkelmodus: Titel schien durch Stift/Papierkorb · Hinweise lagen hinter der Schublade (jetzt Popover) · Kontrast des Fußtexts 2,4 : 1 → 4,9 : 1 · Fokus ging nach Öffnen/Löschen verloren · zweimal `aria-current="page"`, Überschriften |
+| Rückschritte und D | 2 | Umschalter in der Kopfzeile ohne Namen bei 390–439 px → `aria-label` · `reset_test.sql` vergab neue Patienten-IDs, offene Entwürfe ließen sich danach nicht speichern → feste IDs aus `demo.js` (in Postgres echt geprüft, auch auf dem heutigen Live-Stand mit zufälligen IDs) |
+
+**Zweite Runde (nur die Korrekturen, 7 Agenten):**
+- Drei Agenten stellten die 25 Funde am korrigierten Stand nach. Ergebnis: vollständig behoben bis auf 8 Reste, die
+  sich teils überschneiden.
+- Zwei Agenten suchten neue Fehler, die die Korrekturen selbst eingebaut hatten. Sie meldeten 11, alle 11 bestätigt,
+  keiner schwerer als „mittel“.
+- Je ein Gegenprüfer hat jeden Fund zu widerlegen versucht.
+
+Alles behoben und mit den Skripten der Prüfer erneut nachgestellt, alles grün:
+- Ein Hinweis über der Schublade lag genau über „Neues Gespräch“, ein Tipp ging hindurch. Seine Knöpfe waren über
+  Dialogen ohne Funktion. → Hinweise kommen in den offenen Dialog, in der Schublade unten.
+- Der Bearbeiten-Zustand einer Karte und „Beispieldiktat benutzt“ sprangen auf den anderen Tab über. → Das ist jetzt
+  Zustand des einzelnen Tabs.
+- Ein Entwurf ließ sich in zwei Tabs doppelt speichern. → Vor dem Speichern wird nachgesehen, ob er schon gespeichert ist.
+- Die Notfall-Kopie brachte ein in einem anderen Tab Gelöschtes zurück oder überschrieb Neueres. → Dauerhafte
+  Sperrliste, Zeitpunkt von „Alle löschen“, Zeitstempel je Speichern.
+- Abmelden ohne Häkchen ließ eine spät ankommende Aufnahme für die nächste Person sendbar. → Die Sitzung endet immer.
+- Fiel IndexedDB genau beim Abmelden aus, blieben Gespräche liegen. → Marke, der nächste Start löscht zuerst, mit Hinweis.
+- Ein offener Demo-Tab erfuhr nichts vom Löschen beim Abmelden.
+- Die Liste blieb nach dem Umbenennen veraltet.
+- Eine Notiz hing nach Abmelden und Anmelden aus dem Bearbeiten-Modus.
+- „Suche fehlgeschlagen“ zeigte kurz einen Platzhalter, und bei derselben Suche nach dem Löschen stand die Übersicht
+  da wie ein Ergebnis.
+- Der Notiz-Platzhalter am Handy ist jetzt 95 px hoch (Versatz höchstens 22 statt 76 px).
+- Der Fokus blieb erhalten, wenn das Fenster bei offener Schublade breit gezogen wird.
+
+Zusätzlich selbst gefunden und behoben:
+- Umbenennen oder Löschen mit sofortigem Neuladen ging verloren, weil IndexedDB beim Entladen offene Schreibvorgänge
+  abbricht → Notfall-Kopie in sessionStorage (5 von 5 Fällen erhalten).
+- Speichern jetzt sofort statt mit 150 ms Verzögerung.
+- Kopfzeile bei 320–390 px gequetscht.
+- Glow im hellen Modus mit Ringen → Kosinus-Kurve.
+
+### D – Testdaten zurücksetzen
+`supabase/reset_test.sql` wird aus derselben Quelle wie `seed_test.sql` erzeugt (`node dev/seed_erzeugen.mjs`). Ein Test
+prüft, dass beide gleich bleiben. Oben steht zweimal die Warnung „ACHTUNG: löscht ALLE Daten. Nur für Testumgebung. Vor
+Ausführen Bestätigung durch Julius.“ Alles läuft in einer Transaktion: erst löschen, dann der Seed-Stand.
+**Echt ausgeführt** in einem lokalen Wegwerf-Postgres (Supabase-Image 17.11, nur 127.0.0.1, danach entfernt):
+schema → seed → zusätzlicher Patient, zusätzliche und gelöschte Notiz → reset. Ergebnis: genau TP-01/02/03 mit je 2
+Notizen und festen IDs; ein zweiter Lauf ergibt dasselbe. Gegen die Live-Datenbank wurde nichts ausgeführt.
+Anleitung „Testdaten zurücksetzen in 4 Klicks“ im README.
+
+### Getestet (v2.1)
+- **Unit-Tests: 119 grün** (`cd worker && npm test`). Davon neu 24 für den Gesprächsverlauf (Titel, Gruppen samt
+  Zeitumstellung, Limit 50, Aufbereiten, Übernahme v2.0, Ablagen, getrennte Demo-Ablage, Reste löschen, Marke,
+  Zusammenführen zweier Tabs), 2 für `reset_test.sql`, Versionsstempel mit `gespraeche.js`.
+- **Ende-zu-Ende: 258 grün** (`tests/v2.mjs`, Chromium und WebKit). Neu dabei:
+  - Schein-Pixelmessung bei 390/768/1440 px, hell und dunkel, für drei Zustände.
+  - Ruhige Wechsel: 10 Runden mit je 8 Wechseln in 6 Konfigurationen, auch mit „Bewegung reduzieren“.
+  - Gesprächsverlauf am Laptop (Liste, Adresse, Zurück/Vorwärts, Neuladen, Umbenennen, Löschen, alle löschen, Limit 50,
+    Gruppen, Wechsel während der Antwort, Diktat-Modus, Entwurf, unterbrochene Antwort, zwei Tabs, Datenschutz).
+  - Schublade bei 390 und 320 px.
+  - Übergang v1/v2.0.
+  - Echte API: Platzhalter-Zeiten, getrennte Ablagen, Abmelden mit und ohne Häkchen, Spracherkennung nach dem Abmelden.
+  - Safari-Engine mit IndexedDB.
+- **SQL echt ausgeführt** (lokales Wegwerf-Postgres): schema → seed → reset, auch auf dem heutigen Live-Stand.
+- **Screenshots** in `screenshots/`:
+  - `glow-<390|768|1440>-<hell|dunkel>.png`
+  - `laptop-<hell|dunkel>-12-seitenleiste.jpg`
+  - `handy-<hell|dunkel>-12-schublade.jpg`
+  - `handy-320-schublade.jpg`
+  - alle übrigen neu (mit ☰ in der Kopfzeile)
+
 ## Offen
 
 1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
@@ -213,4 +385,5 @@ und v2 vertragen sich (offene v2-Entwurfskarten gehen in v1 allerdings verloren 
 5. **Geschwindigkeit**: Opus 5.5 mit effort „low“. Falls es im Alltag zu langsam wirkt, wäre Sonnet 5.5 die schnellere
    Wahl – Entscheidung bei Julius.
 6. ~~Merge auf `main`~~ – erledigt am 08.11.2026 (v2 live). Rückweg zu v1 siehe „Live-Gang“.
-7. Später: Terminkalender/Praxissoftware (Baustein 2), Chatverlauf über die Sitzung hinaus, Konten statt gemeinsamem Code.
+7. Später: Terminkalender/Praxissoftware (Baustein 2), Gesprächsverlauf über Geräte hinweg (bräuchte Konten statt
+   gemeinsamem Code).

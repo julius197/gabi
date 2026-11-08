@@ -36,12 +36,15 @@
   --akzent-auf: #ffffff;
   --akzent-ton: #36954d;
   --akzent-hell: #eefbee;
+  --eintrag-aktiv: #eefbee; /* deckend: Stift und Papierkorb liegen darüber */
   --akzent-hell-2: #ddf6dd;
   --akzent-rand: #bdeabf;
   --akzent-tief: #1e5e31;
   --blase: #28773d;
   --blase-text: #ffffff;
-  --glanz: #ddf6dd;
+  /* Schein hinter leeren Zuständen: Farbe und Deckkraft in der Mitte (Verlauf siehe .leer::before) */
+  --glanz-rgb: 221, 246, 221;
+  --glanz-a: 1;
   --streifen: linear-gradient(90deg, #6cc471, #4caf50 50%, #36954d);
 
   --warn-bg: rgba(255, 149, 0, 0.14);
@@ -99,12 +102,14 @@
     --akzent-auf: #072312;
     --akzent-ton: #6cc471;
     --akzent-hell: rgba(108, 196, 113, 0.11);
+    --eintrag-aktiv: #17261d; /* = --akzent-hell über --bg, aber deckend */
     --akzent-hell-2: rgba(108, 196, 113, 0.18);
     --akzent-rand: rgba(108, 196, 113, 0.3);
     --akzent-tief: #9ddfa1;
     --blase: #1e5e31;
     --blase-text: #eafbe9;
-    --glanz: rgba(76, 175, 80, 0.16);
+    --glanz-rgb: 76, 175, 80;
+    --glanz-a: 0.16;
     --streifen: linear-gradient(90deg, #4caf50, #36954d 50%, #28773d);
 
     --warn-bg: rgba(255, 170, 60, 0.14);
@@ -281,6 +286,9 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .marke-punkt { color: var(--akzent-ton); }
 .marke-unter { margin-top: 3px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); }
 .kopf .badge-test { margin-left: 4px; cursor: pointer; }
+.kopf-menue { margin-left: -8px; color: var(--text); }
+.kopf > .rund-knopf, .kopf > .knopf, .kopf .badge-test { flex: none; } /* nichts in der Kopfzeile wird zusammengedrückt */
+.seiten-gespraeche { display: none; }
 .kopf-platz { flex: 1; }
 .navi { display: none; }
 .kopf-knopf .beschriftung { display: none; }
@@ -288,23 +296,49 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 
 .titel-block { display: grid; gap: 4px; min-width: 0; }
 .knopf-reihe.links { justify-content: flex-start; }
-.skelett[data-skelett-karte] { height: 78px; border-radius: 20px; }
+.skelett[data-skelett-karte] { height: 102px; border-radius: 20px; } /* = echte Patientenkarte: kein Springen beim Laden */
 .skelett[data-skelett-leser] { height: 360px; border-radius: var(--r-xl); }
+.skelett[data-skelett-notiz] { height: 83px; border-radius: 20px; } /* = Notizkarte mit einzeiliger Vorschau */
+@media (max-width: 639.98px) { .skelett[data-skelett-notiz] { height: 95px; } } /* schmal: Vorschau oft zweizeilig (83/106 px) */
+.skelett.skelett-zeile { height: 21.6px; width: 11rem; border-radius: var(--r-s); } /* = Zeile „.suche-hinweis“ (13,5 px × 1,6) */
+.leser .skelett.skelett-zeile { height: 24px; width: 9rem; } /* = Zeile „Testfall … · bearbeitet“ (15 px × 1,6) */
+.skelett.skelett-augenbraue { height: 18.4px; width: 12rem; border-radius: var(--r-s); } /* = .augenbraue (11,5 px × 1,6) */
+.skelett.skelett-titel { height: 31.2px; width: min(18rem, 80%); border-radius: var(--r-s); } /* = .leser-kopf h1 (26 px × 1,2) */
 .skelett.chip-skelett { display: inline-block; width: 128px; height: 38px; border-radius: var(--rund); }
 .chip strong { font-weight: 600; }
 .chip .stumm { font-size: 13px; }
 
 /* Inhalt */
 .haupt { position: relative; }
-.ansicht { animation: einblenden var(--t-lang) var(--raus); }
+/* Einblenden nur beim ersten Erscheinen nach dem Ladekreis (app.js setzt .einblenden) – nie beim Wechsel der Bereiche */
+.ansicht.einblenden { animation: einblenden var(--t-lang) var(--raus); }
 .spalte { width: 100%; max-width: var(--spalte); margin: 0 auto; padding: 0 var(--rand); }
 
 /* 5 Zugang ----------------------------------------------------------------- */
 .zugang {
-  position: relative; min-height: calc(100dvh - var(--kopf-h)); display: grid; place-items: center;
+  position: relative; isolation: isolate; min-height: calc(100dvh - var(--kopf-h)); display: grid; place-items: center;
   padding: 24px var(--rand) calc(48px + env(safe-area-inset-bottom)); overflow: hidden;
 }
-.glanz { position: absolute; inset: -20% -30% auto; height: 70%; background: radial-gradient(closest-side, var(--glanz), transparent); pointer-events: none; }
+/* Weicher Schein hinter Inhalten: eigenes Pseudo-Element, deutlich größer als der Inhalt, hinter allem (z-index -1 im
+   eigenen Stapel). Der Verlauf folgt in 11 Stufen einer Kosinus-Kurve und läuft am Rand seiner Box flach auf
+   transparent aus (closest-side, letzter Stopp Deckkraft 0) – ohne Knicke, die das Auge als Ringe sieht. Die Box bleibt
+   innerhalb ihres Behälters: nichts schneidet ihn ab, keine Kante, kein seitliches Scrollen. */
+.zugang::before, .leer::before {
+  content: ""; position: absolute; z-index: -1; pointer-events: none; transform: translateX(-50%);
+  background: radial-gradient(closest-side,
+    rgba(var(--glanz-rgb), var(--glanz-a)) 0%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.976)) 10%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.905)) 20%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.794)) 30%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.655)) 40%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.500)) 50%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.345)) 60%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.206)) 70%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.095)) 80%,
+    rgba(var(--glanz-rgb), calc(var(--glanz-a) * 0.024)) 90%,
+    rgba(var(--glanz-rgb), 0) 100%);
+}
+.zugang::before { left: 50%; top: 0; width: min(960px, 100%); height: 66%; }
 .zugang-inhalt { position: relative; width: 100%; max-width: 400px; display: grid; gap: 28px; text-align: center; }
 .zugang-marke { display: grid; justify-items: center; gap: 10px; }
 .zugang-zeichen { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; background: var(--akzent); color: var(--akzent-auf); font-size: 34px; font-weight: 700; letter-spacing: -0.05em; box-shadow: 0 16px 40px -18px rgba(40, 119, 61, 0.7); }
@@ -387,6 +421,7 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .punkte-tippen i:nth-child(2) { animation-delay: 0.16s; }
 .punkte-tippen i:nth-child(3) { animation-delay: 0.32s; }
 .status-zeile { font-size: 13.5px; color: var(--text-3); animation: einblenden var(--t) var(--raus); }
+.status-zeile.ruhig { animation: none; } /* gleicher Status wie im Bild davor – nicht bei jedem Neuzeichnen neu einblenden */
 
 .quellen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .quellen .augenbraue { margin-right: 2px; }
@@ -564,7 +599,6 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
   display: flex; align-items: center; gap: 14px; padding: 16px; text-decoration: none; color: inherit;
   border-radius: 20px; background: var(--flaeche); box-shadow: var(--schatten);
   transition: transform var(--t) var(--raus), box-shadow var(--t) var(--raus);
-  animation: auftauchen var(--t-lang) var(--raus) backwards;
 }
 .patient-karte:hover { transform: translateY(-2px); box-shadow: var(--schatten-hoch); }
 .patient-karte:active { transform: scale(0.99); }
@@ -583,13 +617,14 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
   display: grid; gap: 6px; padding: 16px 18px; text-decoration: none; color: inherit;
   border-radius: 20px; background: var(--flaeche); box-shadow: var(--schatten);
   transition: transform var(--t) var(--raus), box-shadow var(--t) var(--raus);
-  animation: auftauchen var(--t-lang) var(--raus) backwards;
 }
 .notiz-karte:hover { transform: translateY(-2px); box-shadow: var(--schatten-hoch); }
 .notiz-karte-kopf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .notiz-karte-kopf strong { font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .notiz-karte-kopf .badge.warn { margin-left: auto; }
 .notiz-karte p { font-size: 14.5px; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Karten tauchen nur beim ersten Betreten einer Ansicht auf (app.js: erstesMal) – Aktualisierungen erscheinen ruhig */
+.raster.einblenden > .patient-karte, .notiz-liste.einblenden > .notiz-karte { animation: auftauchen var(--t-lang) var(--raus) backwards; }
 
 .zurueck { display: inline-flex; align-items: center; gap: 4px; margin-left: -8px; height: 36px; padding: 0 12px 0 6px; border-radius: var(--rund); color: var(--text-2); text-decoration: none; font-size: 14px; font-weight: 500; transition: background-color var(--t-kurz); }
 .zurueck:hover { background: var(--fuell); color: var(--text); }
@@ -607,12 +642,11 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .original[open] summary .symbol { transform: rotate(90deg); }
 .original p { margin-top: 8px; padding: 14px 16px; border-radius: var(--r-m); background: var(--flaeche-2); box-shadow: inset 0 0 0 1px var(--linie); font-size: 14.5px; color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 
-.leer { display: grid; justify-items: center; text-align: center; gap: 12px; padding: 40px 20px; position: relative; overflow: hidden; }
-.leer .glanz { inset: 0 -10% auto; height: 100%; }
-.leer .kachel { position: relative; }
-.leer h2, .leer p { position: relative; }
+/* Leerer Zustand: kein overflow:hidden mehr (das schnitt den Schein seitlich gerade ab) – der Schein bleibt in der
+   Breite des Zustands und ragt oben/unten nur in den freien Abstand (Ordner-Abstand 16 px, Seitenrand unten 48 px). */
+.leer { display: grid; justify-items: center; text-align: center; gap: 12px; padding: 40px 20px; position: relative; isolation: isolate; }
+.leer::before { left: 50%; top: -28px; bottom: -28px; width: min(680px, 100%); }
 .leer p { color: var(--text-2); max-width: 36ch; }
-.leer .knopf { position: relative; }
 
 /* 10 Dialoge und Toasts ---------------------------------------------------- */
 dialog.dialog {
@@ -637,6 +671,8 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
 }
 .toast.weg { animation: toast-raus var(--t-kurz) var(--rein) forwards; }
 .toast .knopf { pointer-events: auto; } /* nur der Knopf (z. B. „Rückgängig“) fängt Tipps – sonst geht der Tipp durch */
+dialog .toast { pointer-events: auto; } /* im Dialog nichts durchtippen (darunter liegen Knöpfe des Dialogs) */
+dialog.schublade .toasts { position: absolute; top: auto; bottom: calc(12px + env(safe-area-inset-bottom)); left: 12px; right: 12px; width: auto; transform: none; }
 .toast-symbol { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--fuell); color: var(--text-2); }
 .toast-symbol .symbol { width: 14px; height: 14px; stroke-width: 2.2; }
 .toast.erfolg .toast-symbol { background: var(--akzent); color: var(--akzent-auf); }
@@ -645,9 +681,81 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
 .toast-text { flex: 1; min-width: 0; }
 .toast .knopf { min-height: 32px; padding: 0 12px; font-size: 13.5px; }
 
+.haken-zeile { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--r-m); background: var(--flaeche-2); box-shadow: inset 0 0 0 1px var(--linie); font-size: 14.5px; line-height: 1.45; color: var(--text); cursor: pointer; }
+.haken-zeile input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--akzent); cursor: pointer; }
+
+/* Gesprächsliste (Seitenleiste am Laptop, Schublade am Handy) – gleiche Bausteine */
+.gespraeche-liste ul { list-style: none; display: grid; gap: 1px; }
+.gespraeche-gruppe + .gespraeche-gruppe { margin-top: 12px; }
+.gespraeche-gruppe-titel { padding: 4px 12px 4px; font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--text-3); }
+.gespraech-eintrag { --eintrag-bg: var(--bg); position: relative; display: flex; align-items: center; min-width: 0; border-radius: var(--r-m); transition: background-color var(--t-kurz); }
+.gespraech-eintrag:hover { --eintrag-bg: var(--fuell); background: var(--fuell); }
+.gespraech-eintrag.aktiv { --eintrag-bg: var(--eintrag-aktiv); background: var(--eintrag-aktiv); }
+.gespraech-link {
+  flex: 1; min-width: 0; display: block; padding: 9px 12px; border-radius: inherit;
+  color: var(--text-2); text-decoration: none; font-size: 14px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gespraech-link:focus-visible { outline-offset: -2px; }
+.gespraech-eintrag:hover .gespraech-link, .gespraech-eintrag.aktiv .gespraech-link { color: var(--text); }
+.gespraech-eintrag.aktiv .gespraech-link { font-weight: 500; }
+/* Stift und Papierkorb: am Laptop beim Zeigen (oder mit Tastatur-Fokus), über dem Titelende mit weichem Übergang */
+.gespraech-aktionen {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; padding-left: 18px;
+  background: linear-gradient(to right, transparent, var(--eintrag-bg) 16px); border-radius: 0 var(--r-m) var(--r-m) 0;
+  opacity: 0; pointer-events: none; transition: opacity var(--t-kurz);
+}
+.gespraech-eintrag:hover .gespraech-aktionen, .gespraech-eintrag:focus-within .gespraech-aktionen { opacity: 1; pointer-events: auto; }
+.gespraech-aktionen .rund-knopf { width: 28px; height: 28px; color: var(--text-3); }
+.gespraech-aktionen .rund-knopf .symbol { width: 15px; height: 15px; }
+.gespraech-aktionen .rund-knopf:hover { color: var(--text); background: var(--fuell-2); }
+.gespraech-aktionen [data-gespraech-aktion="loeschen"]:hover { color: var(--fehler); background: var(--fehler-bg); }
+.gespraech-eintrag.benennt { --eintrag-bg: var(--flaeche); background: var(--flaeche); box-shadow: inset 0 0 0 2px var(--akzent-ton); }
+.gespraech-eintrag.benennt .gespraech-aktionen { display: none; }
+.gespraech-feld { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 0; border-radius: inherit; background: transparent; color: var(--text); font-size: 14px; }
+.gespraech-feld:focus-visible { outline: none; }
+.gespraeche-leer { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; color: var(--text-3); font-size: 13px; line-height: 1.45; }
+.gespraeche-leer .symbol { width: 18px; height: 18px; margin-top: 1px; color: var(--text-4); }
+.gespraeche-leer strong { display: block; font-weight: 600; color: var(--text-2); }
+.gespraeche-leer span { display: block; }
+.gespraeche-fuss { display: grid; justify-items: start; gap: 4px; margin-top: 14px; padding: 12px 4px 4px 12px; border-top: 1px solid var(--linie); font-size: 12px; line-height: 1.4; color: var(--text-3); }
+.gespraeche-fuss .knopf { margin-left: -12px; color: var(--text-3); }
+.gespraeche-fuss .knopf:hover:not(:disabled) { color: var(--fehler); background: var(--fehler-bg); }
+/* Touch ohne Zeiger: Knöpfe immer sichtbar und groß genug, der Titel macht Platz */
+@media (hover: none) {
+  .gespraech-aktionen { position: static; transform: none; padding-left: 0; background: none; opacity: 1; pointer-events: auto; }
+  .gespraech-aktionen .rund-knopf { width: 40px; height: 40px; }
+  .gespraech-aktionen .rund-knopf .symbol { width: 17px; height: 17px; }
+  .gespraech-link { padding-top: 11px; padding-bottom: 11px; font-size: 15px; }
+  .gespraech-feld { height: 44px; font-size: 16px; }
+  .gespraeche-fuss .knopf { min-height: 44px; }
+}
+
+/* Schublade: Liste der Gespräche von links (Handy/Tablet) */
+dialog.schublade {
+  position: fixed; inset: 0 auto 0 0; margin: 0; padding: 0; border: 0;
+  width: min(340px, calc(100vw - 40px)); max-width: none; height: auto; max-height: none;
+  background: var(--bg); color: var(--text); border-radius: 0 var(--r-xl) var(--r-xl) 0; box-shadow: var(--schatten-dialog);
+}
+dialog.schublade[open] { animation: schublade-rein var(--t-lang) var(--raus); }
+dialog.schublade.schliesst { animation: schublade-raus 180ms var(--rein) forwards; }
+dialog.schublade::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); animation: einblenden var(--t-lang) var(--raus); }
+dialog.schublade.schliesst::backdrop { animation: ausblenden 180ms var(--rein) forwards; }
+html:has(dialog.schublade[open]) { overflow: hidden; }
+.schublade-innen {
+  height: 100%; display: flex; flex-direction: column; gap: 12px;
+  padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.schublade-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-left: 8px; min-height: 44px; }
+.schublade-kopf h2 { font-size: 18px; letter-spacing: -0.02em; }
+.schublade-neu { justify-content: flex-start; padding: 0 16px; }
+.schublade .gespraeche-liste { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 2px 4px 8px; }
+
 /* 11 Laptop ---------------------------------------------------------------- */
-@media (min-width: 380px) {
+@media (min-width: 440px) {
   .kopf-knopf .beschriftung { display: inline; }
+}
+@media (max-width: 1023.98px) {
+  .kopf { gap: 6px; }
 }
 @media (min-width: 640px) {
   :root { --rand: 24px; }
@@ -663,6 +771,7 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
     position: sticky; top: 0; height: 100vh; height: 100dvh; flex-direction: column; align-items: stretch; gap: 6px;
     padding: 24px 16px 20px; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none;
     border-bottom: 0; border-right: 1px solid var(--linie);
+    overflow-y: auto; overscroll-behavior: contain; /* zur Not (sehr niedriges Fenster) scrollt die ganze Leiste */
   }
   .app.ohne-seite .kopf { display: none; }
   .kopf-marke { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 18px; }
@@ -679,7 +788,13 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
   .navi a:hover { background: var(--fuell); color: var(--text); }
   .navi a[aria-current="page"] { background: var(--flaeche); color: var(--text); box-shadow: var(--schatten); }
   .navi a[aria-current="page"] .symbol { color: var(--akzent-ton); }
-  .seiten-patienten { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 22px; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+  .kopf-menue { display: none; }
+  /* Gespräche (scrollt für sich), darunter die Test-Patienten (höchstens ein Viertel der Höhe), unten der Hinweis */
+  .seiten-gespraeche { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 104px; margin-top: 18px; }
+  .seiten-titel { padding: 0 12px 6px; }
+  .seiten-gespraeche .gespraeche-liste { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; margin: 0 -6px; padding: 2px 6px 4px; }
+  .seiten-patienten { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; flex: 0 0 auto; max-height: 21vh; margin-top: 14px; overflow-y: auto; overflow-x: hidden; }
+  .seiten-patienten h2.augenbraue { margin: 0; }
   .seiten-patienten a { min-width: 0; }
   .seiten-patienten .augenbraue { padding: 0 12px 6px; }
   .seiten-patienten a { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: var(--r-m); text-decoration: none; color: var(--text-2); font-size: 14px; }
@@ -687,7 +802,7 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
   .seiten-patienten a b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
   .seiten-patienten a span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-3); }
   .seiten-patienten a .badge { flex: none; height: 20px; padding: 0 7px; font-size: 11px; color: var(--text-3); }
-  .seiten-fuss { display: grid; gap: 10px; margin-top: auto; padding: 14px 12px 0; border-top: 1px solid var(--linie); font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
+  .seiten-fuss { display: grid; gap: 10px; flex: none; margin-top: auto; padding: 14px 12px 0; border-top: 1px solid var(--linie); font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
   .zugang, .hinweis-seite { min-height: 100dvh; }
   .chat { min-height: 100dvh; }
   .verlauf { padding-top: 40px; }
@@ -709,6 +824,7 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
   .vorschlag { min-height: 104px; padding: 12px; }
   .vorschlag-text > span { display: none; }
   .kopf .badge-test { height: 20px; padding: 0 7px; font-size: 11px; margin-left: 2px; } /* bleibt erreichbar: Info, Abmelden */
+  #kopf-neu { display: none; } /* „Neues Gespräch“ steht ganz oben in der Schublade (Menü) */
 }
 
 /* iPhone zoomt in Felder unter 16 px hinein – auf Touch-Geräten alle Eingaben mit 16 px */
@@ -730,6 +846,9 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
 @keyframes aufploppen { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: none; } }
 @keyframes toast-rein { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes toast-raus { to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+@keyframes ausblenden { to { opacity: 0; } }
+@keyframes schublade-rein { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes schublade-raus { to { transform: translateX(-100%); } }
 @keyframes denken { 0%, 80%, 100% { opacity: 0.35; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
 @keyframes pulsieren { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes welle { from { opacity: 0.4; transform: scale(1); } to { opacity: 0; transform: scale(1.9); } }
@@ -741,7 +860,11 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 120ms !important; animation-iteration-count: 1 !important; transition-duration: 120ms !important; scroll-behavior: auto !important; }
-  .nachricht, .patient-karte, .notiz-karte, .ansicht, dialog.dialog[open], .toast, .modus-pill { animation-name: einblenden !important; }
+  /* nur ein- und ausblenden statt bewegen – bewusst ohne !important: „schon gezeigt“ (animation: none am Element) muss
+     gewinnen, sonst blendet z. B. eine laufende Antwort bei jedem Bild neu ein (das blinkte) */
+  .nachricht, .raster.einblenden > .patient-karte, .notiz-liste.einblenden > .notiz-karte, .ansicht.einblenden, .toast, .modus-pill, .status-zeile, .eingabe-fuss.hinweis,
+  dialog.dialog[open], dialog.schublade[open] { animation-name: einblenden; }
+  .toast.weg { animation-name: ausblenden; }
   .knopf:active, .chip:active, .vorschlag:hover, .vorschlag:active, .patient-karte:hover, .notiz-karte:hover, .rund-knopf:active, .senden:active, .mikro:active { transform: none !important; }
   .punkte-tippen i, .aufnahme-punkt, .drehen, .skelett::after, .mikro.lockt::after, .nachricht-text.laeuft > :last-child::after { animation: none !important; }
   .eingabe.nimmt-auf .mikro::after { animation: none !important; opacity: 0; }

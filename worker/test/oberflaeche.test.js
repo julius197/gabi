@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { kuerzelPruefen, normalisieren, suchtext } from "../src/notiz.js";
-import { SEED_DATEI, seedSql } from "../dev/seed_erzeugen.mjs";
+import { RESET_DATEI, SEED_DATEI, resetSql, seedSql } from "../dev/seed_erzeugen.mjs";
 
 const require = createRequire(import.meta.url);
 const DEMO = require("../../demo.js");
@@ -153,13 +153,36 @@ describe("Seed-Datei supabase/seed_test.sql", () => {
   });
 });
 
+describe("Hilfsdatei supabase/reset_test.sql (nur von Hand, nach Julius' OK)", () => {
+  it("passt zum Stand von demo.js (sonst: cd worker && node dev/seed_erzeugen.mjs)", () => {
+    expect(readFileSync(RESET_DATEI, "utf8")).toBe(resetSql());
+  });
+  it("warnt groß ganz oben, löscht in einer Transaktion alles und legt genau den Seed-Stand neu an", () => {
+    const sql = resetSql();
+    const zeilen = sql.split("\n");
+    for (const z of zeilen.slice(0, 2)) expect(z).toBe("-- ⚠️ ACHTUNG: löscht ALLE Daten. Nur für Testumgebung. Vor Ausführen Bestätigung durch Julius.");
+    const ohneKommentar = zeilen.filter((z) => !z.startsWith("--")).join("\n");
+    const start = ohneKommentar.indexOf("begin;");
+    const loeschen = [ohneKommentar.indexOf("delete from public.notes;"), ohneKommentar.indexOf("delete from public.patients_test;")];
+    const einfuegen = ohneKommentar.indexOf("insert into");
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(loeschen.every((i) => i > start && i < einfuegen)).toBe(true);
+    expect(ohneKommentar.trim().endsWith("commit;")).toBe(true);
+    expect(ohneKommentar.match(/\bdelete from\b/g)).toHaveLength(2); // sonst nichts
+    expect(ohneKommentar).not.toMatch(/\b(drop|truncate|alter|grant|revoke)\b/i); // Tabellen und Rechte bleiben
+    // derselbe Datenteil wie seed_test.sql
+    const daten = (x) => x.slice(x.indexOf("-- Test-Patienten"), x.lastIndexOf("commit;"));
+    expect(daten(sql)).toBe(daten(seedSql()));
+  });
+});
+
 describe("Versionsstempel", () => {
   it("VERSION in app.js passt zu jedem ?v= in index.html (sonst lädt jeder Start einmal neu oder zeigt „aktualisiert“)", () => {
     const wurzel = new URL("../../", import.meta.url);
     const html = readFileSync(new URL("index.html", wurzel), "utf8");
     const version = /const VERSION = "([^"]+)"/.exec(readFileSync(new URL("app.js", wurzel), "utf8"))[1];
-    const eigene = [...html.matchAll(/(?:src|href)="(style\.css|config\.js|kern\.js|pdf\.js|demo\.js|aufnahme\.js|app\.js)\?v=([^"]+)"/g)];
-    expect(eigene.map((m) => m[1]).sort()).toEqual(["app.js", "aufnahme.js", "config.js", "demo.js", "kern.js", "pdf.js", "style.css"]);
+    const eigene = [...html.matchAll(/(?:src|href)="(style\.css|config\.js|kern\.js|pdf\.js|demo\.js|aufnahme\.js|gespraeche\.js|app\.js)\?v=([^"]+)"/g)];
+    expect(eigene.map((m) => m[1]).sort()).toEqual(["app.js", "aufnahme.js", "config.js", "demo.js", "gespraeche.js", "kern.js", "pdf.js", "style.css"]);
     for (const m of eigene) expect(`${m[1]}?v=${m[2]}`).toBe(`${m[1]}?v=${version}`);
   });
 });

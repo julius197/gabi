@@ -5,12 +5,13 @@
 
 begin;
 
--- Test-Patienten (nur Kürzel und fiktive Beschreibung)
-insert into public.patients_test (kuerzel, pseudonym) values
-  ('TP-01', 'Testfall Knie rechts (fiktiv)'),
-  ('TP-02', 'Testfall Schulter links (fiktiv)'),
-  ('TP-03', 'Testfall LWS (fiktiv)')
-on conflict (kuerzel) do nothing;
+-- Test-Patienten (nur Kürzel und fiktive Beschreibung; feste IDs wie in demo.js – so bleiben offene Entwürfe
+-- nach einem Zurücksetzen speicherbar; gibt es das Kürzel schon, bleibt der vorhandene Eintrag)
+insert into public.patients_test (id, kuerzel, pseudonym) values
+  ('7e3c1a52-0001-4000-8000-000000000001'::uuid, 'TP-01', 'Testfall Knie rechts (fiktiv)'),
+  ('7e3c1a52-0002-4000-8000-000000000002'::uuid, 'TP-02', 'Testfall Schulter links (fiktiv)'),
+  ('7e3c1a52-0003-4000-8000-000000000003'::uuid, 'TP-03', 'Testfall LWS (fiktiv)')
+on conflict do nothing;
 
 -- Je 2 Beispielnotizen (feste IDs, damit nichts doppelt angelegt wird)
 insert into public.notes (id, patient_id, rohtext, strukturiert, suchtext, erstellt_am)
