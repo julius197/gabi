@@ -53,10 +53,10 @@ describe("Kern: sicherer Text für Gabis Antworten", () => {
     ]);
     expect(v).toEqual([
       { rolle: "nutzer", text: "Suche in meinen Notizen: Theraband" },
-      { rolle: "gabi", text: "Gefunden.\n\n[Notiz-Entwurf für TP-01 (gespeichert) – Befund: Flexion 90°]" },
+      { rolle: "gabi", text: "Gefunden.\n\n[App-Hinweis: Notiz-Entwurf für TP-01 angezeigt (gespeichert) – Befund: Flexion 90°]" },
       // „Nochmal“ fehlt: die Antwort darauf ist gescheitert – der ganze Wortwechsel fällt weg
       { rolle: "nutzer", text: "Bericht" },
-      { rolle: "gabi", text: "[Verlaufsbericht für TP-02 angezeigt – NRS 4]" },
+      { rolle: "gabi", text: "[App-Hinweis: Verlaufsbericht für TP-02 angezeigt – NRS 4]" },
     ]);
     // altes Diktat nach Abbruch wandert nicht in die nächste Anfrage
     expect(K.verlaufFuerServer([
@@ -154,6 +154,8 @@ describe("Demo-Assistent", () => {
     const bericht = await ereignisse(api, { nachrichten: [{ rolle: "nutzer", text: "Bericht" }], aktion: { typ: "bericht", patient_id: tp01.id, art: "verlauf" } });
     expect(bericht.find((e) => e.t === "bericht").bericht).toMatchObject({ art: "verlauf", kuerzel: "TP-01", anzahl: 2 });
     expect(text(bericht)).toBe(DEMO.berichtText("verlauf", "TP-01", 2));
+    expect(DEMO.berichtText("verlauf", "TP-01", 2)).toMatch(/Du kannst ihn als PDF/);
+    expect(DEMO.berichtText("zusammenfassung", "TP-01", 1)).toMatch(/aus einer Notiz\. Du kannst sie als PDF/);
     await expect(api.chatten({ nachrichten: [{ rolle: "nutzer", text: "x" }], aktion: { typ: "diktat", patient_id: "gibts-nicht" } }, () => {})).rejects.toThrow(/nicht gefunden/);
   });
 

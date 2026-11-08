@@ -273,7 +273,7 @@
     return `Hier ist dein Entwurf für **${kuerzel}**. Prüf ihn kurz – gespeichert wird erst, wenn du auf „Speichern“ tippst.${n ? ` ${n === 1 ? "Eine Stelle habe ich" : `${n} Stellen habe ich`} als „(unklar)“ markiert.` : ""}`;
   }
   function berichtText(art, kuerzel, anzahl) {
-    return `${art === "verlauf" ? "Hier ist der Verlaufsbericht" : "Hier ist die Zusammenfassung"} für **${kuerzel}** aus ${anzahl === 1 ? "einer Notiz" : `${anzahl} Notizen`}. Du kannst ihn als PDF speichern.`;
+    return `${art === "verlauf" ? "Hier ist der Verlaufsbericht" : "Hier ist die Zusammenfassung"} für **${kuerzel}** aus ${anzahl === 1 ? "einer Notiz" : `${anzahl} Notizen`}. Du kannst ${art === "verlauf" ? "ihn" : "sie"} als PDF speichern.`;
   }
 
   /** Bericht aus den Notizen ohne KI – in derselben Form, wie die Bericht-KI antwortet (Notizen alt → neu). */
@@ -742,13 +742,13 @@
         await pause(350);
         if (aktion && aktion.typ === "diktat") {
           const r = await werkzeuge.ausfuehren("notiz_entwurf_erstellen", { kuerzel: patient.kuerzel }, { letzte: String(aktion.text || "").trim() || letzte, senden: sicher });
-          if (r.fehler) { sicher({ t: "fehler", text: r.meldung }); return; }
+          if (r.fehler) { await textStroemen(r.meldung, sicher, pause); sicher({ t: "fertig" }); return; }
           await textStroemen(entwurfText(patient.kuerzel, r.ergebnis.unklar.length), sicher, pause);
         } else if (aktion && aktion.typ === "bericht") {
           const art = aktion.art === "zusammenfassung" ? "zusammenfassung" : "verlauf";
           await pause(500);
           const r = await werkzeuge.ausfuehren("bericht_erstellen", { kuerzel: patient.kuerzel, art }, { letzte, senden: sicher });
-          if (r.fehler) { sicher({ t: "fehler", text: r.meldung }); return; }
+          if (r.fehler) { await textStroemen(r.meldung, sicher, pause); sicher({ t: "fertig" }); return; }
           await textStroemen(berichtText(art, patient.kuerzel, r.ergebnis.notizen), sicher, pause);
         } else {
           await demoGespraech({ letzte, werkzeuge, senden: sicher, warte: pause });

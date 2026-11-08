@@ -2,6 +2,18 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NOTIZ_SCHEMA, SYSTEM_PROMPT, normalisieren } from "./notiz.js";
 
+/**
+ * Fehler der Anthropic-API ohne Inhalte protokollieren (für `wrangler tail`): Status, Fehlerart, Request-ID.
+ * Abbrüche (Stopp, Tab geschlossen) sind keine KI-Fehler und erscheinen nicht.
+ */
+export function kiFehlerLoggen(e, wo) {
+  if (!(e instanceof Anthropic.APIError) || e instanceof Anthropic.APIUserAbortError) return;
+  // Das SDK setzt keinen eigenen Fehlernamen; ohne Antwort (Zeitüberschreitung, Verbindung) fehlt auch `type`
+  const art = e.error?.error?.type || e.type
+    || (e instanceof Anthropic.APIConnectionTimeoutError ? "timeout" : e instanceof Anthropic.APIConnectionError ? "verbindung" : "api_error");
+  console.log(`KI-Fehler ${wo}: ${e.status ?? "-"} ${art} ${e.requestID ?? ""}`.trim());
+}
+
 export class StrukturFehler extends Error {}
 
 /** JSON aus der Antwort lesen – auch wenn (z. B. beim Ersatzmodell) Code-Zäune oder Text drumherum stehen. */
@@ -44,6 +56,7 @@ export function claudeStrukturierung(env) {
       });
     } catch (e) {
       // Nie Inhalte loggen – nur Art und Status des Fehlers
+      kiFehlerLoggen(e, "struktur");
       if (e instanceof Anthropic.AuthenticationError) throw new StrukturFehler("Anthropic-Schlüssel ungültig.");
       if (e instanceof Anthropic.RateLimitError) throw new StrukturFehler("KI ist gerade ausgelastet. Bitte gleich noch einmal versuchen.");
       if (e instanceof Anthropic.APIConnectionError) throw new StrukturFehler("KI-Dienst nicht erreichbar.");
@@ -54,7 +67,7 @@ export function claudeStrukturierung(env) {
     if (antwort.stop_reason === "max_tokens") throw new StrukturFehler("Die Notiz ist zu lang für einen Durchgang.");
     const text = antwort.content.filter((b) => b.type === "text").map((b) => b.text).join("");
     const daten = jsonAusText(text);
-    if (!daten) throw new StrukturFehler("Antwort der KI war nicht lesbar. Bitte „Neu strukturieren“.");
+    if (!daten) throw new StrukturFehler("Antwort der KI war nicht lesbar. Bitte noch einmal versuchen.");
     return normalisieren(daten);
   };
 }

@@ -78,6 +78,9 @@ describe("Eingaben prüfen", () => {
     expect((await rufe("/api/transkribieren", { methode: "POST", roh: "A".repeat(400) })).status).toBe(400); // kein WAV
     expect((await rufe("/api/transkribieren", { methode: "POST", roh: `${AUDIO.slice(0, 300)}<script>` })).status).toBe(400);
     expect((await rufe("/api/transkribieren", { methode: "POST", roh: "UklGR" })).status).toBe(400); // zu kurz
+    const lang = wavBase64(20_000); // > 8 KB: geprüft werden Anfang und Ende (spart CPU im Worker)
+    expect((await rufe("/api/transkribieren", { methode: "POST", roh: `${lang.slice(0, -8)}<script>` })).status).toBe(400); // Unsinn am Ende
+    expect((await rufe("/api/transkribieren", { methode: "POST", roh: `${lang}A` })).status).toBe(400); // Länge kein Vielfaches von 4
     expect(transkribieren).not.toHaveBeenCalled();
     expect((await rufe("/api/transkribieren", { methode: "POST", roh: AUDIO })).status).toBe(200);
   });

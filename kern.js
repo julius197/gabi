@@ -116,11 +116,11 @@
       const s = karte.strukturiert || {};
       const teile = ABSCHNITTE.filter(([k]) => stichpunkte(s[k]).length).map(([k, titel]) => `${titel}: ${stichpunkte(s[k]).join("; ")}`);
       const zustand = karte.gespeichert ? "gespeichert" : karte.verworfen ? "verworfen" : "noch nicht gespeichert";
-      return `[Notiz-Entwurf für ${karte.kuerzel} (${zustand}) – ${teile.join(" · ") || "leer"}]`;
+      return `[App-Hinweis: Notiz-Entwurf für ${karte.kuerzel} angezeigt (${zustand}) – ${teile.join(" · ") || "leer"}]`;
     }
     if (karte.typ === "bericht") {
       const b = karte.bericht || {};
-      return `[${b.titel || "Bericht"} für ${b.kuerzel} angezeigt – ${stichpunkte(b.zusammenfassung).join("; ")}]`;
+      return `[App-Hinweis: ${b.titel || "Bericht"} für ${b.kuerzel} angezeigt – ${stichpunkte(b.zusammenfassung).join("; ")}]`;
     }
     return "";
   }

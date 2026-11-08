@@ -6,6 +6,8 @@
 // Voraussetzung: `cd worker && npm run lokal` läuft (http://localhost:8788, Zugangscode „test“), Playwright mit Chromium + WebKit.
 // Aufruf: PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/v2.mjs [diktat.wav] [screenshot-ordner] [basis-url]
 // Ohne diktat.wav wird auf dem Mac eine erfundene Test-Aufnahme mit `say` erzeugt (spielt nichts ab).
+// GABI_LIVE=1 (basis-url = https://gabi.automatilabs.de): nur Demo- und Mock-Teile – keine Anfragen mit falschem Zugangscode
+// an den Live-Worker (sonst zählt die Sperre für die eigene IP hoch) und ohne den Teil mit dem lokalen Server.
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -25,6 +27,7 @@ if (!audio) {
   execFileSync("afconvert", ["-f", "WAVE", "-d", "LEI16@16000", "-c", "1", aiff, audio]);
 }
 
+const LIVE = process.env.GABI_LIVE === "1";
 const fehler = [];
 const pruefe = (ok, text) => { if (!ok) { fehler.push(text); console.log(`✗ ${text}`); } else console.log(`✓ ${text}`); };
 const warte = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -43,11 +46,16 @@ function konsoleBeobachten(page) {
   return meldungen;
 }
 
-/** Keine echte Sprachausgabe in Testbrowsern (macOS spielt sie sonst laut ab) – nur zählen. */
+/** Keine echte Sprachausgabe in Testbrowsern (macOS spielt sie sonst laut ab) – nur zählen. Mit einer lokalen deutschen Stimme. */
 async function stumm(ctx) {
   await ctx.addInitScript(() => {
     window.__gesprochen = 0;
-    const attrappe = { speak(u) { window.__gesprochen++; setTimeout(() => u.onend && u.onend(), 300); }, cancel() {}, getVoices() { return []; }, speaking: false };
+    const stimmen = [{ name: "Test-Stimme", lang: "de-DE", localService: true, default: true }, { name: "Online-Stimme", lang: "de-DE", localService: false }];
+    const attrappe = {
+      speak(u) { window.__gesprochen++; window.__stimme = u.voice && u.voice.name; setTimeout(() => u.onend && u.onend(), 300); },
+      cancel() {}, getVoices() { return stimmen; }, addEventListener() {}, removeEventListener() {}, speaking: false,
+    };
+    window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; this.voice = null; this.lang = ""; this.rate = 1; } };
     try { Object.defineProperty(window, "speechSynthesis", { value: attrappe, configurable: true }); } catch { /* egal */ }
   });
 }
@@ -132,6 +140,13 @@ async function demoAblauf(geraet, schema) {
   await page.waitForSelector(".karte-entwurf.erledigt");
   await page.waitForFunction(() => /Gespeichert bei TP-01/.test(document.querySelector("#toasts").textContent));
   pruefe(await page.isHidden("#modus-pill"), `${name}: Speichern nach Bestätigung, Diktat-Modus endet`);
+  await warte(350); // Hinweis eingeblendet
+  const verdeckt = await page.evaluate(() => [...document.querySelectorAll("#mikro, #senden")].filter((b) => {
+    const r = b.getBoundingClientRect();
+    const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !e || !b.contains(e);
+  }).map((b) => b.id));
+  pruefe(!verdeckt.length, `${name}: Hinweise verdecken weder Mikrofon noch Senden${verdeckt.length ? ` (verdeckt: ${verdeckt.join(", ")})` : ""}`);
 
   // Frage tippen
   await fragen(page, "Was wollte TP-01?");
@@ -203,13 +218,18 @@ async function demoAblauf(geraet, schema) {
   // Zugangsbildschirm im neuen Design (echter Server, falscher Code)
   const ctx2 = await chrome.newContext({ viewport, isMobile: mobil, hasTouch: mobil, deviceScaleFactor: 2, colorScheme: schema });
   const p2 = await ctx2.newPage();
+  const k2 = konsoleBeobachten(p2);
   await p2.goto(`${basis}/#/`);
-  await p2.waitForSelector("#ansicht-zugang:not([hidden])");
+  await p2.waitForSelector("#ansicht-zugang:not([hidden])", { timeout: 20000 });
   await p2.evaluate(() => document.fonts.ready);
-  await p2.fill("#zugang-code", "falsch-123");
-  await p2.click("#zugang-weiter");
-  await p2.waitForSelector("#zugang-fehler:not([hidden])");
-  pruefe((await p2.textContent("#zugang-fehler")).includes("stimmt nicht"), `${name}: Zugang – falscher Code wird verständlich abgelehnt`);
+  if (LIVE) {
+    pruefe(await p2.isVisible("#zugang-code") && k2.length === 0, `${name}: Zugang – Bildschirm erscheint (echter Server bereit), keine Konsolenfehler`);
+  } else {
+    await p2.fill("#zugang-code", "falsch-123");
+    await p2.click("#zugang-weiter");
+    await p2.waitForSelector("#zugang-fehler:not([hidden])");
+    pruefe((await p2.textContent("#zugang-fehler")).includes("stimmt nicht"), `${name}: Zugang – falscher Code wird verständlich abgelehnt`);
+  }
   await warte(450);
   await p2.screenshot({ path: join(aus, `${name}-09-zugang.jpg`), type: "jpeg", quality: 88 });
   await ctx2.close();
@@ -258,6 +278,13 @@ for (const [fall, antwort, text] of [
   const page = await ctx.newPage();
   await page.route("**/api/status", antwort);
   await page.goto(`${basis}/#/`);
+  if (LIVE && fall === "nicht erreichbar") {
+    // auf der echten Adresse nie still in die Demo: Offline-Seite mit „Demo ansehen“
+    await page.waitForSelector("#ansicht-offline:not([hidden])", { timeout: 20000 });
+    pruefe(await page.isVisible('#ansicht-offline a[href*="demo=1"]'), "Backend nicht erreichbar (echte Adresse): Offline-Seite statt stiller Demo, mit „Demo ansehen“");
+    await ctx.close();
+    continue;
+  }
   await page.waitForSelector("#ansicht-chat:not([hidden])", { timeout: 20000 });
   const badge = await page.textContent("#test-badge");
   const hinweis = await page.textContent("#toasts");
@@ -322,14 +349,115 @@ for (const [fall, antwort, text] of [
   await antwortAbwarten(page, "85 €");
   await page.locator(".von-gabi").last().locator('[data-aktion="vorlesen"]').click();
   await page.waitForFunction(() => window.__gesprochen === 1);
-  pruefe(true, "Vorlesen: Antwort wird an die Sprachausgabe gegeben (im Test stumm)");
+  pruefe((await page.evaluate(() => window.__stimme)) === "Test-Stimme", "Vorlesen: nur mit lokaler deutscher Stimme (keine Online-Stimme), im Test stumm");
+  await ctx.close();
+}
+
+{ // Push-to-Talk-Kanten und Neuladen (Demo, Handy)
+  const ctx = await chrome.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, permissions: ["microphone"] });
+  await stumm(ctx);
+  await ctx.addInitScript(() => {
+    // nachgebauter visualViewport: Chromium hat keine iPhone-Tastatur, die den sichtbaren Ausschnitt verschiebt
+    const vv = { offsetTop: 0, offsetLeft: 0, pageTop: 0, pageLeft: 0, scale: 1, width: innerWidth, height: innerHeight, addEventListener() {}, removeEventListener() {} };
+    window.__vv = vv;
+    try { Object.defineProperty(window, "visualViewport", { value: vv, configurable: true }); } catch { /* egal */ }
+  });
+  const page = await ctx.newPage();
+  const konsole = konsoleBeobachten(page);
+  await page.goto(`${basis}/?demo=1#/`);
+  await page.waitForSelector(".vorschlag");
+  const m = await page.locator("#mikro").boundingBox();
+  const mx = m.x + m.width / 2;
+  const my = m.y + m.height / 2;
+  const zustand = () => page.evaluate(() => ({ text: document.querySelector("#aufnahme-text").textContent, verwirft: document.querySelector(".eingabe").classList.contains("verwirft") }));
+  const nutzerZahl = () => page.locator(".von-nutzer").count();
+  const ruhig = () => page.waitForFunction(() => !document.querySelector("#senden.stoppt") && !document.querySelector(".von-gabi .tippen") && !document.querySelector(".eingabe.erkennt"), null, { timeout: 20000 });
+
+  // a) Tastatur war offen (Ausschnitt um 300 px verschoben) und schließt beim Halten: Finger bleibt, clientY wird 300 kleiner
+  await page.evaluate(() => { window.__vv.offsetTop = 300; });
+  const vorher = await nutzerZahl();
+  await page.mouse.move(mx, my);
+  await page.mouse.down();
+  await page.waitForSelector(".eingabe.nimmt-auf", { timeout: 8000 });
+  await page.evaluate(() => { window.__vv.offsetTop = 0; });
+  await page.mouse.move(mx, my - 300, { steps: 5 });
+  await warte(900);
+  const z1 = await zustand();
+  await page.mouse.up();
+  pruefe(z1.text === "Loslassen zum Senden" && !z1.verwirft, `Push-to-Talk: schließende iPhone-Tastatur zählt nicht als Wegziehen (${z1.text})`);
+  await page.waitForFunction((n) => document.querySelectorAll(".von-nutzer").length > n, vorher, { timeout: 15000 });
+  await ruhig();
+  pruefe(true, "Push-to-Talk: Aufnahme trotz schließender Tastatur gesendet");
+
+  // b) echtes Wegziehen nach oben verwirft – mit „Rückgängig“
+  await page.mouse.move(mx, my);
+  await page.mouse.down();
+  await page.waitForSelector(".eingabe.nimmt-auf", { timeout: 8000 });
+  await warte(500);
+  await page.mouse.move(mx, my - 200, { steps: 5 });
+  await warte(500);
+  const z2 = await zustand();
+  await page.mouse.up();
+  pruefe(z2.text === "Loslassen zum Verwerfen" && z2.verwirft, `Push-to-Talk: Wegziehen nach oben zeigt „Loslassen zum Verwerfen“ (${z2.text})`);
+  await page.waitForSelector('#toasts .toast button:has-text("Rückgängig")');
+
+  // c) „Rückgängig“, während Gabi antwortet → nicht parallel schicken, sondern als Karte parken
+  await fragen(page, "Was kostet Osteopathie?");
+  await page.click('#toasts .toast button:has-text("Rückgängig")');
+  await page.waitForSelector('[data-aktion="aufnahme-senden"]:has-text("Jetzt senden")', { timeout: 8000 });
+  pruefe(true, "Rückgängig während einer Antwort: Aufnahme wartet als Karte mit „Jetzt senden“");
+
+  // d) Neues Gespräch warnt vor der nicht gesendeten Aufnahme
+  await page.click("#kopf-neu");
+  await page.waitForSelector("#dialog-frage[open]");
+  const warnung = await page.textContent("#frage-text");
+  await page.click("#frage-nein");
+  pruefe(warnung === "Eine Aufnahme ist noch nicht gesendet und geht verloren.", `Neues Gespräch: Warnung nennt die nicht gesendete Aufnahme („${warnung}“)`);
+
+  // e) nach der Antwort: „Jetzt senden“ schickt die geparkte Aufnahme (die Park-Karte steht unter der Antwort)
+  await page.waitForFunction(() => !document.querySelector("#senden.stoppt") && !document.querySelector(".von-gabi .tippen")
+    && [...document.querySelectorAll(".von-gabi .nachricht-text")].some((t) => /85 €/.test(t.textContent)), null, { timeout: 20000 });
+  const vorSenden = await nutzerZahl();
+  await page.click('[data-aktion="aufnahme-senden"]:has-text("Jetzt senden")');
+  await page.waitForFunction(() => /Nachgeschickt/.test(document.querySelector("#nachrichten").textContent), null, { timeout: 15000 });
+  await page.waitForFunction((n) => document.querySelectorAll(".von-nutzer").length > n, vorSenden, { timeout: 15000 });
+  await ruhig();
+  pruefe(true, "Geparkte Aufnahme: „Jetzt senden“ schickt sie nach");
+
+  // f) Neuladen: Beispiel-Chip ohne Diktat-Modus gesperrt; begonnene Bearbeitung bleibt, „Abbrechen“ auch
+  await page.click('#chips-leiste [data-schnell="diktat"]');
+  await page.locator('[data-aktion="waehle"]:has-text("TP-02")').last().click();
+  await page.waitForSelector('[data-aktion="beispiel"]:not([disabled])');
+  await warte(400);
+  await page.reload();
+  await page.waitForSelector("#ansicht-chat:not([hidden])");
+  pruefe(await page.locator('[data-aktion="beispiel"]').last().isDisabled(), "Neuladen: Beispiel-Chip ohne Diktat-Modus gesperrt (keine Sackgasse)");
+  await page.click('#chips-leiste [data-schnell="diktat"]');
+  await page.locator('[data-aktion="waehle"]:has-text("TP-02")').last().click();
+  await page.locator('[data-aktion="beispiel"]:not([disabled])').last().click();
+  await page.waitForSelector(".karte-entwurf:not(.erledigt) [data-aktion=\"entwurf-bearbeiten\"]");
+  await antwortAbwarten(page, "Entwurf für TP-02");
+  await page.locator('[data-aktion="entwurf-bearbeiten"]').last().click();
+  const feld = page.locator(".karte-entwurf textarea[data-abschnitt]").first();
+  await feld.fill(`${await feld.inputValue()}\nTest: getippt vor dem Neuladen`);
+  await warte(400);
+  await page.reload();
+  await page.waitForSelector("#ansicht-chat:not([hidden])");
+  const nachLaden = await page.locator(".karte-entwurf textarea[data-abschnitt]").first().inputValue().catch(() => "");
+  pruefe(nachLaden.includes("Test: getippt vor dem Neuladen"), "Neuladen: begonnene Bearbeitung einer Entwurfskarte bleibt erhalten");
+  await page.locator('[data-aktion="entwurf-abbrechen"]').last().click();
+  await warte(400);
+  await page.reload();
+  await page.waitForSelector("#ansicht-chat:not([hidden])");
+  pruefe((await page.locator(".karte-entwurf textarea").count()) === 0 && (await page.locator('[data-aktion="entwurf-speichern"]').count()) === 1, "Neuladen: abgebrochene Bearbeitung kommt nicht zurück");
+  pruefe(konsole.length === 0, `Push-to-Talk-Kanten: keine Fehler in der Konsole${konsole.length ? ` (${konsole.join(" | ")})` : ""}`);
   await ctx.close();
 }
 
 // ---------------------------------------------------------------------------
 // 3 Echte lokale API: Zugang, NDJSON-Strom, Spracherkennung, Fehler + Wiederholen, Speichern
 // ---------------------------------------------------------------------------
-{
+if (!LIVE) {
   const ctx = await chrome.newContext({ viewport: { width: 1440, height: 900 }, permissions: ["microphone"], acceptDownloads: true });
   await stumm(ctx);
   const page = await ctx.newPage();
@@ -361,11 +489,20 @@ for (const [fall, antwort, text] of [
   pruefe(versuch === 3, "Echte API: „Nochmal versuchen“ auch nach einem Fehler mitten im Strom");
   pruefe(typen.at(-1) === "application/x-ndjson; charset=utf-8", "Echte API: „Nochmal versuchen“ klappt, Antwort kommt als NDJSON-Strom");
 
-  // Diktat mit echter Aufnahme → Spracherkennung → Entwurf → Speichern
+  // Diktat mit echter Aufnahme → Spracherkennung fällt einmal aus → Karte „nicht angekommen“ → Nochmal senden → Entwurf
+  let erkennungAus = true;
+  await page.route("**/api/transkribieren", (route) => (erkennungAus
+    ? route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ fehler: "Spracherkennung gerade nicht erreichbar. Bitte nochmal versuchen." }) })
+    : route.continue()));
   await page.click('#chips-leiste [data-schnell="diktat"]');
   await page.locator('[data-aktion="waehle"]:has-text("TP-01")').last().click();
   await mikroHalten(page, 4000);
+  await page.waitForSelector('[data-aktion="aufnahme-senden"]', { timeout: 30000 });
+  pruefe((await page.textContent(".hinweis-box.warn")).includes("nicht erreichbar"), "Echte API: Spracherkennung fällt aus → bleibende Karte, Aufnahme bleibt erhalten");
+  erkennungAus = false;
+  await page.click('[data-aktion="aufnahme-senden"]');
   await page.waitForSelector(".karte-entwurf:not(.erledigt)", { timeout: 120000 });
+  pruefe(/Nachgeschickt/.test(await page.textContent("#nachrichten")), "Echte API: „Nochmal senden“ schickt dieselbe Aufnahme nach, ohne neu zu sprechen");
   await antwortAbwarten(page, "Entwurf für TP-01", 30000);
   const diktat = await page.evaluate(() => [...document.querySelectorAll(".von-nutzer .blase")].pop().textContent);
   pruefe(/knie|treppe|flexion|schmerz|demo/i.test(diktat), `Echte API: Aufnahme erkannt („${diktat.replace(/\s+/g, " ").slice(0, 70)}…“)`);
@@ -374,6 +511,28 @@ for (const [fall, antwort, text] of [
   await page.click('.karte-entwurf.erledigt a[href*="/notizen/n/"]');
   await page.waitForSelector('[data-leser="pdf"]');
   pruefe((await page.textContent(".leser")).includes("TP-01"), "Echte API: Entwurf gespeichert und im Notizordner");
+
+  // Nachgeschickte Aufnahme kommt leer zurück → Karte hängt nicht auf „Sende …“, nur „Verwerfen“ bleibt
+  let erkennung = "aus";
+  await page.unroute("**/api/transkribieren");
+  await page.route("**/api/transkribieren", (route) => (erkennung === "aus"
+    ? route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ fehler: "Spracherkennung gerade nicht erreichbar. Bitte nochmal versuchen." }) })
+    : route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ text: "" }) })));
+  await page.evaluate(() => { location.hash = "#/"; });
+  await page.waitForSelector("#ansicht-chat:not([hidden])");
+  await mikroHalten(page, 2000);
+  await page.waitForSelector('.hinweis-box.warn [data-aktion="aufnahme-senden"]', { timeout: 30000 });
+  erkennung = "leer";
+  await page.locator('[data-aktion="aufnahme-senden"]').last().click();
+  await page.waitForFunction(() => /nichts verstanden/.test([...document.querySelectorAll(".hinweis-box.warn")].pop()?.textContent || ""), null, { timeout: 30000 });
+  const leerKarte = page.locator(".hinweis-box.warn").last();
+  pruefe((await leerKarte.locator("button").count()) === 0 && (await leerKarte.textContent()).includes("Bitte noch einmal aufnehmen"),
+    "Echte API: nachgeschickte Aufnahme kommt leer zurück → kein Hängen auf „Sende …“, Hinweis „noch einmal aufnehmen“");
+  await page.click("#seite-neu");
+  const nachLeer = await page.waitForSelector("#dialog-frage[open]", { timeout: 1500 }).then(() => page.textContent("#frage-text")).catch(() => "");
+  if (nachLeer) await page.click("#frage-nein");
+  pruefe(!/Aufnahme/.test(nachLeer), `Echte API: leere Aufnahme zählt nicht als „nicht gesendet“${nachLeer ? ` („${nachLeer}“)` : ""}`);
+  await page.unroute("**/api/transkribieren");
   pruefe(konsole.length === 0, `Echte API: keine Fehler in der Konsole${konsole.length ? ` (${konsole.join(" | ")})` : ""}`);
   await ctx.close();
 }

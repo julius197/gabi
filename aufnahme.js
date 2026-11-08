@@ -102,8 +102,9 @@
    *  beiPegel(0…1), beiZeit(sekunden)
    *  beiFertig({ holen, dauerMs })  holen() → Base64-WAV (einmal umgewandelt, beliebig oft abrufbar)
    *  beiFehler({ text, hilfe })     beiHinweis(text)
+   *  beiVerworfen({ holen })        verworfen, aber noch 20 s zurückholbar („Rückgängig“)
    */
-  function erstelle({ beiZustand = () => {}, beiPegel = () => {}, beiZeit = () => {}, beiFertig = () => {}, beiFehler = () => {}, beiHinweis = () => {} } = {}) {
+  function erstelle({ beiZustand = () => {}, beiPegel = () => {}, beiZeit = () => {}, beiFertig = () => {}, beiFehler = () => {}, beiHinweis = () => {}, beiVerworfen = null } = {}) {
     const a = { phase: "bereit", losgelassen: false, verwerfen: false, rec: null, stream: null, ctx: null, analyser: null, teile: [], mime: "", start: 0, dauer: undefined, maxPegel: 0, sperre: null };
     const setze = (phase) => { a.phase = phase; beiZustand(phase); };
 
@@ -255,11 +256,12 @@
       a.ctx = null;
       setze("bereit");
       beiZeit(0);
-      const schliessen = () => { if (ctx) ctx.close().catch(() => {}); };
-      if (verwerfen) { schliessen(); beiHinweis("Aufnahme verworfen."); return; }
-      if (dauer < MIN_DAUER_MS) { schliessen(); beiHinweis("Zu kurz – halte das Mikrofon gedrückt, solange du sprichst."); return; }
-      if (ctx && ctx.state === "running" && maxPegel < 0.015) { schliessen(); beiFehler({ text: "Es kam kein Ton an. Bitte Mikrofon prüfen (stumm? anderes Gerät?) und nochmal versuchen." }); return; }
-      if (!teile.length) { schliessen(); beiFehler({ text: "Die Aufnahme war leer. Bitte nochmal gedrückt halten und sprechen." }); return; }
+      let zu = false;
+      const schliessen = () => { if (ctx && !zu) { zu = true; ctx.close().catch(() => {}); } };
+      if (dauer < MIN_DAUER_MS) { schliessen(); beiHinweis(verwerfen ? "Aufnahme verworfen." : "Zu kurz – halte das Mikrofon gedrückt, solange du sprichst."); return; }
+      if (!teile.length) { schliessen(); if (verwerfen) beiHinweis("Aufnahme verworfen."); else beiFehler({ text: "Die Aufnahme war leer. Bitte nochmal gedrückt halten und sprechen." }); return; }
+      if (verwerfen && !beiVerworfen) { schliessen(); beiHinweis("Aufnahme verworfen."); return; }
+      if (!verwerfen && ctx && ctx.state === "running" && maxPegel < 0.015) { schliessen(); beiFehler({ text: "Es kam kein Ton an. Bitte Mikrofon prüfen (stumm? anderes Gerät?) und nochmal versuchen." }); return; }
       const blob = new Blob(teile, { type: mime || "audio/webm" });
       let b64 = null;
       let laeuft = null;
@@ -278,6 +280,11 @@
         }
         return laeuft;
       };
+      if (verwerfen) {
+        const uhr = setTimeout(schliessen, 20000); // nicht zurückgeholt → Audio freigeben
+        beiVerworfen({ holen: () => { clearTimeout(uhr); return holen(); }, dauerMs: dauer });
+        return;
+      }
       beiFertig({ holen, dauerMs: dauer });
     }
 

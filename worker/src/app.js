@@ -197,7 +197,9 @@ function ndjsonAntwort(arbeit) {
 /** Aufnahme prüfen: Base64 einer WAV-Datei (das schickt die Oberfläche immer). */
 function audioPruefen(b64) {
   if (b64.length > MAX_AUDIO_BASE64) throw new HttpFehler(413, "Aufnahme zu lang (höchstens 5 Minuten am Stück).");
-  if (b64.length < MIN_AUDIO_BASE64 || !BASE64.test(b64)) throw new HttpFehler(400, "Keine gültige Aufnahme.");
+  // Sparsam prüfen (CPU-Zeit im Worker): Länge, Anfang und Ende – Whisper lehnt Unsinn in der Mitte ohnehin ab
+  const stichprobe = b64.length > 8192 ? b64.slice(0, 4096) + b64.slice(-4096) : b64;
+  if (b64.length < MIN_AUDIO_BASE64 || b64.length % 4 !== 0 || !BASE64.test(stichprobe)) throw new HttpFehler(400, "Keine gültige Aufnahme.");
   let kopf = "";
   try { kopf = atob(b64.slice(0, 16)); } catch { kopf = ""; }
   if (kopf.slice(0, 4) !== "RIFF" || kopf.slice(8, 12) !== "WAVE") throw new HttpFehler(400, "Keine gültige Aufnahme (WAV erwartet).");
@@ -292,15 +294,17 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
         return ndjsonAntwort(async (senden) => {
           if (anfrage.aktion.typ === "diktat") {
             const r = await werkzeuge.ausfuehren("notiz_entwurf_erstellen", { kuerzel: patient.kuerzel }, { letzte: anfrage.aktion.text || anfrage.letzte, senden });
-            if (r.fehler) throw new ChatFehler(r.meldung);
+            if (r.fehler && r.technisch) throw new ChatFehler(r.meldung);
+            if (r.fehler) { senden({ t: "text", d: r.meldung }); return; } // fachlicher Hinweis: normale Antwort
             const n = r.ergebnis.unklar.length;
             senden({ t: "text", d: `Hier ist dein Entwurf für **${patient.kuerzel}**. Prüf ihn kurz – gespeichert wird erst, wenn du auf „Speichern“ tippst.${n ? ` ${n === 1 ? "Eine Stelle habe ich" : `${n} Stellen habe ich`} als „(unklar)“ markiert.` : ""}` });
             return;
           }
           const r = await werkzeuge.ausfuehren("bericht_erstellen", { kuerzel: patient.kuerzel, art: anfrage.aktion.art }, { ...kontext, senden });
-          if (r.fehler) throw new ChatFehler(r.meldung);
+          if (r.fehler && r.technisch) throw new ChatFehler(r.meldung);
+          if (r.fehler) { senden({ t: "text", d: r.meldung }); return; }
           const b = r.ergebnis;
-          senden({ t: "text", d: `${b.art === "verlauf" ? "Hier ist der Verlaufsbericht" : "Hier ist die Zusammenfassung"} für **${patient.kuerzel}** aus ${b.notizen === 1 ? "einer Notiz" : `${b.notizen} Notizen`}. Du kannst ihn als PDF speichern.` });
+          senden({ t: "text", d: `${b.art === "verlauf" ? "Hier ist der Verlaufsbericht" : "Hier ist die Zusammenfassung"} für **${patient.kuerzel}** aus ${b.notizen === 1 ? "einer Notiz" : `${b.notizen} Notizen`}. Du kannst ${b.art === "verlauf" ? "ihn" : "sie"} als PDF speichern.` });
         });
       }
       if (!chatten) throw new HttpFehler(503, "Gabi ist auf dem Server noch nicht eingerichtet (KI-Schlüssel fehlt).");

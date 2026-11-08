@@ -10,7 +10,10 @@ Suche, Bearbeiten, Löschen, PDF).
 > **Testversion – nur Testdaten.** Keine Klarnamen, keine echten Patientendaten. Kürzel brauchen deshalb eine Ziffer (z. B. `TP-01`).
 > Gabi stellt keine Diagnosen und gibt keine Therapieempfehlungen; sie antwortet nur aus gespeicherten Notizen und der Wissensdatei.
 
-Adresse: **https://gabi.automatilabs.de** (Branch `main`, noch v1) · v2 liegt auf Branch `gabi-v2` · Protokoll: `GABI-V2-LOG.md`.
+Adresse: **https://gabi.automatilabs.de** (Branch `main`, v2 seit 08.11.2026) · Protokoll: `GABI-V2-LOG.md`.
+
+> **Neue Version veröffentlichen:** in `index.html` die Kennung `?v=…` an `style.css` und allen eigenen Skripten hochzählen –
+> GitHub Pages lässt Dateien 10 Minuten im Browser-Cache, sonst mischen sich alte und neue Dateien.
 
 ## Aufbau
 
@@ -71,7 +74,8 @@ Gespräch läuft über den Demo-Assistenten – aber mit dem echten Worker-Code 
 Optional: `ANTHROPIC_API_KEY=… npm run lokal` (echte Strukturierung und echtes Gespräch mit Claude) und
 `GABI_WHISPER_CMD="python3 dev/whisper_lokal.py"` (echte Spracherkennung lokal, braucht `mlx-whisper` auf Apple Silicon).
 
-**Gegen den echten Worker testen** (Branch vor dem Merge prüfen, echter Zugangscode):
+**Gegen den echten Worker testen** (einen Branch vor dem Merge prüfen, echter Zugangscode; Live-Fehler der KI sieht man
+parallel mit `npx wrangler tail` – dort stehen nur Status, Fehlerart und Request-ID, nie Inhalte):
 ```bash
 cd worker && npm run vorschau   # http://localhost:8788 – Oberfläche dieses Branches, API = Live-Worker
 ```

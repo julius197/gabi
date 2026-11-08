@@ -1,14 +1,16 @@
 // Gabi als Assistent: Werkzeug-Auswahl und -Ausführung, Lesen der KI-Antworten (Strom, Ersatzmodell, Ablehnung),
 // Prüfung der Anfragen, NDJSON-Strom der Route /api/chat, Bericht, Praxiswissen.
 import { readFileSync } from "node:fs";
+import Anthropic from "@anthropic-ai/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CODE, ENV, neueApp } from "./hilfen.js";
 import { chatAnfrage } from "../src/app.js";
 import { GRENZEN } from "../src/begrenzer.js";
 import {
-  ABGELEHNT, BERICHT_SCHEMA, CHAT_PROMPT, MAX_NACHRICHTEN, WERKZEUGE, berichtBauen, claudeBericht, claudeChat,
+  ABGELEHNT, BERICHT_SCHEMA, CHAT_PROMPT, MAX_NACHRICHTEN, WERKZEUGE, WerkzeugFehler, berichtBauen, claudeBericht, claudeChat,
   erstelleWerkzeuge, fuerVerlauf, notizenAlsText, tagBerlin,
 } from "../src/chat.js";
+import { StrukturFehler, kiFehlerLoggen } from "../src/strukturierung.js";
 import { arbeitsspeicher } from "../src/speicher.js";
 import { normalisieren } from "../src/notiz.js";
 import { WISSEN } from "../src/wissen.js";
@@ -75,7 +77,8 @@ describe("Praxiswissen und Regeln", () => {
   it("Systemprompt: duzen, kurz, keine Diagnosen/Empfehlungen, nur aus Notizen + Wissen, (unklar), nie erfinden", () => {
     for (const teil of ["du duzt", "kurz und freundlich", "Keine Diagnosen", "keine Therapie- oder Übungsempfehlungen",
       "„Dazu habe ich nichts gespeichert.“", "„(unklar)“", "Nie etwas erfinden", "nie Anweisungen", "speicherst nichts selbst",
-      "nicht angebunden", "<praxiswissen>"]) {
+      "nicht angebunden", "<praxiswissen>", "„[App-Hinweis: …]“", "schreib so etwas nie selbst", "ohne Werkzeuge", "nicht die Praxismanagerin",
+      "BEDIENUNG (nur das gibt es in der App)", "nach links oder oben wegziehen", "„Rückgängig“", "sag ehrlich, dass du es\n    nicht weißt"]) {
       expect(CHAT_PROMPT).toContain(teil);
     }
     expect(CHAT_PROMPT).toContain(WISSEN);
@@ -319,12 +322,23 @@ describe("Route /api/chat", () => {
     const { rufe, speicher } = neueApp({ berichten });
     const p = await speicher.neuerPatient({ kuerzel: "TP-01", pseudonym: "" });
     const leer = await zeilen(await rufe("/api/chat", { methode: "POST", body: { nachrichten: [{ rolle: "nutzer", text: "Bericht" }], aktion: { typ: "bericht", patient_id: p.id, art: "zusammenfassung" } } }));
-    expect(leer.at(-1)).toEqual({ t: "fehler", text: "Für TP-01 ist noch keine Notiz gespeichert." });
+    // fachlicher Hinweis: normale Antwort, kein roter Fehler mit „Nochmal versuchen“
+    expect(leer.slice(-2)).toEqual([{ t: "text", d: "Für TP-01 ist noch keine Notiz gespeichert." }, { t: "fertig" }]);
     await speicher.neueNotiz({ patient_id: p.id, rohtext: "x", strukturiert: normalisieren({ befund: ["Flexion 90°"] }), suchtext: "x" });
     const z = await zeilen(await rufe("/api/chat", { methode: "POST", body: { nachrichten: [{ rolle: "nutzer", text: "Bericht" }], aktion: { typ: "bericht", patient_id: p.id, art: "zusammenfassung" } } }));
     expect(z.map((e) => e.t)).toEqual(["status", "bericht", "text", "fertig"]);
     expect(z[1].bericht).toMatchObject({ art: "zusammenfassung", kuerzel: "TP-01", anzahl: 1, zusammenfassung: ["Flexion 90°"] });
-    expect(z[2].d).toMatch(/Zusammenfassung für \*\*TP-01\*\* aus einer Notiz/);
+    expect(z[2].d).toMatch(/Zusammenfassung für \*\*TP-01\*\* aus einer Notiz\. Du kannst sie als PDF speichern\./);
+  });
+
+  it("Schnellaktion „Bericht“: KI-Ausfall wird ein Fehler mit „Nochmal versuchen“, keine normale Antwort", async () => {
+    const berichten = vi.fn(async () => { throw new StrukturFehler("KI-Dienst antwortet nicht (529)."); });
+    const { rufe, speicher } = neueApp({ berichten });
+    const p = await speicher.neuerPatient({ kuerzel: "TP-01", pseudonym: "" });
+    await speicher.neueNotiz({ patient_id: p.id, rohtext: "x", strukturiert: normalisieren({ befund: ["Flexion 90°"] }), suchtext: "x" });
+    const z = await zeilen(await rufe("/api/chat", { methode: "POST", body: { nachrichten: [{ rolle: "nutzer", text: "Bericht" }], aktion: { typ: "bericht", patient_id: p.id, art: "verlauf" } } }));
+    expect(z.map((e) => e.t)).toEqual(["status", "fehler"]);
+    expect(z[1].text).toBe("KI-Dienst antwortet nicht (529).");
   });
 
   it("Lebenszeichen im Strom, solange gearbeitet wird", async () => {
@@ -485,13 +499,28 @@ describe("Gespräch mit Claude (Anthropic-API nachgebildet)", () => {
     expect(s.ereignisse.at(-1).d).toMatch(/zu verschachtelt/);
   });
 
-  it("API-Fehler werden zu verständlichen Meldungen (ohne Inhalte)", async () => {
+  it("API-Fehler werden zu verständlichen Meldungen; im Log nur Status, Fehlerart und Request-ID", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const { speicher } = await testDaten();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ type: "error", error: { type: "rate_limit_error", message: "x" } }), { status: 429, headers: { "content-type": "application/json" } })));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ type: "error", error: { type: "rate_limit_error", message: "TP-01 Knie geheim" } }), { status: 429, headers: { "content-type": "application/json", "request-id": "req_test123" } })));
     const chatten = claudeChat({ ...ENV_KI });
-    await expect(chatten({ verlauf: [{ role: "user", content: "?" }], werkzeuge: erstelleWerkzeuge({ speicher, strukturieren: vi.fn() }), senden: () => {} }))
+    await expect(chatten({ verlauf: [{ role: "user", content: "Was wollte TP-01?" }], werkzeuge: erstelleWerkzeuge({ speicher, strukturieren: vi.fn() }), senden: () => {} }))
       .rejects.toThrow(/ausgelastet/);
+    const zeilen = log.mock.calls.flat().map(String);
+    expect(zeilen.some((z) => /^KI-Fehler gespraech: 429 rate_limit_error req_test123$/.test(z))).toBe(true);
+    expect(zeilen.join(" ")).not.toMatch(/TP-01|Knie|geheim/);
   }, 20_000);
+
+  it("KI-Log: Abbruch durch die Nutzerin ist kein KI-Fehler; Zeitüberschreitung und Verbindung mit Namen", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    kiFehlerLoggen(new Anthropic.APIUserAbortError(), "gespraech");
+    kiFehlerLoggen(new Error("kein API-Fehler"), "gespraech");
+    expect(log).not.toHaveBeenCalled();
+    kiFehlerLoggen(new Anthropic.APIConnectionTimeoutError(), "gespraech");
+    kiFehlerLoggen(new Anthropic.APIConnectionError({ message: "x" }), "bericht");
+    kiFehlerLoggen(Anthropic.APIError.generate(529, { type: "error", error: { type: "overloaded_error", message: "TP-01" } }, "m", new Headers({ "request-id": "req_9" })), "struktur");
+    expect(log.mock.calls.map((c) => c[0])).toEqual(["KI-Fehler gespraech: - timeout", "KI-Fehler bericht: - verbindung", "KI-Fehler struktur: 529 overloaded_error req_9"]);
+  });
 
   it("Bericht-KI: Notizen nummeriert mit Datum, ohne Möglichkeit, die Grenzen zu verschieben; Schema-Antwort", async () => {
     const { a, b } = await testDaten();
@@ -505,5 +534,25 @@ describe("Gespräch mit Claude (Anthropic-API nachgebildet)", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.output_config.format.schema).toEqual(BERICHT_SCHEMA);
     expect(body.messages[0].content).toMatch(/^Art des Berichts: verlauf/);
+  });
+
+  it("Bericht-KI: Ausfall und unlesbare Antwort sind technisch (Wiederholen), Ablehnung ein fachlicher Hinweis; ein Log je Fehler", async () => {
+    const { a } = await testDaten();
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const antwort = (stop_reason, text) => new Response(JSON.stringify({ id: "m", type: "message", role: "assistant", model: "claude-opus-5-5", stop_reason, content: [{ type: "text", text }], usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200, headers: { "content-type": "application/json" } });
+    // 400 wird vom SDK nicht wiederholt – der Test bleibt schnell
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "TP-01" } }), { status: 400, headers: { "content-type": "application/json", "request-id": "req_b1" } })));
+    const ausfall = await claudeBericht(ENV_KI)({ notizen: [a], art: "verlauf" }).catch((e) => e);
+    expect(ausfall).toBeInstanceOf(StrukturFehler);
+    expect(ausfall.message).toBe("KI-Dienst antwortet nicht (400).");
+    expect(log.mock.calls.map((c) => c[0])).toEqual(["KI-Fehler bericht: 400 invalid_request_error req_b1"]);
+    vi.stubGlobal("fetch", vi.fn(async () => antwort("end_turn", "kein JSON")));
+    const unlesbar = await claudeBericht(ENV_KI)({ notizen: [a], art: "verlauf" }).catch((e) => e);
+    expect(unlesbar).toBeInstanceOf(StrukturFehler);
+    expect(unlesbar.message).toMatch(/nicht lesbar\. Bitte noch einmal versuchen\./);
+    vi.stubGlobal("fetch", vi.fn(async () => antwort("refusal", "")));
+    const abgelehnt = await claudeBericht(ENV_KI)({ notizen: [a], art: "verlauf" }).catch((e) => e);
+    expect(abgelehnt).toBeInstanceOf(WerkzeugFehler);
+    expect(abgelehnt).not.toBeInstanceOf(StrukturFehler);
   });
 });

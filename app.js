@@ -5,6 +5,17 @@
 (() => {
   "use strict";
 
+  // Übergang v1 → v2: alte Seite (noch im Browser-Cache) mit neuem Skript → einmal frisch laden, dann ist alles v2
+  if (!document.getElementById("ansicht-chat") || !window.GabiKern) {
+    try {
+      if (!sessionStorage.getItem("gabi.frisch-geladen")) {
+        sessionStorage.setItem("gabi.frisch-geladen", "1");
+        location.reload();
+      }
+    } catch { /* Speicher gesperrt – lieber nicht neu laden als endlos */ }
+    return;
+  }
+
   const K = window.GabiKern;
   const PDF = window.GabiPdf;
   const DEMO = window.GabiDemo;
@@ -15,6 +26,7 @@
   // ==========================================================
   const API = (window.GABI_CONFIG && window.GABI_CONFIG.apiUrl ? window.GABI_CONFIG.apiUrl : "").replace(/\/+$/, "");
   const DEMO_PARAM = new URLSearchParams(location.search).get("demo") === "1";
+  const PRODUKTION = location.hostname === "gabi.automatilabs.de";
   const modus = { demo: false, grund: "" };
   let demoApi = null;
 
@@ -62,7 +74,8 @@
       b.type = "button";
       b.className = "knopf geist";
       b.textContent = aktion.text;
-      b.addEventListener("click", () => { weg(); aktion.tun(); });
+      let getan = false;
+      b.addEventListener("click", () => { if (getan) return; getan = true; weg(); aktion.tun(); });
       t.append(b);
     }
     el.toasts.append(t);
@@ -301,7 +314,7 @@
     el.offlineTitel.textContent = navigator.onLine === false ? "Kein Internet" : "Server nicht erreichbar";
     el.offlineText.textContent = navigator.onLine === false
       ? "Dein Gerät ist offline. Sobald das Internet wieder da ist, geht es hier weiter."
-      : "Gabi erreicht den Server gerade nicht. Versuch es gleich noch einmal – deine Daten sind sicher gespeichert.";
+      : "Gabi erreicht den Server gerade nicht. Versuch es gleich noch einmal – gespeicherte Notizen bleiben erhalten.";
   }
   el.offlineErneut.addEventListener("click", () => start());
   window.addEventListener("online", () => { if (!el.offline.hidden) start(); });
@@ -320,7 +333,8 @@
     ansichtZeigen("laden");
     if (DEMO_PARAM) return demoStarten("param");
     const grund = await backendPruefen();
-    if (grund === "nicht-erreichbar" && zugang) return offlineZeigen(); // echtes Gerät: nicht still in die Demo
+    // Auf der echten Adresse nie still in die Demo (die Offline-Seite bietet „Demo ansehen“ an); lokal und in Tests schon
+    if (grund === "nicht-erreichbar" && (zugang || PRODUKTION)) return offlineZeigen();
     if (grund) return demoStarten(grund);
     if (zugang) return starten();
     zugangZeigen();
@@ -350,7 +364,8 @@
   });
   el.infoAbmelden.addEventListener("click", async () => {
     el.dialogInfo.close();
-    if (!(await frage("Abmelden?", "Der Zugangscode wird auf diesem Gerät gelöscht. Das Gespräch auch.", { ja: "Abmelden" }))) return;
+    const verlust = verlustText();
+    if (!(await frage("Abmelden?", `Der Zugangscode wird auf diesem Gerät gelöscht. Das Gespräch auch.${verlust ? ` ${verlust}` : ""}`, { ja: "Abmelden", gefahr: Boolean(verlust) }))) return;
     gespraechLeeren();
     zugangVergessen();
     zugangZeigen();
@@ -364,7 +379,10 @@
 
   async function route() {
     if (!gestartet || routeLaeuft) return;
-    const ziel = location.hash || "#/";
+    // alte v1-Adressen (#/aufnahme, #/ordner/…) auf v2 umleiten
+    const roh = location.hash || "#/";
+    const ziel = roh.replace(/^#\/ordner(?=\/|$)/, "#/notizen").replace(/^#\/aufnahme$/, "#/");
+    if (ziel !== roh) history.replaceState(null, "", ziel);
     routeLaeuft = true;
     try {
       if (ziel !== letzterHash && ordner.geaendert && !(await frage("Änderungen verwerfen?", "Du hast die Notiz bearbeitet, aber noch nicht gesichert.", { ja: "Verwerfen", nein: "Weiter bearbeiten", gefahr: true }))) {
@@ -403,23 +421,42 @@
 
   // ---------- Speichern im Browser (nur diese Sitzung) ----------
   let merkenUhr = null;
+  function gespraechSchreiben() {
+    merkenUhr = null;
+    // „bearbeitung“ (Getipptes in einer Karte) bleibt erhalten – iOS kennt kein beforeunload
+    const nachrichten = chat.nachrichten.map(({ laeuft, wartet, status, ...n }) => ({ ...n, karten: (n.karten || []).map(({ speichert, sendet, ...k }) => k) }));
+    speicher.schreiben("sitzung", schluessel("gespraech.v2"), JSON.stringify({ nachrichten }));
+  }
   function gespraechMerken() {
     clearTimeout(merkenUhr);
-    merkenUhr = setTimeout(() => {
-      const nachrichten = chat.nachrichten.map(({ laeuft, wartet, status, ...n }) => ({ ...n, karten: (n.karten || []).map(({ bearbeiten, bearbeitung, speichert, ...k }) => k) }));
-      speicher.schreiben("sitzung", schluessel("gespraech.v2"), JSON.stringify({ nachrichten, modus: chat.modus }));
-    }, 150);
+    merkenUhr = setTimeout(gespraechSchreiben, 150);
   }
+  // App geht in den Hintergrund (iOS verwirft solche Tabs gern): Ausstehendes sofort sichern
+  document.addEventListener("visibilitychange", () => { if (document.hidden && merkenUhr) { clearTimeout(merkenUhr); gespraechSchreiben(); } });
   function gespraechLaden() {
     let d = null;
     try { d = JSON.parse(speicher.lesen("sitzung", schluessel("gespraech.v2")) || "null"); } catch { d = null; }
     chat.nachrichten = d && Array.isArray(d.nachrichten) ? d.nachrichten : [];
-    for (const n of chat.nachrichten) if (n.rolle === "gabi" && !n.text && !(n.karten || []).length && !n.fehler) n.abgebrochen = true;
-    chat.modus = d && d.modus ? d.modus : null;
+    for (const n of chat.nachrichten) {
+      if (n.rolle !== "gabi" || n.lokal) continue;
+      if (n.unterwegs) {
+        // Seite wurde mitten in der Antwort neu geladen (z. B. iOS-Tab im Hintergrund) – ehrlich zeigen, Wiederholen anbieten
+        delete n.unterwegs;
+        Object.assign(n, { fehler: true, fehlerText: "Die Antwort wurde unterbrochen, weil die Seite neu geladen wurde.", wiederholbar: Boolean(n.body) });
+      } else if (!n.text && !(n.karten || []).length && !n.fehler) n.abgebrochen = true;
+    }
+    for (const n of chat.nachrichten) {
+      for (const k of n.karten || []) {
+        if (k.typ === "entwurf" && k.bearbeitung) k.bearbeiten = true;
+        if (k.typ === "beispiel") k.benutzt = true; // gehört zum Diktat-Modus, der nicht übernommen wird
+      }
+    }
+    chat.modus = null; // Diktat-/Such-Modus nicht übernehmen – sonst wird die nächste Frage still zum Diktat
     allesZeigen();
   }
   function gespraechLeeren() {
     if (chat.laeuft) chat.laeuft.abbruch.abort();
+    aufnahmen.clear(); // ohne Karte nicht mehr erreichbar – Speicher freigeben
     chat.nachrichten = [];
     chat.modus = null;
     speicher.loeschen("sitzung", schluessel("gespraech.v2"));
@@ -427,11 +464,20 @@
   }
 
   const offeneEntwuerfe = () => chat.nachrichten.flatMap((n) => n.karten || []).filter((k) => k.typ === "entwurf" && !k.gespeichert && !k.verworfen);
+  /** Was beim Leeren des Gesprächs verloren ginge – als Satz für die Rückfrage, sonst "". */
+  function verlustText() {
+    const e = offeneEntwuerfe().length;
+    const a = aufnahmen.size;
+    return [
+      e === 1 ? "Ein Entwurf ist noch nicht gespeichert und geht verloren." : e > 1 ? `${e} Entwürfe sind noch nicht gespeichert und gehen verloren.` : "",
+      a === 1 ? "Eine Aufnahme ist noch nicht gesendet und geht verloren." : a > 1 ? `${a} Aufnahmen sind noch nicht gesendet und gehen verloren.` : "",
+    ].filter(Boolean).join(" ");
+  }
 
   async function neuesGespraech() {
     if (!chat.nachrichten.length) { location.hash = "#/"; el.text.focus(); return; }
-    const offen = offeneEntwuerfe().length;
-    if (offen && !(await frage("Neues Gespräch?", offen === 1 ? "Ein Entwurf ist noch nicht gespeichert und geht verloren." : `${offen} Entwürfe sind noch nicht gespeichert und gehen verloren.`, { ja: "Neues Gespräch", gefahr: true }))) return;
+    const verlust = verlustText();
+    if (verlust && !(await frage("Neues Gespräch?", verlust, { ja: "Neues Gespräch", gefahr: true }))) return;
     gespraechLeeren();
     location.hash = "#/";
     gruessen();
@@ -489,7 +535,7 @@
   function nutzerHtml(n) {
     const kopf = n.art === "diktat"
       ? `<div class="blase-kopf">${symbol("mikro")}Diktat · ${esc(n.kuerzel || "")}${n.beispiel ? " · Beispiel" : ""}</div>`
-      : n.art === "stimme" ? `<div class="blase-kopf">${symbol("mikro")}Gesprochen</div>`
+      : n.art === "stimme" ? `<div class="blase-kopf">${symbol("mikro")}Gesprochen${n.beispiel ? " · Beispiel" : ""}</div>`
         : n.art === "suche" ? `<div class="blase-kopf">${symbol("suche")}Suche</div>` : "";
     return `<div class="blase">${kopf}${esc(n.text)}</div>`;
   }
@@ -569,6 +615,10 @@
   async function antwortHolen(gabi, body) {
     const abbruch = new AbortController();
     chat.laeuft = { abbruch, gabi };
+    // falls die Seite mitten in der Antwort neu lädt: erkennbar unterbrochen, mit „Nochmal versuchen“
+    gabi.unterwegs = true;
+    gabi.body = body;
+    gespraechMerken();
     eingabeAktualisieren();
     try {
       await chatStrom(body, (e) => ereignis(gabi, e), abbruch.signal);
@@ -583,6 +633,7 @@
         gabi.body = body;
       }
     } finally {
+      delete gabi.unterwegs;
       if (gabi.fehler) gabi.body = body; // damit „Nochmal versuchen“ auch bei Fehlern mitten im Strom geht
       else delete gabi.body;
       gabi.laeuft = false;
@@ -726,8 +777,24 @@
     if (k.typ === "beispiel") {
       return `<div class="chip-gruppe" data-karte="${esc(k.id)}"><button class="chip akzent" type="button" data-aktion="beispiel" ${k.benutzt ? "disabled" : ""}>${symbol("funke")}Beispieldiktat nehmen</button></div>`;
     }
+    if (k.typ === "aufnahme") {
+      if (k.erledigt) return `<div class="karte-zustand ok" data-karte="${esc(k.id)}"><span class="haken"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Nachgeschickt.</span></div>`;
+      if (k.verworfen) return `<div class="karte-zustand" data-karte="${esc(k.id)}">Aufnahme verworfen.</div>`;
+      const da = aufnahmen.has(k.id);
+      const senden = da && k.erneut
+        ? `<button class="knopf primaer klein" type="button" data-aktion="aufnahme-senden" ${k.sendet ? "disabled" : ""}>${k.sendet ? '<span class="drehen"></span>Sende …' : k.zurueck ? `${symbol("senden")}Jetzt senden` : `${symbol("zuruecksetzen")}Nochmal senden`}</button>`
+        : "";
+      return `<div class="hinweis-box warn" data-karte="${esc(k.id)}">
+        <div class="hinweis-box-kopf">${symbol("mikro")}<span>${esc(k.fehlerText || "Die Aufnahme ist nicht angekommen.")}</span></div>
+        ${k.leer || (da && !k.erneut) ? "<p>Bitte noch einmal aufnehmen.</p>" : da ? "<p>Die Aufnahme ist noch da – du musst nicht neu sprechen.</p>" : "<p>Nach dem Neuladen ist die Aufnahme nicht mehr da. Bitte noch einmal aufnehmen.</p>"}
+        ${da ? `<div class="knopf-reihe links">${senden}<button class="knopf leise klein" type="button" data-aktion="aufnahme-verwerfen" ${k.sendet ? "disabled" : ""}>Verwerfen</button></div>` : ""}
+      </div>`;
+    }
     return "";
   }
+
+  /** Nicht angekommene Aufnahmen (nur im Speicher dieses Tabs): Karten-ID → { holen, modusBeiAufnahme } */
+  const aufnahmen = new Map();
 
   function auswahlHtml(k) {
     const fertig = Boolean(k.gewaehlt);
@@ -735,10 +802,15 @@
       const art = (wert, titel, sym) => `<button class="chip${k.gewaehlt === wert ? " gewaehlt" : ""}" type="button" data-aktion="waehle" data-wert="${wert}" ${fertig ? "disabled" : ""}>${symbol(sym)}${titel}</button>`;
       return `<div class="auswahl-karte" data-karte="${esc(k.id)}"><div class="chip-gruppe">${art("verlauf", "Verlaufsbericht", "bericht")}${art("zusammenfassung", "Zusammenfassung", "dokument")}</div></div>`;
     }
+    if (!chat.patienten && chat.patientenFehler) {
+      return `<div class="hinweis-box" data-karte="${esc(k.id)}"><div class="hinweis-box-kopf">${symbol("warn")}<span>Die Test-Patienten konnten nicht geladen werden.</span></div>
+        <p>${esc(chat.patientenFehler)}</p><div><button class="knopf sekundaer klein" type="button" data-aktion="patienten-neu-laden">${symbol("zuruecksetzen")}Nochmal versuchen</button></div></div>`;
+    }
     if (!chat.patienten) {
       return `<div class="auswahl-karte" data-karte="${esc(k.id)}"><div class="chip-gruppe"><span class="skelett chip-skelett"></span><span class="skelett chip-skelett"></span><span class="skelett chip-skelett"></span></div></div>`;
     }
-    const chips = chat.patienten.map((p) => `<button class="chip${k.gewaehlt === p.id ? " gewaehlt" : ""}" type="button" data-aktion="waehle" data-wert="${esc(p.id)}" ${fertig ? "disabled" : ""}><strong>${esc(p.kuerzel)}</strong>${kurzName(p) ? `<span class="stumm">${esc(kurzName(p))}</span>` : ""}</button>`).join("");
+    const ohneNotiz = (p) => k.zweck === "bericht" && !(p.anzahl > 0); // Bericht braucht mindestens eine Notiz
+    const chips = chat.patienten.map((p) => `<button class="chip${k.gewaehlt === p.id ? " gewaehlt" : ""}" type="button" data-aktion="waehle" data-wert="${esc(p.id)}" ${fertig || ohneNotiz(p) ? "disabled" : ""}${ohneNotiz(p) ? ' title="Noch keine Notiz – kein Bericht möglich"' : ""}><strong>${esc(p.kuerzel)}</strong>${ohneNotiz(p) ? '<span class="stumm">noch keine Notiz</span>' : kurzName(p) ? `<span class="stumm">${esc(kurzName(p))}</span>` : ""}</button>`).join("");
     return `<div class="auswahl-karte" data-karte="${esc(k.id)}"><div class="chip-gruppe">${chips}
       <button class="chip akzent" type="button" data-aktion="neuer-patient" ${fertig ? "disabled" : ""}>${symbol("person-plus")}Neuer Test-Patient</button></div></div>`;
   }
@@ -808,7 +880,7 @@
   }
 
   function berichtAlsText(b) {
-    const zeilen = [`${b.titel} · ${b.kuerzel}${b.pseudonym ? ` (${b.pseudonym})` : ""}`, `${b.anzahl} Notizen · ${zeitraum(b)}`, "", "Zusammenfassung", ...(b.zusammenfassung || []).map((p) => `- ${p}`)];
+    const zeilen = [`${b.titel} · ${b.kuerzel}${b.pseudonym ? ` (${b.pseudonym})` : ""}`, `${b.anzahl === 1 ? "1 Notiz" : `${b.anzahl} Notizen`} · ${zeitraum(b)}`, "", "Zusammenfassung", ...(b.zusammenfassung || []).map((p) => `- ${p}`)];
     if (b.art === "verlauf") {
       zeilen.push("", "Verlauf");
       for (const v of b.verlauf || []) zeilen.push(`${K.datum(v.datum)}`, ...(v.punkte || []).map((p) => `- ${p}`));
@@ -836,6 +908,29 @@
     if (aktion === "neu-laden") return location.reload();
     if (!k) return;
 
+    if (aktion === "patienten-neu-laden") {
+      chat.patientenFehler = "";
+      nachrichtNeuZeichnen(n);
+      patientenLaden().catch(() => {});
+      return;
+    }
+    if (aktion === "aufnahme-senden") {
+      const eintrag = aufnahmen.get(k.id);
+      if (!eintrag) return;
+      if (chat.laeuft || erkennt) { toast("Einen Moment – Gabi ist noch beschäftigt."); return; }
+      k.sendet = true;
+      nachrichtNeuZeichnen(n);
+      erkennen(eintrag.holen, eintrag.modusBeiAufnahme, { n, k });
+      return;
+    }
+    if (aktion === "aufnahme-verwerfen") {
+      if (!(await frage("Aufnahme verwerfen?", "Die Aufnahme wird gelöscht und lässt sich nicht wiederherstellen.", { ja: "Verwerfen", gefahr: true }))) return;
+      aufnahmen.delete(k.id);
+      k.verworfen = true;
+      nachrichtNeuZeichnen(n);
+      gespraechMerken();
+      return;
+    }
     if (aktion === "waehle") return waehlen(n, k, b.dataset.wert);
     if (aktion === "neuer-patient") {
       const p = await patientAnlegenDialog();
@@ -852,8 +947,8 @@
       } catch (f) { toast(f.message, { art: "fehler" }); }
       return;
     }
-    if (aktion === "entwurf-bearbeiten") { k.bearbeiten = true; nachrichtNeuZeichnen(n); autoHoeheAlle(nachrichtKnoten.get(n.id)); nachrichtKnoten.get(n.id).querySelector("textarea")?.focus(); return; }
-    if (aktion === "entwurf-abbrechen") { k.bearbeiten = false; delete k.bearbeitung; nachrichtNeuZeichnen(n); return; }
+    if (aktion === "entwurf-bearbeiten") { k.bearbeiten = true; nachrichtNeuZeichnen(n); autoHoeheAlle(nachrichtKnoten.get(n.id)); nachrichtKnoten.get(n.id).querySelector("textarea")?.focus(); gespraechMerken(); return; }
+    if (aktion === "entwurf-abbrechen") { k.bearbeiten = false; delete k.bearbeitung; nachrichtNeuZeichnen(n); gespraechMerken(); return; }
     if (aktion === "entwurf-uebernehmen") {
       const s = { ...k.strukturiert };
       for (const t of kk.querySelectorAll("textarea[data-abschnitt]")) s[t.dataset.abschnitt] = t.value.split("\n").map((z) => z.trim()).filter(Boolean);
@@ -888,7 +983,10 @@
     const kk = e.target.closest("[data-karte]");
     const n = knoten && chat.nachrichten.find((x) => x.id === knoten.dataset.id);
     const k = n && kk && (n.karten || []).find((x) => x.id === kk.dataset.karte);
-    if (k && e.target.dataset.abschnitt) k.bearbeitung = { ...(k.bearbeitung || {}), [e.target.dataset.abschnitt]: e.target.value };
+    if (k && e.target.dataset.abschnitt) {
+      k.bearbeitung = { ...(k.bearbeitung || {}), [e.target.dataset.abschnitt]: e.target.value };
+      gespraechMerken();
+    }
   });
 
   async function waehlen(n, k, wert) {
@@ -948,8 +1046,19 @@
 
   // ---------- Test-Patienten ----------
   async function patientenLaden() {
-    const { patienten } = await api("/api/patienten");
+    let patienten;
+    try {
+      ({ patienten } = await api("/api/patienten"));
+    } catch (f) {
+      // offene Auswahl-Karten zeigen den Fehler mit „Nochmal versuchen“ statt ewig Platzhalter
+      if (!(f instanceof Abbruch)) {
+        chat.patientenFehler = f.message;
+        for (const n of chat.nachrichten) if ((n.karten || []).some((k) => k.typ === "auswahl" && !k.gewaehlt)) nachrichtNeuZeichnen(n);
+      }
+      throw f;
+    }
     chat.patienten = patienten;
+    chat.patientenFehler = "";
     seitenPatientenZeigen();
     // offene Auswahl-Karten mit der Liste füllen
     for (const n of chat.nachrichten) if ((n.karten || []).some((k) => k.typ === "auswahl" && !k.gewaehlt)) nachrichtNeuZeichnen(n);
@@ -1025,6 +1134,7 @@
     for (const c of document.querySelectorAll("[data-schnell]")) c.disabled = laeuft || erkennt;
   }
 
+  el.text.enterKeyHint = GROB ? "enter" : "send";
   el.text.addEventListener("input", () => { autoHoehe(el.text); eingabeAktualisieren(); });
   el.text.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !GROB) { e.preventDefault(); el.eingabe.requestSubmit(); }
@@ -1038,18 +1148,19 @@
     el.text.value = "";
     autoHoehe(el.text);
     eingabeAktualisieren();
+    if (GROB) el.text.blur(); // Antwort nicht hinter der Tastatur verstecken
     textSenden(text, "");
   });
 
   /** Getippter oder gesprochener Text → je nach Modus Diktat, Suche oder normale Frage. */
-  function textSenden(text, art, modusBeiAufnahme) {
+  function textSenden(text, art, modusBeiAufnahme, { beispiel = false } = {}) {
     const m = modusBeiAufnahme !== undefined ? modusBeiAufnahme : chat.modus;
-    if (m && m.typ === "diktat") return diktatSenden(text, { modusBeiAufnahme: m });
+    if (m && m.typ === "diktat") return diktatSenden(text, { modusBeiAufnahme: m, beispiel });
     if (m && m.typ === "suche") {
       modusSetzen(null);
       return senden({ text, senden: `Suche in meinen Notizen: ${text}`, art: "suche" });
     }
-    return senden({ text, art });
+    return senden({ text, art, beispiel });
   }
 
   function diktatSenden(text, { beispiel = false, modusBeiAufnahme = null } = {}) {
@@ -1097,9 +1208,29 @@
       } else toast(text, { art: "fehler", dauer: 6000 });
     },
     beiHinweis(text) { toast(text); },
+    beiVerworfen({ holen }) {
+      const m = chat.modus ? { ...chat.modus } : null;
+      toast("Aufnahme verworfen.", { dauer: 9000, aktion: { text: "Rückgängig", tun: () => {
+        if (!erkennt && !chat.laeuft && aufnahme.phase === "bereit") return erkennen(holen, m);
+        // Gabi ist beschäftigt: nicht parallel schicken, sondern als Karte parken – „Jetzt senden“, sobald sie fertig ist
+        const k = { typ: "aufnahme", id: neueId(), zurueck: true, erneut: true, fehlerText: "Zurückgeholte Aufnahme – noch nicht gesendet." };
+        aufnahmen.set(k.id, { holen, modusBeiAufnahme: m });
+        location.hash = "#/";
+        lokaleAntwort("Deine Aufnahme ist zurück. Tipp auf „Jetzt senden“, sobald ich fertig bin.", [k]);
+      } } });
+    },
   });
 
-  async function erkennen(holen, modusBeiAufnahme) {
+  /** Hochladen erst, wenn die App sichtbar ist (iOS bricht Hintergrund-Uploads gern ab). */
+  function sichtbar() {
+    if (!document.hidden) return Promise.resolve();
+    return new Promise((ok) => {
+      const pruefen = () => { if (!document.hidden) { document.removeEventListener("visibilitychange", pruefen); ok(); } };
+      document.addEventListener("visibilitychange", pruefen);
+    });
+  }
+
+  async function erkennen(holen, modusBeiAufnahme, wiederholung = null) {
     erkennt = true;
     el.eingabe.classList.add("erkennt");
     el.eingabe.classList.remove("nimmt-auf");
@@ -1109,13 +1240,29 @@
     eingabeAktualisieren();
     try {
       const b64 = await holen();
+      await sichtbar();
       const zweck = modusBeiAufnahme && modusBeiAufnahme.typ === "diktat" ? "diktat" : "frage";
       const demoZusatz = modus.demo ? `?zweck=${zweck}${zweck === "diktat" ? `&patient=${encodeURIComponent(modusBeiAufnahme.kuerzel)}` : ""}` : "";
       const d = await api(`/api/transkribieren${demoZusatz}`, { methode: "POST", text: b64, zeit: 180000 });
       const text = String((d && d.text) || "").trim();
-      if (!text) { toast("Ich habe nichts verstanden. Bitte nochmal deutlich sprechen.", { art: "warn" }); return; }
+      if (!text) {
+        if (wiederholung) {
+          // dieselbe leere Aufnahme nicht nochmal schicken – nur „Verwerfen“ bleibt
+          Object.assign(wiederholung.k, { sendet: false, erneut: false, leer: true, fehlerText: "In der Aufnahme habe ich nichts verstanden." });
+          aufnahmen.delete(wiederholung.k.id);
+          nachrichtNeuZeichnen(wiederholung.n);
+          gespraechMerken();
+        } else toast("Ich habe nichts verstanden. Bitte nochmal deutlich sprechen.", { art: "warn" });
+        return;
+      }
       erkennt = false;
       el.eingabe.classList.remove("erkennt");
+      if (wiederholung) {
+        Object.assign(wiederholung.k, { erledigt: true, sendet: false });
+        aufnahmen.delete(wiederholung.k.id);
+        nachrichtNeuZeichnen(wiederholung.n);
+      }
+      if (modus.demo) toast("Demo-Modus: Statt deiner Aufnahme steht hier ein Beispieltext.", { dauer: 5000 });
       if (chat.laeuft) {
         // sollte nicht passieren (Senden ist gesperrt) – dann nichts verlieren: Text ins Eingabefeld
         el.text.value = [el.text.value.trim(), text].filter(Boolean).join("\n");
@@ -1123,15 +1270,27 @@
         toast("Gabi antwortet noch – dein Text steht im Eingabefeld.");
         return;
       }
-      textSenden(text, "stimme", modusBeiAufnahme);
+      textSenden(text, "stimme", modusBeiAufnahme, { beispiel: modus.demo });
     } catch (f) {
       if (f instanceof Abbruch) return;
-      toast(f.message, { art: "fehler", dauer: 8000, aktion: f.keineWiederholung ? undefined : { text: "Nochmal senden", tun: () => erkennen(holen, modusBeiAufnahme) } });
+      // bleibende Karte statt Toast: die Aufnahme bleibt erhalten, bis sie nachgeschickt oder verworfen ist
+      if (wiederholung) {
+        Object.assign(wiederholung.k, { sendet: false, fehlerText: f.message, erneut: !f.keineWiederholung });
+        nachrichtNeuZeichnen(wiederholung.n);
+      } else {
+        const k = { typ: "aufnahme", id: neueId(), fehlerText: f.message, erneut: !f.keineWiederholung };
+        aufnahmen.set(k.id, { holen, modusBeiAufnahme });
+        location.hash = "#/";
+        const fuer = modusBeiAufnahme && modusBeiAufnahme.typ === "diktat" ? ` für **${modusBeiAufnahme.kuerzel}**` : "";
+        lokaleAntwort(`Dein ${fuer ? "Diktat" : "gesprochener Text"}${fuer} ist nicht angekommen.`, [k]);
+      }
     } finally {
       erkennt = false;
       el.eingabe.classList.remove("erkennt");
       el.aufnahmeZeit.textContent = "0:00";
       eingabeAktualisieren();
+      // Karte nie auf „Sende …“ stehen lassen (z. B. Abbruch, weil der Zugangscode neu eingegeben werden muss)
+      if (wiederholung && wiederholung.k.sendet) { wiederholung.k.sendet = false; nachrichtNeuZeichnen(wiederholung.n); }
     }
   }
 
@@ -1139,6 +1298,12 @@
   let zeiger = null;
   let startPunkt = null;
   let verwerfen = false;
+  // clientX/Y zählen ab dem Layout-Viewport. Schließt sich auf dem iPhone die Tastatur (das Textfeld verschwindet während
+  // der Aufnahme), verschiebt sich der sichtbare Ausschnitt (visualViewport.offsetTop) – der Finger aber nicht.
+  const fingerPunkt = (e) => {
+    const vv = window.visualViewport;
+    return { x: e.clientX - ((vv && vv.offsetLeft) || 0), y: e.clientY - ((vv && vv.offsetTop) || 0) };
+  };
   function aufnahmeBeginnen() {
     if (chat.laeuft || erkennt || aufnahme.phase !== "bereit") return false;
     if (mikroGesperrt) {
@@ -1153,14 +1318,16 @@
   el.mikro.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || zeiger !== null) return;
     e.preventDefault();
+    if (document.activeElement === el.text) el.text.blur(); // Tastatur zu, bevor die Eingabezeile zur Aufnahme wird
     if (!aufnahmeBeginnen()) return;
     zeiger = e.pointerId;
-    startPunkt = { x: e.clientX, y: e.clientY };
+    startPunkt = fingerPunkt(e);
     try { el.mikro.setPointerCapture(e.pointerId); } catch { /* egal */ }
   });
   el.mikro.addEventListener("pointermove", (e) => {
     if (e.pointerId !== zeiger || !startPunkt) return;
-    const weit = Math.hypot(e.clientX - startPunkt.x, e.clientY - startPunkt.y) > 90;
+    const p = fingerPunkt(e);
+    const weit = Math.max(startPunkt.x - p.x, startPunkt.y - p.y) > 140; // deutlich nach links oder oben
     if (weit !== verwerfen) {
       verwerfen = weit;
       el.aufnahmeText.textContent = weit ? "Loslassen zum Verwerfen" : "Loslassen zum Senden";
@@ -1248,7 +1415,7 @@
         return;
       }
       const gesamt = patienten.reduce((s, p) => s + (p.anzahl || 0), 0);
-      inhalt.innerHTML = `<p class="suche-hinweis">${patienten.length} Test-Patienten · ${gesamt} Notizen</p>
+      inhalt.innerHTML = `<p class="suche-hinweis">${patienten.length === 1 ? "1 Test-Patient" : `${patienten.length} Test-Patienten`} · ${gesamt === 1 ? "1 Notiz" : `${gesamt} Notizen`}</p>
         <div class="raster">${patienten.map((p, i) => `<a class="patient-karte" href="#/notizen/p/${esc(p.id)}" data-i="${i}">
           <span class="patient-kachel">${esc(p.kuerzel.replace(/^[A-Z]+-?/, "") || p.kuerzel.slice(0, 2))}</span>
           <span class="patient-text"><strong>${esc(p.kuerzel)}</strong><span>${esc(kurzName(p) || "Test-Patient")}</span><small>${p.anzahl === 1 ? "1 Notiz" : `${esc(p.anzahl || 0)} Notizen`}</small></span>${symbol("rechts")}</a>`).join("")}
@@ -1445,14 +1612,29 @@
     SPRACHE.cancel();
     if (n) nachrichtNeuZeichnen(n);
   }
+  /** Nur Stimmen, die auf dem Gerät sprechen (localService) – Online-Stimmen wie „Google Deutsch“ schicken den Text ins Netz. */
+  const lokaleDeutscheStimme = () => SPRACHE.getVoices().find((v) => v.localService && /^de(-|_|$)/i.test(v.lang || "")) || null;
+  // Stimmen schon beim Start laden: iOS spricht nur direkt im Tipp, nicht nach einer Wartezeit
+  let stimmenDa = false;
+  if (SPRACHE) {
+    const laden = () => { try { stimmenDa = SPRACHE.getVoices().length > 0; } catch { stimmenDa = false; } };
+    laden();
+    try { SPRACHE.addEventListener("voiceschanged", laden); } catch { /* ältere Browser */ }
+  }
   function vorlesen(n) {
     if (!SPRACHE) return;
     if (vorleseId === n.id) { sprechenStoppen(); return; }
     sprechenStoppen();
+    const stimme = lokaleDeutscheStimme();
+    if (!stimme) {
+      toast(stimmenDa
+        ? "Vorlesen geht hier nicht: Dieses Gerät hat keine deutsche Stimme, die ohne Internet arbeitet. Der Text bleibt auf dem Gerät."
+        : "Die Stimme lädt noch – bitte gleich noch einmal tippen.", { art: "warn", dauer: 6000 });
+      return;
+    }
     const u = new SpeechSynthesisUtterance(K.ohneFormat(n.text));
-    u.lang = "de-DE";
-    const stimme = SPRACHE.getVoices().find((v) => /^de(-|_|$)/i.test(v.lang || ""));
-    if (stimme) u.voice = stimme;
+    u.voice = stimme;
+    u.lang = stimme.lang || "de-DE";
     u.rate = 1.02;
     u.onend = u.onerror = () => { if (vorleseId === n.id) { vorleseId = null; nachrichtNeuZeichnen(n); } };
     vorleseId = n.id;
@@ -1479,7 +1661,7 @@
   }
 
   window.addEventListener("beforeunload", (e) => {
-    if (offeneEntwuerfe().length || ordner.geaendert || aufnahme.phase !== "bereit" || erkennt) { e.preventDefault(); e.returnValue = ""; }
+    if (offeneEntwuerfe().length || aufnahmen.size || ordner.geaendert || aufnahme.phase !== "bereit" || erkennt) { e.preventDefault(); e.returnValue = ""; }
   });
 
   // Los geht's

@@ -685,7 +685,9 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
   .willkommen { padding-top: 12vh; }
   .gruss { font-size: 48px; }
   .notizen { padding-top: 40px; }
-  .toasts { top: auto; bottom: 28px; left: auto; right: 28px; transform: none; }
+  /* unten links: Seitenleiste (272 px) plus freier Rand links der Eingabezeile (max. 760 px, mittig) –
+     verdeckt nie Eingabezeile, Mikrofon oder Senden */
+  .toasts { top: auto; bottom: 20px; left: 12px; right: auto; transform: none; width: clamp(248px, calc(244px + max(32px, (100vw - 1032px) / 2)), 400px); }
   .eingabe-bereich { padding-bottom: 20px; }
 }
 @media (max-width: 1023.98px) {
@@ -698,6 +700,19 @@ dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-f
   .vorschlag { min-height: 104px; padding: 12px; }
   .vorschlag-text > span { display: none; }
   .kopf .badge-test { display: none; }
+}
+
+/* iPhone zoomt in Felder unter 16 px hinein – auf Touch-Geräten alle Eingaben mit 16 px */
+@media (pointer: coarse) {
+  .abschnitt textarea.eingabefeld, .leser textarea.eingabefeld, .sortierung select, .ergebnis-kopf .sortierung select { font-size: 16px; }
+}
+/* Querformat mit Notch: Inhalte nicht unter die Kamera */
+@supports (padding: max(0px)) {
+  .kopf { padding-left: max(var(--rand), env(safe-area-inset-left)); padding-right: max(var(--rand), env(safe-area-inset-right)); }
+  .eingabe-bereich { padding-left: max(var(--rand), env(safe-area-inset-left)); padding-right: max(var(--rand), env(safe-area-inset-right)); }
+}
+@media (min-width: 1024px) {
+  @supports (padding: max(0px)) { .kopf { padding-left: max(16px, env(safe-area-inset-left)); padding-right: 16px; } }
 }
 
 /* 12 Bewegung -------------------------------------------------------------- */
