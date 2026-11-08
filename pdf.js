@@ -245,7 +245,7 @@
       ["Zeitraum", datum(von) === datum(bis) ? datum(von) : `${datum(von)} – ${datum(bis)}`, 60],
       ["Notizen", String(b.anzahl || 0), 24],
     ]);
-    d.hinweis(`Erstellt am ${datum(erstellt)}, ${uhrzeit(erstellt)} Uhr – aus den gespeicherten Notizen, ohne Diagnosen oder Empfehlungen.`);
+    d.hinweis(`Erstellt am ${datum(erstellt)}, ${uhrzeit(erstellt)} Uhr – nur aus den gespeicherten Notizen; Gabi ergänzt keine eigenen Diagnosen oder Empfehlungen.`);
     d.z.y += 5;
 
     const zusammenfassung = Array.isArray(b.zusammenfassung) ? b.zusammenfassung : [];
@@ -275,7 +275,7 @@
 
     const offen = Array.isArray(b.offen) ? b.offen : [];
     if (offen.length) {
-      d.ueberschrift("Bitte prüfen (offene Punkte)", { f: FARBE.warn });
+      d.ueberschrift("Offene Punkte", { f: FARBE.warn });
       d.punkte(offen, { punktFarbe: FARBE.warn, hintergrund: FARBE.warnHell });
     }
     d.fuss(`${titel} ${b.kuerzel} ${tag(erstellt)}`);

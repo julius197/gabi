@@ -14,7 +14,7 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=2.0.0">
+  <link rel="stylesheet" href="style.css?v=2.0.1">
 </head>
 <body>
   <svg width="0" height="0" class="unsichtbar" aria-hidden="true" focusable="false">
@@ -108,7 +108,7 @@
             <p class="meldung" id="zugang-fehler" role="alert" hidden></p>
             <button class="knopf primaer voll" type="submit" id="zugang-weiter">Weiter</button>
           </form>
-          <p class="zugang-fuss">Noch keinen Code? <a href="?demo=1#/">Demo ansehen</a> – mit Beispieldaten, ohne Server.</p>
+          <p class="zugang-fuss">Noch keinen Code? <a href="?demo=1#/">Demo ansehen</a> – mit Beispieldaten und vorbereiteten Antworten, ohne KI.</p>
         </div>
       </section>
 
@@ -119,7 +119,7 @@
           <h2 id="offline-titel">Keine Verbindung</h2>
           <p id="offline-text">Gabi erreicht den Server gerade nicht. Prüf bitte das Internet und versuch es noch einmal.</p>
           <div class="knopf-reihe">
-            <button class="knopf primaer" type="button" id="offline-erneut"><svg class="symbol"><use href="#i-zuruecksetzen"/></svg>Erneut versuchen</button>
+            <button class="knopf primaer" type="button" id="offline-erneut"><svg class="symbol"><use href="#i-zuruecksetzen"/></svg>Nochmal versuchen</button>
             <a class="knopf sekundaer" href="?demo=1#/">Demo ansehen</a>
           </div>
         </div>
@@ -229,6 +229,7 @@
     <form class="dialog-form" method="dialog">
       <h2 id="info-titel">Testversion</h2>
       <ul class="info-liste" id="info-liste">
+        <li id="info-demo" hidden><svg class="symbol"><use href="#i-info"/></svg><span>Demo: vorbereitete Beispielantworten ohne KI. Die echte Gabi versteht freie Fragen und schreibt die Notiz selbst aus deinem Diktat.</span></li>
         <li><svg class="symbol"><use href="#i-schloss"/></svg><span>Nur erfundene Testdaten verwenden – Patienten nur als Kürzel wie TP-01.</span></li>
         <li><svg class="symbol"><use href="#i-funke"/></svg><span>Gabi schlägt Notizen und Berichte vor. Prüf sie immer selbst – Gabi stellt keine Diagnosen und gibt keine Empfehlungen.</span></li>
         <li><svg class="symbol"><use href="#i-uhr"/></svg><span>Termine und Praxissoftware sind noch nicht angebunden.</span></li>
@@ -245,12 +246,12 @@
   <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
   <!-- ?v=… bei jeder Version erhöhen: GitHub Pages lässt Dateien 10 Minuten im Browser-Cache -->
-  <script src="config.js?v=2.0.0"></script>
+  <script src="config.js?v=2.0.1"></script>
   <script src="vendor/jspdf.umd.min.js?v=4.2.1"></script>
-  <script src="kern.js?v=2.0.0"></script>
-  <script src="pdf.js?v=2.0.0"></script>
-  <script src="demo.js?v=2.0.0"></script>
-  <script src="aufnahme.js?v=2.0.0"></script>
-  <script src="app.js?v=2.0.0"></script>
+  <script src="kern.js?v=2.0.1"></script>
+  <script src="pdf.js?v=2.0.1"></script>
+  <script src="demo.js?v=2.0.1"></script>
+  <script src="aufnahme.js?v=2.0.1"></script>
+  <script src="app.js?v=2.0.1"></script>
 </body>
 </html>

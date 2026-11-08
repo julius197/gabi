@@ -58,9 +58,9 @@ export function claudeStrukturierung(env) {
       // Nie Inhalte loggen – nur Art und Status des Fehlers
       kiFehlerLoggen(e, "struktur");
       if (e instanceof Anthropic.AuthenticationError) throw new StrukturFehler("Anthropic-Schlüssel ungültig.");
-      if (e instanceof Anthropic.RateLimitError) throw new StrukturFehler("KI ist gerade ausgelastet. Bitte gleich noch einmal versuchen.");
+      if (e instanceof Anthropic.RateLimitError) throw new StrukturFehler("Ich bin gerade ausgelastet. Bitte gleich noch einmal versuchen.");
       if (e instanceof Anthropic.APIConnectionError) throw new StrukturFehler("KI-Dienst nicht erreichbar.");
-      if (e instanceof Anthropic.APIError) throw new StrukturFehler(`KI-Dienst antwortet nicht (${e.status ?? "?"}).`);
+      if (e instanceof Anthropic.APIError) throw new StrukturFehler(e.status ? `KI-Dienst antwortet nicht (${e.status}).` : "KI-Dienst antwortet nicht.");
       throw e;
     }
     if (antwort.stop_reason === "refusal") throw new StrukturFehler("Die KI hat diese Notiz nicht verarbeitet. Bitte Text prüfen.");

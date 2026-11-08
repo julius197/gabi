@@ -30,7 +30,7 @@
       id: "7e3c1a52-0101-4000-8000-000000000101", kuerzel: "TP-01", tageZurueck: 9, uhrzeit: "08:30",
       rohtext: "Patientin kommt zur dritten Behandlung nach vorderer Kreuzbandplastik rechts. Schmerz in Ruhe bei zwei, bei Belastung bei fünf. Flexion aktiv bis 90 Grad, Extension minus 5 Grad. Leichte Schwellung am medialen Gelenkspalt. Wir haben 20 Minuten Lymphdrainage gemacht, dann Patellamobilisation und Quadrizepsaktivierung im Sitzen. Für zu Hause Quadrizeps anspannen, dreimal zehn Wiederholungen, zweimal täglich. Nächstes Mal Gangschule.",
       strukturiert: {
-        befund: ["Z. n. vorderer Kreuzbandplastik rechts, 3. Behandlung (laut Notiz)", "Pat.: Schmerz NRS 2 in Ruhe, NRS 5 bei Belastung", "Flexion Knie rechts aktiv bis 90°, Extension -5°", "Leichte Schwellung medialer Gelenkspalt"],
+        befund: ["Diagnose laut Verordnung: Z. n. vorderer Kreuzbandplastik rechts", "3. Behandlung", "Pat.: Schmerz NRS 2 in Ruhe, NRS 5 bei Belastung", "Flexion Knie rechts aktiv bis 90°, Extension -5°", "Leichte Schwellung medialer Gelenkspalt"],
         massnahmen: ["Manuelle Lymphdrainage, 20 min", "Patellamobilisation", "Quadrizepsaktivierung im Sitzen"],
         verlauf: ["Nächster Termin: Gangschule"],
         hausaufgaben: ["Quadrizeps anspannen 3 × 10 Wdh., 2 × täglich"],
@@ -52,7 +52,7 @@
       id: "7e3c1a52-0201-4000-8000-000000000201", kuerzel: "TP-02", tageZurueck: 12, uhrzeit: "10:15",
       rohtext: "Schulter links, Erstbefund. Ärztliche Diagnose Impingement-Syndrom. Patient klagt über Schmerzen beim Überkopfarbeiten, NRS sechs. Abduktion aktiv bis 100 Grad, schmerzhafter Bogen zwischen 70 und 110 Grad. Außenrotation kraftgemindert. Manuelle Therapie am Glenohumeralgelenk, 15 Minuten, danach Skapulastabilisation mit Theraband. Hausaufgabe Pendelübungen dreimal täglich.",
       strukturiert: {
-        befund: ["Ärztliche Diagnose: Impingement-Syndrom Schulter links (laut Notiz)", "Pat.: Schmerz bei Überkopfarbeit, NRS 6", "Abduktion aktiv bis 100°, schmerzhafter Bogen 70–110°", "Außenrotation kraftgemindert"],
+        befund: ["Diagnose laut Verordnung: Impingement-Syndrom Schulter links", "Pat.: Schmerz bei Überkopfarbeit, NRS 6", "Abduktion aktiv bis 100°, schmerzhafter Bogen 70–110°", "Außenrotation kraftgemindert"],
         massnahmen: ["Manuelle Therapie Glenohumeralgelenk, 15 min", "Skapulastabilisation mit Theraband"],
         verlauf: ["Erstbefund"],
         hausaufgaben: ["Pendelübungen 3 × täglich"],
@@ -126,7 +126,29 @@
         unklar: ["„Pass descendens“ als „pars descendens“ gelesen"],
       },
     },
+    {
+      rohtext: "Lendenwirbelsäule. Patientin berichtet, dass das Sitzen im Büro besser geht, NRS drei. Finger-Boden-Abstand fünfzehn Zentimeter. ISG links mobilisiert, danach zwanzig Minuten Rumpfstabilisation auf der Matte. Für zu Hause Beckenkippen und Vierfüßlerstand, dreimal zehn, täglich.",
+      strukturiert: {
+        befund: ["Pat.: Sitzen im Büro geht besser, NRS 3", "FBA 15 cm"],
+        massnahmen: ["Mobilisation ISG links", "Rumpfstabilisation auf der Matte, 20 min"],
+        verlauf: [],
+        hausaufgaben: ["Beckenkippen und Vierfüßlerstand 3 × 10 Wdh., täglich"],
+        unklar: [],
+      },
+    },
+    {
+      rohtext: "Patientin berichtet, dass die Übungen zu Hause gut klappen, NRS zwei. Zwanzig Minuten Krankengymnastik mit Kräftigung und Koordination. Hausaufgaben wie besprochen weiter, dreimal pro Woche.",
+      strukturiert: {
+        befund: ["Pat.: Übungen zu Hause klappen gut, NRS 2"],
+        massnahmen: ["KG mit Kräftigung und Koordination, 20 min"],
+        verlauf: [],
+        hausaufgaben: ["Übungen wie besprochen weiter, 3 × pro Woche"],
+        unklar: [],
+      },
+    },
   ];
+  // welches Beispieldiktat zu welchem Pseudonym passt (Index in DIKTATE); sonst das neutrale (letztes)
+  const DIKTAT_MUSTER = [/knie/i, /schulter/i, /hws|nacken|halswirbel/i, /lws|lenden|rücken|ruecken|\bisg\b/i];
 
   // Beispielfragen für die Fake-Spracherkennung im Gespräch (ohne Diktat-Modus)
   const FRAGEN = [
@@ -140,12 +162,13 @@
     { muster: /standort|adresse|anfahrt|kieslingstra|thumenberger|\bwo\b.*(praxis|ihr|seid)/, text: "PhysioWorks hat zwei Standorte in Nürnberg:\n- Kieslingstraße 82, 90491 Nürnberg\n- Thumenberger Weg 89, 90491 Nürnberg" },
     { muster: /gegründet|seit wann|gründung|inhaber|wem gehört/, text: "PhysioWorks wurde 2011 von Philipp Engelhardt gegründet – er ist bis heute Inhaber der Praxis." },
     { muster: /telefon|erreich|öffnungszeit|geöffnet|anrufen|nummer|e-?mail/, text: "Telefonisch erreichst du die Praxis unter +49 911 23 99 823 (Mo, Di und Do 7:30–17:00, Mi 7:30–15:00, Fr 7:30–16:00 Uhr) oder per E-Mail an info@physio-works.de. Die Öffnungszeiten der Praxen selbst stehen nicht auf der Website." },
-    { muster: /profi|sportler|athlet|ice tigers|hockey|olymp|verein/, text: "Ja – laut Website behandelt PhysioWorks vom Schmerzpatienten bis zum Olympia-Athleten. Die Praxis ist offizieller Partner der Nürnberg Ice Tigers und Kooperationspartner des Deutschen Hockey-Bunds." },
-    { muster: /preis|kosten|kostet|krankenkasse|\bkasse|rezept|privat|selbstzahl|osteopath/, text: "Auf der Website steht nur ein Preis: Osteopathie kostet 85 € pro Behandlungseinheit (Selbstzahlerleistung). PhysioWorks nennt sich Privatpraxis – wie sonst abgerechnet wird, muss die Praxis noch bestätigen." },
+    { muster: /profi|sportler|athlet|ice tigers|hockey|olymp|verein/, text: "Laut Website behandelt PhysioWorks alle – vom Schmerzpatienten bis zum Olympia-Athleten. Die Praxis ist offizieller Partner der Nürnberg Ice Tigers und Kooperationspartner des Deutschen Hockey-Bunds." },
+    { muster: /rezept|verordnung/, text: "Ob du für eine Behandlung ein Rezept brauchst, steht nicht auf der Website – das muss die Praxis noch bestätigen. Bekannt ist nur: Osteopathie ist eine Selbstzahlerleistung (85 € pro Behandlungseinheit)." },
+    { muster: /preis|kosten|kostet|krankenkasse|\bkasse|privat|selbstzahl|osteopath/, text: "Auf der Website steht nur ein Preis: Osteopathie kostet 85 € pro Behandlungseinheit (Selbstzahlerleistung). PhysioWorks nennt sich Privatpraxis – wie sonst abgerechnet wird, muss die Praxis noch bestätigen." },
     { muster: /akupunktur|nadel|dry needling/, text: "Akupunktur gibt es laut Website u. a. bei akuten und chronischen Schmerzen, Arthrose, Kopfschmerz und Migräne – auch als Ohrakupunktur und Dry Needling. Genannt wird Dr. med. Rebecca Pohle." },
     { muster: /youngster|kinder|jugend/, text: "Das Youngster Training ist für Kinder und Jugendliche von 10 bis 16 Jahren: mittwochs je eine Stunde zwischen 14:00 und 19:00 Uhr, höchstens 4 pro Gruppe, mit 10er-Karten." },
-    { muster: /trainingstherapie|\bmtt\b|trainingszeit|gerätetraining/, text: "Die Medizinische Trainingstherapie beginnt mit einer Funktionsdiagnostik und läuft in Gruppen mit höchstens 4 Personen. Trainingszeiten: Mo–Do 7:00–19:00, Fr 7:00–18:00, Sa 9:00–14:00 Uhr." },
-    { muster: /\bteam\b|mitarbeit|kolleg|praxismanag|wer arbeitet/, text: "Inhaber ist Philipp Engelhardt, Praxismanagerin ist Gabi Diem. Dazu kommen laut Website viele Kolleginnen und Kollegen aus Physiotherapie, Manueller Therapie, Training und Büro." },
+    { muster: /trainingstherapie|\bmtt\b|trainingszeit|gerätetraining|trainier|\btraining\b/, text: "Die Medizinische Trainingstherapie beginnt mit einer Funktionsdiagnostik und läuft in Gruppen mit höchstens 4 Personen. Trainingszeiten: Mo–Do 7:00–19:00, Fr 7:00–18:00, Sa 9:00–14:00 Uhr." },
+    { muster: /\bteam\b|mitarbeit|kolleg|praxismanag|wer arbeitet|\bdiem\b/, text: "Inhaber ist Philipp Engelhardt, Praxismanagerin ist Gabi Diem. Dazu kommen laut Website viele Kolleginnen und Kollegen aus Physiotherapie, Manueller Therapie, Training und Büro." },
     { muster: /leistung|angebot|bietet|therapien|was macht (die praxis|ihr|physioworks)/, text: "Laut Website bietet PhysioWorks:\n- Sportphysiotherapie\n- Manuelle Therapie\n- Medizinische Trainingstherapie\n- Youngster Training\n- Akupunktur\n\nDazu u. a. Lymphdrainage, Krankengymnastik nach Bobath und PNF, Kiefergelenkstherapie, Osteopathie und Kinesio-Tape." },
   ];
 
@@ -270,7 +293,7 @@
   /** Texte der festen Abläufe – gleich wie im Worker (worker/src/app.js, Route /api/chat). */
   function entwurfText(kuerzel, anzahlUnklar) {
     const n = anzahlUnklar;
-    return `Hier ist dein Entwurf für **${kuerzel}**. Prüf ihn kurz – gespeichert wird erst, wenn du auf „Speichern“ tippst.${n ? ` ${n === 1 ? "Eine Stelle habe ich" : `${n} Stellen habe ich`} als „(unklar)“ markiert.` : ""}`;
+    return `Hier ist dein Entwurf für **${kuerzel}**. Prüf ihn kurz – gespeichert wird erst, wenn du auf „Speichern“ tippst.${n ? ` ${n === 1 ? "Schau dir bitte den Punkt unter „Bitte prüfen“ an." : `Schau dir bitte die ${n} Punkte unter „Bitte prüfen“ an.`}` : ""}`;
   }
   function berichtText(art, kuerzel, anzahl) {
     return `${art === "verlauf" ? "Hier ist der Verlaufsbericht" : "Hier ist die Zusammenfassung"} für **${kuerzel}** aus ${anzahl === 1 ? "einer Notiz" : `${anzahl} Notizen`}. Du kannst ${art === "verlauf" ? "ihn" : "sie"} als PDF speichern.`;
@@ -453,7 +476,7 @@
     const hat = (re) => re.test(t);
     if (hat(/diagnose|empfiehl|empfehl|welche übung(en)? soll|was soll (ich|er|sie)|therapievorschlag|prognose|ist das (schlimm|normal)|was fehlt (ihm|ihr)/)) return { art: "rat" };
     if (kuerzel && t.length > 40 && hat(/notiz für|diktat|dokumentier|schreib.*notiz|neue notiz|behandlung (heute|eben)/)) return { art: "entwurf", kuerzel };
-    if (hat(/bericht|zusammenfass|verlauf (von|für)|fass .* zusammen/)) return { art: "bericht", kuerzel, berichtArt: hat(/zusammenfass/) ? "zusammenfassung" : "verlauf" };
+    if (hat(/bericht|zusammenfass|verlauf (von|für)|fasse? .*zusammen/)) return { art: "bericht", kuerzel, berichtArt: hat(/zusammenfass|fasse? .*zusammen/) ? "zusammenfassung" : "verlauf" };
     if (hat(/\bheute\b|steht an|tagesüberblick|überblick|termin/)) return { art: "heute" };
     if (kuerzel && hat(/hausaufgabe|heimübung|zu ?hause/)) return { art: "hausaufgaben", kuerzel };
     if (kuerzel && hat(/wollte|anliegen|beschwerde|gesagt|berichtet|erzählt|wie geht/)) return { art: "anliegen", kuerzel };
@@ -461,9 +484,18 @@
     const praxis = PRAXIS.find((x) => x.muster.test(t));
     if (praxis) return { art: "praxis", text: praxis.text };
     if (hat(/^(hallo|hi|hey|guten (morgen|tag|abend)|servus|moin|grüß)/)) return { art: "hallo" };
-    if (hat(/wer bist du|was kannst du|wie funktionierst|\bhilfe\b/)) return { art: "hilfe" };
+    const kurz = t.length <= 40; // Smalltalk nur bei kurzen Nachrichten – sonst ist es eine Frage
+    if (kurz && hat(/\b(danke|dankeschön|merci|super|prima|klasse|perfekt|top)\b|vielen dank/)) return { art: "danke" };
+    if (kurz && hat(/\b(tschüss|tschüs|ciao|bye)\b|bis (morgen|später|bald|dann)|schönen (abend|tag|feierabend)|gute nacht/)) return { art: "tschuess" };
+    if (kurz && hat(/wie geht('?s| es) (dir|ihnen)|wie läuft('?s| es) bei dir/)) return { art: "befinden" };
+    if (hat(/wer bist du|wer ist gabi(?!\s*diem)|was kannst du|wie funktionierst|\bhilfe\b/)) return { art: "hilfe" };
     const woerter = suchwoerter(t.replace(FUELLWOERTER, " "));
-    if (woerter.length) return { art: "suche", suchbegriff: woerter.join(" ") };
+    if (woerter.length) {
+      // für die Antwort so geschrieben, wie getippt (Suche selbst ist unabhängig von Groß-/Kleinschreibung)
+      const roh = String(text || "");
+      const anzeige = woerter.map((w) => { const i = roh.toLowerCase().indexOf(w); return i >= 0 ? roh.slice(i, i + w.length) : w; }).join(" ");
+      return { art: "suche", suchbegriff: woerter.join(" "), anzeige };
+    }
     return { art: "unbekannt" };
   }
 
@@ -483,6 +515,9 @@
     rat: "Das entscheidest du als Therapeutin oder Therapeut – Diagnosen und Empfehlungen gebe ich nicht. Ich kann dir aber zeigen, was in den Notizen steht, zum Beispiel mit „Letzte Notiz von TP-01“.",
     hallo: "Hallo! Ich bin Gabi. Ich bereite Behandlungsnotizen vor, suche in deinen Notizen, schreibe Berichte und beantworte Fragen zur Praxis. Womit fangen wir an?",
     hilfe: "Ich bin Gabi, die Assistenz für PhysioWorks. Ich kann:\n- eine Behandlung aus deinem Diktat als Notiz vorbereiten\n- Notizen durchsuchen, z. B. „Was wollte TP-01?“\n- Verlaufsberichte und Zusammenfassungen als PDF erstellen\n- Fragen zur Praxis beantworten, z. B. „Wo sind die Standorte?“",
+    danke: "Gern! Sag Bescheid, wenn du noch etwas brauchst.",
+    tschuess: "Bis bald!",
+    befinden: "Danke der Nachfrage – mir geht's gut. Womit kann ich dir helfen?",
     unbekannt: "Dazu habe ich nichts gespeichert. Im Demo-Modus verstehe ich einfache Fragen – probier zum Beispiel „Was wollte TP-01?“, „Hausaufgaben von TP-02“ oder „Wo sind die Standorte?“.",
   };
 
@@ -500,13 +535,13 @@
     const kuerzelListe = ((patienten.ergebnis && patienten.ergebnis.patienten) || []).map((p) => p.kuerzel);
     const a = absichtErkennen(letzte, kuerzelListe);
 
-    if (a.art === "rat" || a.art === "hallo" || a.art === "hilfe" || a.art === "unbekannt") { await warte(450); return sag(ANTWORT[a.art]); }
+    if (["rat", "hallo", "hilfe", "danke", "tschuess", "befinden", "unbekannt"].includes(a.art)) { await warte(450); return sag(ANTWORT[a.art]); }
     if (a.art === "praxis") { await warte(450); return sag(a.text); }
 
     if (a.art === "heute") {
       const r = await nutze("heute_ueberblick", {});
       const e = r.ergebnis;
-      const teile = [`Heute ist ${e.heute.split(" um ")[0]}. Einen Kalender habe ich noch nicht – Termine kommen mit der Anbindung an die Praxissoftware.`];
+      const teile = [`Heute ist ${e.heute.split(" um ")[0]}. Termine und Kalender sind in der Testversion noch nicht angebunden.`];
       teile.push(e.notizen_heute.length
         ? `Heute gespeichert:\n${liste(e.notizen_heute.map((n) => `**${n.kuerzel}**, ${n.datum.split(", ").pop()} Uhr`))}`
         : "Heute ist noch keine Notiz gespeichert.");
@@ -536,7 +571,7 @@
         const passend = ALLE.flatMap((x) => n[x] || []).find((p) => p.toLowerCase().includes(wort)) || ALLE.flatMap((x) => n[x] || [])[0] || "";
         return `**${n.kuerzel}**, ${datumAus(n)}: ${passend}`;
       });
-      return sag(`Ich habe ${e.gefunden === 1 ? "eine Notiz" : `${e.gefunden} Notizen`} zu „${a.suchbegriff}“ gefunden:\n${liste(zeilen)}`);
+      return sag(`Ich habe ${e.gefunden === 1 ? "eine Notiz" : `${e.gefunden} Notizen`} zu „${a.anzeige || a.suchbegriff}“ gefunden:\n${liste(zeilen)}`);
     }
 
     // anliegen, hausaufgaben, letzte: die neuesten Notizen des Patienten
@@ -637,8 +672,8 @@
         }
         // passend zum Test-Patienten (Knie, Schulter, sonst HWS) – ohne Angabe der Reihe nach
         const fuer = frisch.patienten.find((x) => x.kuerzel === url.searchParams.get("patient"));
-        const passend = fuer ? (/knie/i.test(fuer.pseudonym) ? 0 : /schulter/i.test(fuer.pseudonym) ? 1 : 2) : -1;
-        const diktat = DIKTATE[passend >= 0 ? passend : frisch.diktat % DIKTATE.length];
+        const passend = fuer ? DIKTAT_MUSTER.findIndex((re) => re.test(fuer.pseudonym || "")) : -1;
+        const diktat = DIKTATE[passend >= 0 ? passend : fuer ? DIKTATE.length - 1 : frisch.diktat % DIKTATE.length];
         frisch.diktat++;
         merken(frisch);
         return { text: diktat.rohtext };

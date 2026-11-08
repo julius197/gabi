@@ -14,6 +14,8 @@ Adresse: **https://gabi.automatilabs.de** (Branch `main`, v2 seit 08.11.2026) ·
 
 > **Neue Version veröffentlichen:** in `index.html` die Kennung `?v=…` an `style.css` und allen eigenen Skripten hochzählen –
 > GitHub Pages lässt Dateien 10 Minuten im Browser-Cache, sonst mischen sich alte und neue Dateien.
+> Pages liefert nur die App aus: Notizen, Worker, Tests und Screenshots stehen in `_config.yml` unter `exclude` –
+> neue Dateien oder Ordner, die nicht zur App gehören, dort ergänzen.
 
 ## Aufbau
 

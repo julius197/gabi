@@ -73,7 +73,7 @@ async function codeStimmt(ist, soll) {
 }
 
 const zuViele = (warteS, text = "Zu viele Anfragen.") =>
-  new HttpFehler(429, `${text} Bitte in ${warteS >= 90 ? `${Math.ceil(warteS / 60)} Minuten` : `${warteS} Sekunden`} noch einmal versuchen.`, { "Retry-After": String(warteS) });
+  new HttpFehler(429, `${text} Bitte in ${warteS >= 90 ? `${Math.ceil(warteS / 60)} Minuten` : warteS === 1 ? "1 Sekunde" : `${warteS} Sekunden`} noch einmal versuchen.`, { "Retry-After": String(warteS) });
 
 function laengePruefen(request, max, meldung) {
   const laenge = Number(request.headers.get("Content-Length") || 0);
@@ -297,7 +297,7 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
             if (r.fehler && r.technisch) throw new ChatFehler(r.meldung);
             if (r.fehler) { senden({ t: "text", d: r.meldung }); return; } // fachlicher Hinweis: normale Antwort
             const n = r.ergebnis.unklar.length;
-            senden({ t: "text", d: `Hier ist dein Entwurf für **${patient.kuerzel}**. Prüf ihn kurz – gespeichert wird erst, wenn du auf „Speichern“ tippst.${n ? ` ${n === 1 ? "Eine Stelle habe ich" : `${n} Stellen habe ich`} als „(unklar)“ markiert.` : ""}` });
+            senden({ t: "text", d: `Hier ist dein Entwurf für **${patient.kuerzel}**. Prüf ihn kurz – gespeichert wird erst, wenn du auf „Speichern“ tippst.${n ? ` ${n === 1 ? "Schau dir bitte den Punkt unter „Bitte prüfen“ an." : `Schau dir bitte die ${n} Punkte unter „Bitte prüfen“ an.`}` : ""}` });
             return;
           }
           const r = await werkzeuge.ausfuehren("bericht_erstellen", { kuerzel: patient.kuerzel, art: anfrage.aktion.art }, { ...kontext, senden });

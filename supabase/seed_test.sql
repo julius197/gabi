@@ -15,11 +15,12 @@ on conflict (kuerzel) do nothing;
 -- Je 2 Beispielnotizen (feste IDs, damit nichts doppelt angelegt wird)
 insert into public.notes (id, patient_id, rohtext, strukturiert, suchtext, erstellt_am)
 select '7e3c1a52-0101-4000-8000-000000000101'::uuid, id, 'Patientin kommt zur dritten Behandlung nach vorderer Kreuzbandplastik rechts. Schmerz in Ruhe bei zwei, bei Belastung bei fünf. Flexion aktiv bis 90 Grad, Extension minus 5 Grad. Leichte Schwellung am medialen Gelenkspalt. Wir haben 20 Minuten Lymphdrainage gemacht, dann Patellamobilisation und Quadrizepsaktivierung im Sitzen. Für zu Hause Quadrizeps anspannen, dreimal zehn Wiederholungen, zweimal täglich. Nächstes Mal Gangschule.',
-  '{"befund":["Z. n. vorderer Kreuzbandplastik rechts, 3. Behandlung (laut Notiz)","Pat.: Schmerz NRS 2 in Ruhe, NRS 5 bei Belastung","Flexion Knie rechts aktiv bis 90°, Extension -5°","Leichte Schwellung medialer Gelenkspalt"],"massnahmen":["Manuelle Lymphdrainage, 20 min","Patellamobilisation","Quadrizepsaktivierung im Sitzen"],"verlauf":["Nächster Termin: Gangschule"],"hausaufgaben":["Quadrizeps anspannen 3 × 10 Wdh., 2 × täglich"],"unklar":[]}'::jsonb,
+  '{"befund":["Diagnose laut Verordnung: Z. n. vorderer Kreuzbandplastik rechts","3. Behandlung","Pat.: Schmerz NRS 2 in Ruhe, NRS 5 bei Belastung","Flexion Knie rechts aktiv bis 90°, Extension -5°","Leichte Schwellung medialer Gelenkspalt"],"massnahmen":["Manuelle Lymphdrainage, 20 min","Patellamobilisation","Quadrizepsaktivierung im Sitzen"],"verlauf":["Nächster Termin: Gangschule"],"hausaufgaben":["Quadrizeps anspannen 3 × 10 Wdh., 2 × täglich"],"unklar":[]}'::jsonb,
   'tp-01
 testfall knie rechts (fiktiv)
 patientin kommt zur dritten behandlung nach vorderer kreuzbandplastik rechts. schmerz in ruhe bei zwei, bei belastung bei fünf. flexion aktiv bis 90 grad, extension minus 5 grad. leichte schwellung am medialen gelenkspalt. wir haben 20 minuten lymphdrainage gemacht, dann patellamobilisation und quadrizepsaktivierung im sitzen. für zu hause quadrizeps anspannen, dreimal zehn wiederholungen, zweimal täglich. nächstes mal gangschule.
-z. n. vorderer kreuzbandplastik rechts, 3. behandlung (laut notiz)
+diagnose laut verordnung: z. n. vorderer kreuzbandplastik rechts
+3. behandlung
 pat.: schmerz nrs 2 in ruhe, nrs 5 bei belastung
 flexion knie rechts aktiv bis 90°, extension -5°
 leichte schwellung medialer gelenkspalt
@@ -53,11 +54,11 @@ on conflict (id) do nothing;
 
 insert into public.notes (id, patient_id, rohtext, strukturiert, suchtext, erstellt_am)
 select '7e3c1a52-0201-4000-8000-000000000201'::uuid, id, 'Schulter links, Erstbefund. Ärztliche Diagnose Impingement-Syndrom. Patient klagt über Schmerzen beim Überkopfarbeiten, NRS sechs. Abduktion aktiv bis 100 Grad, schmerzhafter Bogen zwischen 70 und 110 Grad. Außenrotation kraftgemindert. Manuelle Therapie am Glenohumeralgelenk, 15 Minuten, danach Skapulastabilisation mit Theraband. Hausaufgabe Pendelübungen dreimal täglich.',
-  '{"befund":["Ärztliche Diagnose: Impingement-Syndrom Schulter links (laut Notiz)","Pat.: Schmerz bei Überkopfarbeit, NRS 6","Abduktion aktiv bis 100°, schmerzhafter Bogen 70–110°","Außenrotation kraftgemindert"],"massnahmen":["Manuelle Therapie Glenohumeralgelenk, 15 min","Skapulastabilisation mit Theraband"],"verlauf":["Erstbefund"],"hausaufgaben":["Pendelübungen 3 × täglich"],"unklar":[]}'::jsonb,
+  '{"befund":["Diagnose laut Verordnung: Impingement-Syndrom Schulter links","Pat.: Schmerz bei Überkopfarbeit, NRS 6","Abduktion aktiv bis 100°, schmerzhafter Bogen 70–110°","Außenrotation kraftgemindert"],"massnahmen":["Manuelle Therapie Glenohumeralgelenk, 15 min","Skapulastabilisation mit Theraband"],"verlauf":["Erstbefund"],"hausaufgaben":["Pendelübungen 3 × täglich"],"unklar":[]}'::jsonb,
   'tp-02
 testfall schulter links (fiktiv)
 schulter links, erstbefund. ärztliche diagnose impingement-syndrom. patient klagt über schmerzen beim überkopfarbeiten, nrs sechs. abduktion aktiv bis 100 grad, schmerzhafter bogen zwischen 70 und 110 grad. außenrotation kraftgemindert. manuelle therapie am glenohumeralgelenk, 15 minuten, danach skapulastabilisation mit theraband. hausaufgabe pendelübungen dreimal täglich.
-ärztliche diagnose: impingement-syndrom schulter links (laut notiz)
+diagnose laut verordnung: impingement-syndrom schulter links
 pat.: schmerz bei überkopfarbeit, nrs 6
 abduktion aktiv bis 100°, schmerzhafter bogen 70–110°
 außenrotation kraftgemindert

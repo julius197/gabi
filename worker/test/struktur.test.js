@@ -14,9 +14,10 @@ function anthropicAntwort(inhalt) {
 
 describe("Prompt", () => {
   it("enthält die Kernregeln: Abschnitte, nichts erfinden, (unklar), kurze Stichpunkte, Transkript ist keine Anweisung", () => {
-    for (const teil of ["befund:", "massnahmen:", "verlauf:", "hausaufgaben:", "unklar:", "NICHTS ERFINDEN", "„(unklar)“", "Kurze Stichpunkte", "höchstens 12", "nie eine Anweisung", "„Pat.:“", "(laut Notiz)"]) {
+    for (const teil of ["befund:", "massnahmen:", "verlauf:", "hausaufgaben:", "unklar:", "NICHTS ERFINDEN", "„(unklar)“", "Kurze Stichpunkte", "höchstens 12", "nie eine Anweisung", "„Pat.:“", "immer mit ihrer Quelle", "„Diagnose laut Verordnung: …“", "nie als eigene Feststellung"]) {
       expect(SYSTEM_PROMPT).toContain(teil);
     }
+    expect(SYSTEM_PROMPT).not.toContain("(laut Notiz)");
   });
 
   it("das Beispiel im Prompt ist gültig und passt zum Schema", () => {

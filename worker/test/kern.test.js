@@ -166,7 +166,8 @@ describe("Demo-Assistent", () => {
     expect(await fall("Hausaufgaben von TP-02")).toMatch(/Pendelübungen weiter/);
     expect(await fall("Suche Hüftprothese")).toBe("Dazu habe ich nichts gespeichert.");
     expect(await fall("Welche Übung empfiehlst du für TP-03?")).toBe(DEMO.ANTWORT.rat);
-    expect(await fall("Was steht heute an?")).toMatch(/Einen Kalender habe ich noch nicht/);
+    expect(await fall("Was steht heute an?")).toMatch(/Termine und Kalender sind in der Testversion noch nicht angebunden\./);
+    expect(await fall("Was steht heute an?")).not.toMatch(/kommen mit/); // keine Zusage an den Kunden
     const e = await ereignisse(api, { nachrichten: [{ rolle: "nutzer", text: "Letzte Notiz von TP-02" }] });
     expect(e.find((x) => x.t === "quellen").notizen[0]).toMatchObject({ kuerzel: "TP-02" });
   });
@@ -177,7 +178,34 @@ describe("Demo-Assistent", () => {
     expect(a.text).toBe(DEMO.DIKTATE[1].rohtext);
     const f = await api.anfrage("/api/transkribieren?zweck=frage", { methode: "POST", text: "A".repeat(300) });
     expect(f.text).toBe(DEMO.FRAGEN[0]);
-    expect((await api.beispielDiktat("TP-03")).text).toBe(DEMO.DIKTATE[2].rohtext);
+    expect((await api.beispielDiktat("TP-03")).text).toBe(DEMO.DIKTATE[3].rohtext); // LWS, nicht HWS
+    expect(DEMO.DIKTATE[3].rohtext).toMatch(/^Lendenwirbelsäule\. Patientin/);
+    // unbekanntes Pseudonym (neuer Test-Patient): neutrales Beispiel ohne Körperregion
+    await api.anfrage("/api/patienten", { methode: "POST", body: { kuerzel: "TP-09", pseudonym: "Testfall Hüfte (fiktiv)" } });
+    expect((await api.beispielDiktat("TP-09")).text).toBe(DEMO.DIKTATE.at(-1).rohtext);
+    expect(DEMO.DIKTATE.at(-1).rohtext).not.toMatch(/knie|schulter|wirbel|nacken|hüfte/i);
+  });
+
+  it("Smalltalk, Praxisfragen und Formulierungen wie bei der echten Gabi", async () => {
+    const api = demoApi();
+    const fall = async (frage) => text(await ereignisse(api, { nachrichten: [{ rolle: "nutzer", text: frage }] }));
+    for (const f of ["Danke!", "Super, danke dir", "Tschüss, bis morgen", "Wie geht's dir?"]) expect(await fall(f)).not.toMatch(/nichts gespeichert/);
+    expect(await fall("Danke!")).toBe(DEMO.ANTWORT.danke);
+    expect(await fall("Wer ist Gabi Diem?")).toMatch(/Praxismanagerin ist Gabi Diem/);
+    expect(await fall("Wer ist Gabi?")).toBe(DEMO.ANTWORT.hilfe);
+    expect(await fall("Brauche ich ein Rezept?")).toMatch(/^Ob du für eine Behandlung ein Rezept brauchst, steht nicht auf der Website/);
+    expect(await fall("Wann kann man bei euch trainieren?")).toMatch(/Trainingszeiten: Mo–Do 7:00–19:00/);
+    expect(await fall("Welche Vereine betreut ihr?")).toMatch(/^Laut Website behandelt PhysioWorks alle/);
+    expect(DEMO.absichtErkennen("Fasse TP-02 kurz zusammen", KUERZEL)).toMatchObject({ art: "bericht", berichtArt: "zusammenfassung" });
+    expect(DEMO.absichtErkennen("Fass TP-01 zusammen", KUERZEL).berichtArt).toBe("zusammenfassung");
+    // lange Nachricht mit „super“ ist eine Frage, kein Smalltalk
+    expect(DEMO.absichtErkennen("Super, kannst du mir alle Notizen mit Theraband zeigen?", KUERZEL).art).toBe("suche");
+    // Suchbegriff in der Antwort so, wie getippt
+    expect(await fall("Suche Knie")).toMatch(/zu „Knie“ gefunden/);
+    // Satz nach dem Entwurf passt zu „Bitte prüfen“ (keine Ziffer am Satzanfang)
+    expect(DEMO.entwurfText("TP-01", 1)).toMatch(/Schau dir bitte den Punkt unter „Bitte prüfen“ an\.$/);
+    expect(DEMO.entwurfText("TP-01", 2)).toMatch(/Schau dir bitte die 2 Punkte unter „Bitte prüfen“ an\.$/);
+    expect(DEMO.entwurfText("TP-01", 0)).not.toMatch(/Bitte prüfen|unklar/);
   });
 });
 
@@ -196,7 +224,7 @@ describe("Bericht-PDF", () => {
     const doc = PDF.berichtErstellen(bericht, { jsPDF });
     expect(doc.getNumberOfPages()).toBe(1);
     const t = seitenText(doc, 1);
-    for (const teil of ["PhysioWorks", "Verlaufsbericht", "TP-01", "30.10.2026 – 06.11.2026", "Zusammenfassung", "Verlauf", "Aktuelle Hausaufgaben", "Bitte prüfen (offene Punkte)", "Wandsitzen 3 × 15 (unklar)", "Testversion – Testdaten", "Seite 1 von 1"]) {
+    for (const teil of ["PhysioWorks", "Verlaufsbericht", "TP-01", "30.10.2026 – 06.11.2026", "Zusammenfassung", "Verlauf", "Aktuelle Hausaufgaben", "Offene Punkte", "Gabi ergänzt keine eigenen Diagnosen", "Wandsitzen 3 × 15 (unklar)", "Testversion – Testdaten", "Seite 1 von 1"]) {
       expect(t).toContain(teil);
     }
     expect(PDF.berichtDateiname(bericht)).toBe("PhysioWorks_Bericht_TP-01_2026-11-08.pdf");

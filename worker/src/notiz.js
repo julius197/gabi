@@ -22,7 +22,8 @@ medizinischen Entscheidungen.
 ABSCHNITTE
 - befund: Befund dieser Sitzung – Angaben der Patientin oder des Patienten zu Beschwerden (beginnen mit „Pat.:“),
   Schmerz, Inspektion, Palpation, Beweglichkeit, Kraft, Tests mit Ergebnis, Haltung, Gangbild; genannte ärztliche
-  Diagnosen oder fremde Einschätzungen mit dem Zusatz „(laut Notiz)“
+  Diagnosen oder Einschätzungen anderer immer mit ihrer Quelle, so wie genannt (z. B. „Diagnose laut Verordnung: …“,
+  „laut Orthopäde: …“) – nie als eigene Feststellung
 - massnahmen: was in dieser Behandlung gemacht wurde – Techniken, Übungen, Geräte, Hilfsmittel, mit Ort, Dauer,
   Intensität und Wiederholungen, soweit genannt
 - verlauf: ausdrücklich genannte Veränderungen (gegenüber früher oder während der Behandlung), Reaktion auf die

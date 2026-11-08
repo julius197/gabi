@@ -76,7 +76,7 @@ Nur Testdaten. Selbstständig gearbeitet, Entscheidungen unten.
 | Kontraste | alle Texte ≥ 4,5 : 1 (WCAG AA) in Hell und Dunkel – Fließtext 13 : 1 bzw. 16 : 1, Knöpfe 5,5 : 1 bzw. 7,8 : 1, „(unklar)“ 6,1 : 1 |
 | Worker-Build | `wrangler deploy --dry-run` baut (942 KB, gzip 173 KB) |
 | Code-Review | unabhängiger Review (zweiter Agent) – Funde und Behebung siehe unten |
-| Live | Worker 2.0.0 deployt (08.11.2026, nach allen grünen Tests): `/api/status` → `bereit: true`, Funktionen notizen/chat/bericht; fremde Herkunft 403, ohne Zugangscode 401, CORS-Vorabfrage für /api/chat 204, falsche Methode 405; v1-Routen unverändert (401 ohne Code), Live-Seite (v1) erreichbar. Oberfläche v2 **nicht** deployt |
+| Live | **v2 live seit 08.11.2026, 18:00** (auf „Ja, live schalten“): `main` per Fast-Forward auf `22d8ad1`, GitHub Pages gebaut 18:00:41. Worker 2.0.0 mit den Live-Gang-Korrekturen neu deployt: `/api/status` → `bereit: true`; fremde Herkunft 403, CORS-Vorabfrage 204, falsche Methode 405, ohne Zugangscode 401. Alle 12 ausgelieferten Dateien (unter den Adressen mit `?v=`) identisch mit `main`, 200 und richtige Typen. Danach Live-Prüfung (Workflow, fünf Blickwinkel + Gegenprüfung), siehe „Live-Gang“ |
 
 ## Review-Funde (unabhängiger Code-Review) und Behebung
 
@@ -144,14 +144,34 @@ Bewusst nicht gemacht: dauerhafte Worker-Logs (`[observability]`) – das speich
 Datenschutz-Entscheidung für Julius; `npx wrangler tail` zeigt Fehler live auch ohne. Die localhost-Freigabe im Worker bleibt,
 damit `npm run vorschau` gegen den Live-Worker funktioniert.
 
+**Live-Prüfung nach dem Umschalten** (Workflow mit fünf Blickwinkeln – Technik, iPhone, Laptop, Übergang v1 → v2,
+Texte aus Kundensicht – und je einer Gegenprüfung; strikt ohne Zugangscode und ohne /api-Anfragen außer `/api/status`,
+weil der Worker jede Anfrage ohne richtigen Code als Fehlversuch für die IP zählt). Umgesetzt (`?v=2.0.1`):
+
+| Fund | Umsetzung |
+|---|---|
+| Unter gabi.automatilabs.de waren auch interne Notizen (Log, README, MORGEN/NACHTLOG), Worker-Quellen, Tests und Screenshots abrufbar (`.nojekyll` → Pages lieferte alles aus) | `_config.yml` mit `exclude` statt `.nojekyll` – Pages liefert nur noch die App; das öffentliche Repo bleibt, wie es ist |
+| App lief eingebettet in fremden Seiten (GitHub Pages kann kein `frame-ancestors`/HSTS setzen) | startet in einem fremden Rahmen nicht, zeigt nur „Gabi in einem eigenen Tab öffnen“; HSTS bleibt eine Grenze von GitHub Pages |
+| Demo: TP-03 (LWS, Patientin) bekam ein HWS-Diktat; neue Test-Patienten auch | eigenes LWS-Beispiel, neutrales Beispiel für unbekannte Beschreibungen |
+| Satz nach dem Entwurf „Eine Stelle habe ich als „(unklar)“ markiert.“ stimmte oft nicht (gezählt werden die Punkte unter „Bitte prüfen“) | „Schau dir bitte den Punkt / die N Punkte unter „Bitte prüfen“ an.“ – Worker und Demo gleich |
+| Demo: „Danke“, „Tschüss“, „Wie geht's dir?“ → „Dazu habe ich nichts gespeichert.“; „Wer ist Gabi Diem?“, Rezept, Trainingszeiten, Vereine falsch oder vorbei beantwortet; „Fasse … zusammen“ ergab Verlaufsbericht | eigene kurze Antworten; Muster und Texte aus dem Praxiswissen ergänzt (Rezept: „steht nicht auf der Website“) |
+| Demo sagte nirgends, dass die Antworten vorbereitet sind | Zugang, Seitenleiste und Info-Dialog: „vorbereitete Antworten, ohne KI“ |
+| Demo „Was steht heute an?“ klang nach Zusage („Termine kommen mit der Anbindung …“) | „Termine und Kalender sind in der Testversion noch nicht angebunden.“ |
+| „(laut Notiz)“ hinter Diagnosen (aus Notara) – für Physios unverständlich; PDF sagte „ohne Diagnosen“ über einer Diagnose | Prompt: ärztliche Diagnosen immer mit Quelle („Diagnose laut Verordnung: …“), nie als eigene Feststellung; PDF: „Gabi ergänzt keine eigenen Diagnosen oder Empfehlungen“ |
+| Kleine Texte: „bearbeitet Heute“, „Sichern“ neben „Speichern“, „Erneut“ neben „Nochmal versuchen“, „in 1 Sekunden“, „Gabi ist ausgelastet“ in Gabis eigener Blase, „(?)“, doppelte Klammern im kopierten Bericht, „gefunden zu …“, Suchbegriff klein, „Bitte prüfen (offene Punkte)“ im PDF, „Quellen“ zeigte alle gefundenen Notizen | korrigiert; Überschrift heißt jetzt „Gefundene Notizen“ |
+
+Bewusst gelassen: englische Fehlernamen bei Mikrofonproblemen (helfen bei der Fehlersuche), „Test-Patient“ im
+Ordnerkopf (kein Platz bei 320 px), kontextabhängige Platzhalter.
+
 **Rückweg zu v1** (falls der echte Claude-Weg am Montag hakt): `git revert --no-commit e9968ff..HEAD && git commit -m "Zurück zu v1"`
 und pushen – der Worker 2.0 bleibt und bedient v1 weiter, Browser-Speicher von v1 und v2 vertragen sich.
 
 ## Offen
 
-1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht): lokal fehlt der Schlüssel, live
-   fehlt mir der Zugangscode. Getestet ist alles gegen eine nachgebaute Anthropic-API. → Julius: `npm run vorschau`
-   und mit dem echten Code ein paar Fragen stellen (siehe README).
+1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
+   Schlüssel, live fehlt mir der Zugangscode. Getestet ist alles gegen eine nachgebaute Anthropic-API. → Julius: auf
+   https://gabi.automatilabs.de mit dem echten Code eine freie Frage, einen Bericht und ein Diktat; parallel zeigt
+   `cd worker && npx wrangler tail` Fehler (nur Status, Art, Request-ID – keine Inhalte).
 2. **Cloudflare-Tarif prüfen**: Im Gratis-Tarif gibt es 10 ms CPU je Anfrage. Das Gespräch liest einen Antwortstrom;
    das sollte reichen, ist aber live noch nicht gemessen. Falls Antworten abbrechen: Workers Paid (5 $/Monat).
 3. **Echtes iPhone**: Push-to-Talk, Tastatur und das unten klebende Eingabefeld nur in der Safari-Engine und mit
@@ -160,6 +180,5 @@ und pushen – der Worker 2.0 bleibt und bedient v1 weiter, Browser-Speicher von
    Praxen, welche Leistung an welchem Standort, Preis und Ort Youngster Training, wer Akupunktur macht, Preise und Rezept.
 5. **Geschwindigkeit**: Opus 5.5 mit effort „low“. Falls es im Alltag zu langsam wirkt, wäre Sonnet 5.5 die schnellere
    Wahl – Entscheidung bei Julius.
-6. **Merge auf `main`** erst nach Julius' Test (dann zeigt GitHub Pages v2). Der Worker 2.0 ist mit der v1-Oberfläche
-   kompatibel.
+6. ~~Merge auf `main`~~ – erledigt am 08.11.2026 (v2 live). Rückweg zu v1 siehe „Live-Gang“.
 7. Später: Terminkalender/Praxissoftware (Baustein 2), Chatverlauf über die Sitzung hinaus, Konten statt gemeinsamem Code.

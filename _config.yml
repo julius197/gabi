@@ -1,0 +1,13 @@
+# GitHub Pages (Jekyll): nur die App ausliefern. Projektnotizen, Worker-Quellen, Tests und Screenshots bleiben im
+# öffentlichen Repo, sind unter gabi.automatilabs.de aber nicht abrufbar. Dateien ohne Front Matter (alle App-Dateien)
+# liefert Jekyll unverändert aus. Neue Notizen oder Ordner, die nicht zur App gehören, hier eintragen.
+exclude:
+  - README.md
+  - GABI-V2-LOG.md
+  - MORGEN.md
+  - NACHTLOG.md
+  - knowledge
+  - supabase
+  - tests
+  - worker
+  - screenshots

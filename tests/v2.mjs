@@ -182,7 +182,7 @@ async function demoAblauf(geraet, schema) {
   await page.waitForSelector(".patient-karte");
   await bild("07", "notizen");
   await page.fill("#suche", "theraband");
-  await page.waitForFunction(() => /2 Notizen gefunden/.test(document.querySelector("#ordner-inhalt").textContent));
+  await page.waitForFunction(() => /2 Notizen zu „[^“]+“ gefunden/.test(document.querySelector("#ordner-inhalt").textContent));
   await page.fill("#suche", "xyzabc");
   await page.waitForSelector('#ordner-inhalt [data-ordner="suche-loeschen"]');
   await page.click('#ordner-inhalt [data-ordner="suche-loeschen"]');

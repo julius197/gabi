@@ -417,11 +417,11 @@ export function kiFehler(e, wo = "gespraech") {
   if (e instanceof ChatFehler || e instanceof StrukturFehler) return e;
   kiFehlerLoggen(e, wo);
   if (e instanceof Anthropic.AuthenticationError) return new ChatFehler("Anthropic-Schlüssel ungültig.");
-  if (e instanceof Anthropic.RateLimitError) return new ChatFehler("Gabi ist gerade ausgelastet. Bitte gleich noch einmal versuchen.");
+  if (e instanceof Anthropic.RateLimitError) return new ChatFehler("Ich bin gerade ausgelastet. Bitte gleich noch einmal versuchen.");
   if (e instanceof Anthropic.APIConnectionTimeoutError) return new ChatFehler("Die KI antwortet gerade zu langsam. Bitte noch einmal versuchen.");
   if (e instanceof Anthropic.APIConnectionError) return new ChatFehler("KI-Dienst nicht erreichbar.");
   if (e instanceof Anthropic.APIUserAbortError) return new ChatFehler("Abgebrochen.");
-  if (e instanceof Anthropic.APIError) return new ChatFehler(`KI-Dienst antwortet nicht (${e.status ?? "?"}).`);
+  if (e instanceof Anthropic.APIError) return new ChatFehler(e.status ? `KI-Dienst antwortet nicht (${e.status}).` : "KI-Dienst antwortet nicht.");
   return e;
 }
 

@@ -6,6 +6,17 @@
   "use strict";
 
   // Übergang v1 → v2: alte Seite (noch im Browser-Cache) mit neuem Skript → einmal frisch laden, dann ist alles v2
+  if (window.top !== window.self) {
+    // in einer fremden Seite eingebettet: nicht starten, nur ein Link zum Öffnen im eigenen Tab
+    const link = document.createElement("a");
+    link.href = location.href;
+    link.target = "_top";
+    link.rel = "noopener";
+    link.className = "knopf primaer";
+    link.textContent = "Gabi in einem eigenen Tab öffnen";
+    document.body.replaceChildren(link);
+    return;
+  }
   if (!document.getElementById("ansicht-chat") || !window.GabiKern) {
     try {
       if (!sessionStorage.getItem("gabi.frisch-geladen")) {
@@ -268,9 +279,9 @@
   });
 
   const DEMO_TEXTE = {
-    param: "Demo-Modus mit Beispieldaten – nichts geht an einen Server.",
-    "nicht-erreichbar": "Server nicht erreichbar – Gabi läuft im Demo-Modus mit Beispieldaten.",
-    "nicht-eingerichtet": "Server noch nicht eingerichtet – Gabi läuft im Demo-Modus mit Beispieldaten.",
+    param: "Demo mit Beispieldaten und vorbereiteten Antworten (ohne KI) – nichts geht an einen Server.",
+    "nicht-erreichbar": "Server nicht erreichbar – Gabi läuft im Demo-Modus mit Beispieldaten und vorbereiteten Antworten.",
+    "nicht-eingerichtet": "Server noch nicht eingerichtet – Gabi läuft im Demo-Modus mit Beispieldaten und vorbereiteten Antworten.",
   };
 
   async function statusHolen() {
@@ -342,6 +353,8 @@
 
   // Info-Dialog (Badge „Testversion“ / „Demo“)
   el.testBadge.addEventListener("click", () => {
+    const demoPunkt = document.getElementById("info-demo");
+    if (demoPunkt) demoPunkt.hidden = !modus.demo;
     el.infoTitel.textContent = modus.demo ? "Demo-Modus" : "Testversion";
     el.infoZuruecksetzen.hidden = !modus.demo;
     el.infoVerbinden.hidden = !modus.demo;
@@ -385,7 +398,7 @@
     if (ziel !== roh) history.replaceState(null, "", ziel);
     routeLaeuft = true;
     try {
-      if (ziel !== letzterHash && ordner.geaendert && !(await frage("Änderungen verwerfen?", "Du hast die Notiz bearbeitet, aber noch nicht gesichert.", { ja: "Verwerfen", nein: "Weiter bearbeiten", gefahr: true }))) {
+      if (ziel !== letzterHash && ordner.geaendert && !(await frage("Änderungen verwerfen?", "Du hast die Notiz bearbeitet, aber noch nicht gespeichert.", { ja: "Verwerfen", nein: "Weiter bearbeiten", gefahr: true }))) {
         history.replaceState(null, "", letzterHash);
         return;
       }
@@ -545,7 +558,7 @@
     if (n.text) teile.push(`<div class="nachricht-text${n.laeuft ? " laeuft" : ""}">${K.formatierterText(n.text)}</div>`);
     for (const k of n.karten || []) teile.push(karteHtml(n, k));
     if (n.quellen && n.quellen.length) {
-      teile.push(`<div class="quellen"><span class="augenbraue">Quellen</span>${n.quellen.slice(0, 6).map((q) => `<a class="quelle" href="#/notizen/n/${esc(q.id)}">${symbol("dokument")}${esc(q.kuerzel)} · ${esc(K.datumKurz(q.erstellt_am))}</a>`).join("")}</div>`);
+      teile.push(`<div class="quellen"><span class="augenbraue">Gefundene Notizen</span>${n.quellen.slice(0, 6).map((q) => `<a class="quelle" href="#/notizen/n/${esc(q.id)}">${symbol("dokument")}${esc(q.kuerzel)} · ${esc(K.datumKurz(q.erstellt_am))}</a>`).join("")}</div>`);
     }
     if (n.fehler) {
       teile.push(`<div class="hinweis-box"><div class="hinweis-box-kopf">${symbol("warn")}<span>${esc(n.fehlerText || "Da ist etwas schiefgegangen.")}</span></div>${n.wiederholbar ? `<div><button class="knopf sekundaer klein" type="button" data-aktion="wiederholen">${symbol("zuruecksetzen")}Nochmal versuchen</button></div>` : ""}</div>`);
@@ -880,7 +893,7 @@
   }
 
   function berichtAlsText(b) {
-    const zeilen = [`${b.titel} · ${b.kuerzel}${b.pseudonym ? ` (${b.pseudonym})` : ""}`, `${b.anzahl === 1 ? "1 Notiz" : `${b.anzahl} Notizen`} · ${zeitraum(b)}`, "", "Zusammenfassung", ...(b.zusammenfassung || []).map((p) => `- ${p}`)];
+    const zeilen = [`${b.titel} · ${b.kuerzel}${b.pseudonym ? ` · ${b.pseudonym}` : ""}`, `${b.anzahl === 1 ? "1 Notiz" : `${b.anzahl} Notizen`} · ${zeitraum(b)}`, "", "Zusammenfassung", ...(b.zusammenfassung || []).map((p) => `- ${p}`)];
     if (b.art === "verlauf") {
       zeilen.push("", "Verlauf");
       for (const v of b.verlauf || []) zeilen.push(`${K.datum(v.datum)}`, ...(v.punkte || []).map((p) => `- ${p}`));
@@ -1440,7 +1453,7 @@
       const { notizen } = await api(`/api/notizen?q=${encodeURIComponent(q)}`);
       if (nummer !== ordner.suchNummer) return; // eine neuere Suche läuft schon
       inhalt.innerHTML = notizen.length
-        ? `<div class="ergebnis-kopf"><p class="suche-hinweis">${notizen.length === 1 ? "1 Notiz gefunden" : `${notizen.length} Notizen gefunden`} zu „${esc(q)}“</p>${notizen.length > 1 ? sortierungHtml() : ""}</div><div class="notiz-liste">${sortiert(notizen).map((n) => notizKarteHtml(n, true)).join("")}</div>`
+        ? `<div class="ergebnis-kopf"><p class="suche-hinweis">${notizen.length === 1 ? "1 Notiz" : `${notizen.length} Notizen`} zu „${esc(q)}“ gefunden</p>${notizen.length > 1 ? sortierungHtml() : ""}</div><div class="notiz-liste">${sortiert(notizen).map((n) => notizKarteHtml(n, true)).join("")}</div>`
         : leerHtml({ sym: "suche", titel: "Nichts gefunden", text: `Keine Notiz enthält „${q}“.`, knopf: `<button class="knopf sekundaer" type="button" data-ordner="suche-loeschen">Suche löschen</button>` });
     } catch (f) {
       if (f instanceof Abbruch || nummer !== ordner.suchNummer) return;
@@ -1521,14 +1534,14 @@
     const unklar = K.stichpunkte(s.unklar);
     const pruefen = unklar.length && !bearbeiten ? `<section class="abschnitt pruefen"><h3 class="augenbraue">${symbol("warn", "klein")}Bitte prüfen</h3>${punkteHtml(unklar)}</section>` : "";
     const aktionen = bearbeiten
-      ? `<button class="knopf primaer klein" type="button" data-leser="sichern">${symbol("haken")}Sichern</button><button class="knopf leise klein" type="button" data-leser="abbrechen">Abbrechen</button>`
+      ? `<button class="knopf primaer klein" type="button" data-leser="sichern">${symbol("haken")}Speichern</button><button class="knopf leise klein" type="button" data-leser="abbrechen">Abbrechen</button>`
       : `<button class="knopf sekundaer klein" type="button" data-leser="bearbeiten">${symbol("stift")}Bearbeiten</button>
          <button class="knopf sekundaer klein" type="button" data-leser="pdf">${symbol("pdf")}PDF</button>
          <button class="knopf gefahr klein rechts" type="button" data-leser="loeschen">${symbol("muell")}Löschen</button>`;
     el.notizen.innerHTML = `<a class="zurueck" href="#/notizen/p/${esc(n.patient_id)}">${symbol("links")}${esc(n.kuerzel)}</a>
       <article class="leser">
         <div class="leser-kopf"><div class="titel-block"><span class="augenbraue">Behandlungsnotiz · ${esc(n.kuerzel)}</span><h1>${esc(K.datumLang(n.erstellt_am))}</h1>
-          <span class="stumm leser-zeit">${esc(n.pseudonym || "Test-Patient")}${n.geaendert_am ? ` · bearbeitet ${esc(K.wann(n.geaendert_am))}` : ""}</span></div></div>
+          <span class="stumm leser-zeit">${esc(n.pseudonym || "Test-Patient")}${n.geaendert_am ? ` · bearbeitet ${esc(K.wann(n.geaendert_am).replace(/^(Heute|Gestern)\b/, (w) => w.toLowerCase()))}` : ""}</span></div></div>
         <div class="karte mit-streifen"><div class="abschnitte">${abschnitte}${pruefen}</div></div>
         ${n.rohtext ? `<details class="original"><summary>${symbol("rechts")}Original-Diktat</summary><p>${esc(n.rohtext)}</p></details>` : ""}
         <div class="leser-aktionen">${aktionen}</div>
@@ -1574,9 +1587,9 @@
         ordner.bearbeiten = null;
         ordner.geaendert = false;
         leserZeichnen();
-        toast("Änderungen gesichert.", { art: "erfolg" });
+        toast("Änderungen gespeichert.", { art: "erfolg" });
       } catch (f) {
-        if (!(f instanceof Abbruch)) toast(`Nicht gesichert: ${f.message}`, { art: "fehler", dauer: 6000 });
+        if (!(f instanceof Abbruch)) toast(`Nicht gespeichert: ${f.message}`, { art: "fehler", dauer: 6000 });
         l.disabled = false;
       } finally {
         ordner.beschaeftigt = false;
