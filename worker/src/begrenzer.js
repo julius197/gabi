@@ -7,6 +7,7 @@ export const GRENZEN = {
   api: [300, 60_000], //                 alle anderen Anfragen: 300 pro Minute
   transkribieren: [120, 10 * 60_000], // Spracherkennung: 120 je 10 Minuten
   strukturieren: [120, 10 * 60_000], //  KI-Notiz: 120 je 10 Minuten
+  chat: [120, 10 * 60_000], //           Gespräch mit Gabi: 120 Nachrichten je 10 Minuten
   fehlversuch: [20, 15 * 60_000], //     falscher Zugangscode: 20 je 15 Minuten, danach 15 Minuten gesperrt
 };
 

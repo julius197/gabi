@@ -5,8 +5,9 @@ import { GRENZEN, erstelleBegrenzer } from "./begrenzer.js";
 import { MAX_ROHTEXT, istLeer, kuerzelPruefen, normalisieren, pseudonymPruefen, suchtext, suchwoerter } from "./notiz.js";
 import { SpeicherFehler, istUuid } from "./speicher.js";
 import { StrukturFehler } from "./strukturierung.js";
+import { ChatFehler, MAX_NACHRICHTEN, MAX_ZEICHEN_NACHRICHT, MAX_ZEICHEN_VERLAUF, erstelleWerkzeuge, kiFehler } from "./chat.js";
 
-export const VERSION = "1.1.0";
+export const VERSION = "2.0.0";
 export const MAX_AUDIO_BASE64 = 14_000_000; // ≈ 10 MB WAV ≈ 5 Minuten bei 16 kHz mono
 const MIN_AUDIO_BASE64 = 200;
 const MAX_JSON = 300_000;
@@ -17,6 +18,7 @@ const ROUTEN = [
   [/^\/api\/pruefen$/, "GET"],
   [/^\/api\/transkribieren$/, "POST"],
   [/^\/api\/strukturieren$/, "POST"],
+  [/^\/api\/chat$/, "POST"],
   [/^\/api\/patienten$/, "GET, POST"],
   [/^\/api\/notizen$/, "GET, POST"],
   [/^\/api\/notizen\/[^/]+$/, "GET, PATCH, DELETE"],
@@ -115,6 +117,74 @@ function rohtextPruefen(roh) {
   return t;
 }
 
+/**
+ * Gesprächsanfrage prüfen: { nachrichten: [{ rolle: "nutzer" | "gabi", text }], aktion?: { typ, patient_id, art } }.
+ * Ergebnis: Verlauf im Format der Anthropic-API (abwechselnd, beginnt und endet mit der Nutzerin).
+ */
+export function chatAnfrage(daten) {
+  const liste = daten.nachrichten;
+  if (!Array.isArray(liste) || !liste.length) throw new HttpFehler(400, "Keine Nachricht.");
+  if (liste.length > MAX_NACHRICHTEN) throw new HttpFehler(413, "Das Gespräch ist zu lang. Bitte ein neues Gespräch beginnen.");
+  const verlauf = [];
+  let gesamt = 0;
+  for (const n of liste) {
+    if (!n || typeof n !== "object" || Array.isArray(n) || !["nutzer", "gabi"].includes(n.rolle)) throw new HttpFehler(400, "Ungültige Nachricht.");
+    const text = textFeld(n.text, "text").replace(/\r\n?/g, "\n").trim();
+    if (text.length > MAX_ZEICHEN_NACHRICHT) throw new HttpFehler(413, "Nachricht zu lang.");
+    gesamt += text.length;
+    if (!text) continue;
+    const role = n.rolle === "nutzer" ? "user" : "assistant";
+    if (!verlauf.length && role === "assistant") continue; // Begrüßung o. Ä. vor der ersten Frage
+    const letzte = verlauf[verlauf.length - 1];
+    if (letzte && letzte.role === role) letzte.content += `\n\n${text}`;
+    else verlauf.push({ role, content: text });
+  }
+  if (gesamt > MAX_ZEICHEN_VERLAUF) throw new HttpFehler(413, "Das Gespräch ist zu lang. Bitte ein neues Gespräch beginnen.");
+  if (!verlauf.length || verlauf[verlauf.length - 1].role !== "user") throw new HttpFehler(400, "Die letzte Nachricht fehlt.");
+  let aktion = null;
+  if (daten.aktion !== undefined && daten.aktion !== null) {
+    const a = daten.aktion;
+    if (typeof a !== "object" || Array.isArray(a) || !["diktat", "bericht"].includes(a.typ)) throw new HttpFehler(400, "Ungültige Aktion.");
+    if (!istUuid(a.patient_id)) throw new HttpFehler(400, "Bitte einen Test-Patienten wählen.");
+    if (a.typ === "bericht" && !["verlauf", "zusammenfassung"].includes(a.art)) throw new HttpFehler(400, "Ungültige Berichtsart.");
+    aktion = { typ: a.typ, patient_id: a.patient_id, art: a.art };
+  }
+  return { verlauf, letzte: verlauf[verlauf.length - 1].content, aktion };
+}
+
+/** Antwort als NDJSON-Strom: jede Zeile ein Ereignis ({ t: "text" | "status" | … }). Endet mit „fertig“ oder „fehler“. */
+function ndjsonAntwort(arbeit) {
+  const { readable, writable } = new TransformStream();
+  const schreiber = writable.getWriter();
+  const kodierer = new TextEncoder();
+  const abbruch = new AbortController();
+  let offen = true;
+  const senden = (ereignis) => {
+    if (!offen) return;
+    schreiber.write(kodierer.encode(`${JSON.stringify(ereignis)}\n`)).catch(() => {
+      offen = false;
+      abbruch.abort(); // Gegenseite ist weg – KI-Anfrage nicht weiterlaufen lassen
+    });
+  };
+  (async () => {
+    try {
+      await arbeit(senden, abbruch.signal);
+      senden({ t: "fertig" });
+    } catch (e) {
+      const f = kiFehler(e);
+      if (f instanceof ChatFehler || f instanceof StrukturFehler || f instanceof HttpFehler) senden({ t: "fehler", text: f.message });
+      else {
+        console.log(`Chat: ${e?.name || "Error"}`); // keine Inhalte loggen
+        senden({ t: "fehler", text: "Da ist etwas schiefgegangen. Bitte noch einmal versuchen." });
+      }
+    } finally {
+      offen = false;
+      schreiber.close().catch(() => {});
+    }
+  })();
+  return new Response(readable, { status: 200, headers: { "Content-Type": "application/x-ndjson; charset=utf-8" } });
+}
+
 /** Aufnahme prüfen: Base64 einer WAV-Datei (das schickt die Oberfläche immer). */
 function audioPruefen(b64) {
   if (b64.length > MAX_AUDIO_BASE64) throw new HttpFehler(413, "Aufnahme zu lang (höchstens 5 Minuten am Stück).");
@@ -124,7 +194,7 @@ function audioPruefen(b64) {
   if (kopf.slice(0, 4) !== "RIFF" || kopf.slice(8, 12) !== "WAVE") throw new HttpFehler(400, "Keine gültige Aufnahme (WAV erwartet).");
 }
 
-export function erstelleApp({ speicher, transkribieren, strukturieren, begrenzer = erstelleBegrenzer(), grenzen = GRENZEN }) {
+export function erstelleApp({ speicher, transkribieren, strukturieren, chatten = null, berichten = null, jetzt = () => new Date(), begrenzer = erstelleBegrenzer(), grenzen = GRENZEN }) {
   function begrenzen(schluessel, grenze) {
     const r = begrenzer.treffer(schluessel, grenze);
     if (!r.erlaubt) throw zuViele(r.warteS);
@@ -156,6 +226,7 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, begrenzer
         version: VERSION,
         // bereit = Zugangscode und Datenbank eingerichtet; sonst startet die Oberfläche im Demo-Modus
         bereit: Boolean(env.GABI_ZUGANGSCODE) && datenbank,
+        funktionen: ["notizen", "chat", "bericht"],
         eingerichtet: {
           zugang: Boolean(env.GABI_ZUGANGSCODE),
           anthropic: Boolean(env.ANTHROPIC_API_KEY),
@@ -196,6 +267,33 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, begrenzer
       if (!t) throw new HttpFehler(400, "Kein Text zum Strukturieren.");
       begrenzen(`strukturieren:${ip}`, grenzen.strukturieren);
       return json({ strukturiert: await strukturieren(t) });
+    }
+
+    if (pfad === "/api/chat") {
+      const anfrage = chatAnfrage(await jsonLesen(request));
+      begrenzen(`chat:${ip}`, grenzen.chat);
+      const werkzeuge = erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt });
+      const kontext = { letzte: anfrage.letzte };
+      if (anfrage.aktion) {
+        // Feste Abläufe aus den Schnellaktionen: ohne Umweg über das Gespräch, schnell und vorhersehbar
+        const patient = await speicher.patient(anfrage.aktion.patient_id);
+        if (!patient) throw new HttpFehler(404, "Test-Patient nicht gefunden.");
+        return ndjsonAntwort(async (senden) => {
+          if (anfrage.aktion.typ === "diktat") {
+            const r = await werkzeuge.ausfuehren("notiz_entwurf_erstellen", { kuerzel: patient.kuerzel }, { ...kontext, senden });
+            if (r.fehler) throw new ChatFehler(r.meldung);
+            const n = r.ergebnis.unklar.length;
+            senden({ t: "text", d: `Hier ist dein Entwurf für **${patient.kuerzel}**. Prüf ihn kurz – gespeichert wird erst, wenn du auf „Speichern“ tippst.${n ? ` ${n === 1 ? "Eine Stelle habe ich" : `${n} Stellen habe ich`} als „(unklar)“ markiert.` : ""}` });
+            return;
+          }
+          const r = await werkzeuge.ausfuehren("bericht_erstellen", { kuerzel: patient.kuerzel, art: anfrage.aktion.art }, { ...kontext, senden });
+          if (r.fehler) throw new ChatFehler(r.meldung);
+          const b = r.ergebnis;
+          senden({ t: "text", d: `${b.art === "verlauf" ? "Hier ist der Verlaufsbericht" : "Hier ist die Zusammenfassung"} für **${patient.kuerzel}** aus ${b.notizen === 1 ? "einer Notiz" : `${b.notizen} Notizen`}. Du kannst ihn als PDF speichern.` });
+        });
+      }
+      if (!chatten) throw new HttpFehler(503, "Gabi ist auf dem Server noch nicht eingerichtet (KI-Schlüssel fehlt).");
+      return ndjsonAntwort((senden, signal) => chatten({ verlauf: anfrage.verlauf, werkzeuge, kontext, senden, signal, jetzt: jetzt() }));
     }
 
     if (pfad === "/api/patienten" && m === "GET") return json({ patienten: await speicher.patienten() });
@@ -283,7 +381,7 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, begrenzer
           antwort = json({ fehler: e.message }, e.status, e.headers);
         } else if (e instanceof SpeicherFehler) {
           antwort = json({ fehler: e.message }, e.status);
-        } else if (e instanceof StrukturFehler) {
+        } else if (e instanceof StrukturFehler || e instanceof ChatFehler) {
           antwort = json({ fehler: e.message }, 502);
         } else {
           console.log(`Fehler: ${e?.name || "Error"}`); // keine Inhalte, keine Schlüssel loggen

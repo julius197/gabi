@@ -116,6 +116,9 @@ function punkte(werte) {
   return ergebnis;
 }
 
+/** Liste von Stichpunkten bereinigen (auch für Berichte): Aufzählungszeichen weg, „(unklar)“ einheitlich, ohne Doppelte. */
+export const stichpunkte = punkte;
+
 /** Formt beliebige (auch unvollständige) Daten in die fünf Listen um – ohne Fehler zu werfen. */
 export function normalisieren(daten) {
   const quelle = daten && typeof daten === "object" && !Array.isArray(daten) ? daten : {};
