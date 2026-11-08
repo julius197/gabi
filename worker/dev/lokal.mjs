@@ -1,10 +1,11 @@
 // Lokaler Modus ohne Konten: Oberfläche + dieselbe API-Logik wie im Worker, Daten nur im Arbeitsspeicher.
 //   npm run lokal                     → http://localhost:8788 (Zugangscode: test)
 // Optional:
-//   ANTHROPIC_API_KEY=…               → echte Strukturierung mit Claude (sonst einfache Demo ohne KI)
+//   ANTHROPIC_API_KEY=…               → echte Strukturierung und echtes Gespräch mit Claude (sonst Demo-Assistent ohne KI)
 //   GABI_WHISPER_CMD="python3 dev/whisper_lokal.py"  → echte Spracherkennung lokal (sonst Demo-Text)
 //   GABI_AUDIO_ABLAGE=/pfad           → letzte Aufnahme dort als WAV ablegen (zum Prüfen)
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -13,10 +14,12 @@ import { fileURLToPath } from "node:url";
 import { erstelleApp } from "../src/app.js";
 import { arbeitsspeicher } from "../src/speicher.js";
 import { claudeStrukturierung } from "../src/strukturierung.js";
+import { claudeBericht, claudeChat } from "../src/chat.js";
 import { WHISPER_PROMPT, bereinigen } from "../src/transkription.js";
 import { normalisieren } from "../src/notiz.js";
 
 const WURZEL = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const DEMO = createRequire(import.meta.url)("../../demo.js"); // Demo-Assistent für den Betrieb ohne KI-Schlüssel
 const PORT = Number(process.env.PORT || 8788);
 const ENV = {
   GABI_ZUGANGSCODE: process.env.GABI_ZUGANGSCODE || "test",
@@ -62,13 +65,17 @@ async function demoStrukturieren(rohtext) {
 
 const speicher = arbeitsspeicher();
 await speicher.neuerPatient({ kuerzel: "TP-01", pseudonym: "Testfall Knie rechts (fiktiv)" });
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const app = erstelleApp({
   speicher,
   transkribieren,
   strukturieren: ENV.ANTHROPIC_API_KEY ? claudeStrukturierung(ENV) : demoStrukturieren,
+  // Ohne Schlüssel: Demo-Assistent (einfache Absichten), aber mit den echten Werkzeugen und dem echten NDJSON-Strom
+  chatten: ENV.ANTHROPIC_API_KEY ? claudeChat(ENV) : ({ kontext, werkzeuge, senden }) => DEMO.demoGespraech({ letzte: kontext.letzte, werkzeuge, senden, warte: pause }),
+  berichten: ENV.ANTHROPIC_API_KEY ? claudeBericht(ENV) : async ({ notizen, art }) => DEMO.demoBerichtInhalt({ notizen, art }),
 });
 
-const TYPEN = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".txt": "text/plain; charset=utf-8" };
+const TYPEN = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".txt": "text/plain; charset=utf-8", ".woff2": "font/woff2", ".md": "text/plain; charset=utf-8" };
 
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -80,7 +87,17 @@ createServer(async (req, res) => {
       const anfrage = new Request(url, { method: req.method, headers: req.headers, body });
       const antwort = await app(anfrage, ENV);
       res.writeHead(antwort.status, Object.fromEntries(antwort.headers));
-      res.end(Buffer.from(await antwort.arrayBuffer()));
+      if (antwort.body) {
+        // Strom (z. B. /api/chat) Stück für Stück weiterreichen – so wie der Worker es tut
+        const leser = antwort.body.getReader();
+        res.on("close", () => leser.cancel().catch(() => {}));
+        for (;;) {
+          const { done, value } = await leser.read();
+          if (done) break;
+          res.write(Buffer.from(value));
+        }
+      }
+      res.end();
       console.log(`${req.method} ${url.pathname} -> ${antwort.status}`);
       return;
     }
@@ -101,5 +118,5 @@ createServer(async (req, res) => {
   }
 }).listen(PORT, "127.0.0.1", () => {
   console.log(`Gabi lokal: http://localhost:${PORT}  (Zugangscode: ${ENV.GABI_ZUGANGSCODE === "test" ? "test" : "aus GABI_ZUGANGSCODE"})`);
-  console.log(`Spracherkennung: ${process.env.GABI_WHISPER_CMD ? "lokal (Whisper)" : "Demo-Text"} · Strukturierung: ${ENV.ANTHROPIC_API_KEY ? `Claude (${ENV.ANTHROPIC_MODELL})` : "Demo ohne KI"}`);
+  console.log(`Spracherkennung: ${process.env.GABI_WHISPER_CMD ? "lokal (Whisper)" : "Demo-Text"} · Strukturierung und Gespräch: ${ENV.ANTHROPIC_API_KEY ? `Claude (${ENV.ANTHROPIC_MODELL})` : "Demo-Assistent ohne KI"}`);
 });
