@@ -295,6 +295,7 @@ for (const [fall, antwort, text] of [
   const hilfe = await page.textContent(".hinweis-box.warn");
   pruefe(/Website-Einstellungen/.test(hilfe) && /Safari/.test(hilfe), "Mikrofon verweigert: iPhone-Anleitung im Gespräch");
   pruefe(konsole.length === 0, `Mikrofon verweigert: keine Fehler in der Konsole${konsole.length ? ` (${konsole.join(" | ")})` : ""}`);
+  await warte(450);
   await page.screenshot({ path: join(aus, "handy-hell-11-mikrofon-hilfe.jpg"), type: "jpeg", quality: 85 });
   await ctx.close();
 }
@@ -342,16 +343,22 @@ for (const [fall, antwort, text] of [
   await page.waitForSelector("#ansicht-chat:not([hidden])");
   pruefe((await page.textContent("#test-badge")).includes("Testversion"), "Echte API: Zugang mit Code, Testversion-Badge");
 
-  let ausfall = true;
-  await page.route("**/api/chat", (route) => (ausfall
-    ? route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ fehler: "Gabi ist gerade ausgelastet. Bitte gleich noch einmal versuchen." }) })
-    : route.continue()));
+  // 1. Versuch: HTTP-Fehler, 2. Versuch: Fehler mitten im Strom, 3. Versuch: echte Antwort
+  let versuch = 0;
+  await page.route("**/api/chat", (route) => {
+    versuch++;
+    if (versuch === 1) return route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ fehler: "Gabi ist gerade ausgelastet. Bitte gleich noch einmal versuchen." }) });
+    if (versuch === 2) return route.fulfill({ status: 200, contentType: "application/x-ndjson", body: `${JSON.stringify({ t: "status", text: "Durchsuche die Notizen …" })}\n${JSON.stringify({ t: "fehler", text: "KI-Dienst antwortet nicht (529)." })}\n` });
+    return route.continue();
+  });
   await fragen(page, "Was steht heute an?");
   await page.waitForSelector('[data-aktion="wiederholen"]');
   pruefe((await page.textContent(".von-gabi .hinweis-box")).includes("ausgelastet"), "Echte API: Fehler wird verständlich angezeigt");
-  ausfall = false;
+  await page.click('[data-aktion="wiederholen"]');
+  await page.waitForFunction(() => /529/.test(document.querySelector(".von-gabi .hinweis-box")?.textContent || ""));
   await page.click('[data-aktion="wiederholen"]');
   await antwortAbwarten(page, "Heute ist");
+  pruefe(versuch === 3, "Echte API: „Nochmal versuchen“ auch nach einem Fehler mitten im Strom");
   pruefe(typen.at(-1) === "application/x-ndjson; charset=utf-8", "Echte API: „Nochmal versuchen“ klappt, Antwort kommt als NDJSON-Strom");
 
   // Diktat mit echter Aufnahme → Spracherkennung → Entwurf → Speichern

@@ -127,6 +127,7 @@ export function chatAnfrage(daten) {
   if (liste.length > MAX_NACHRICHTEN) throw new HttpFehler(413, "Das Gespräch ist zu lang. Bitte ein neues Gespräch beginnen.");
   const verlauf = [];
   let gesamt = 0;
+  let letzteNachricht = ""; // die letzte einzelne Nachricht der Nutzerin (nicht zusammengefasst)
   for (const n of liste) {
     if (!n || typeof n !== "object" || Array.isArray(n) || !["nutzer", "gabi"].includes(n.rolle)) throw new HttpFehler(400, "Ungültige Nachricht.");
     const text = textFeld(n.text, "text").replace(/\r\n?/g, "\n").trim();
@@ -134,6 +135,7 @@ export function chatAnfrage(daten) {
     gesamt += text.length;
     if (!text) continue;
     const role = n.rolle === "nutzer" ? "user" : "assistant";
+    if (role === "user") letzteNachricht = text;
     if (!verlauf.length && role === "assistant") continue; // Begrüßung o. Ä. vor der ersten Frage
     const letzte = verlauf[verlauf.length - 1];
     if (letzte && letzte.role === role) letzte.content += `\n\n${text}`;
@@ -147,9 +149,12 @@ export function chatAnfrage(daten) {
     if (typeof a !== "object" || Array.isArray(a) || !["diktat", "bericht"].includes(a.typ)) throw new HttpFehler(400, "Ungültige Aktion.");
     if (!istUuid(a.patient_id)) throw new HttpFehler(400, "Bitte einen Test-Patienten wählen.");
     if (a.typ === "bericht" && !["verlauf", "zusammenfassung"].includes(a.art)) throw new HttpFehler(400, "Ungültige Berichtsart.");
-    aktion = { typ: a.typ, patient_id: a.patient_id, art: a.art };
+    // Diktat ausdrücklich mitgeschickt: nur dieser Text wird zur Notiz (nie der zusammengefasste Verlauf)
+    const text = a.typ === "diktat" ? textFeld(a.text, "text").replace(/\r\n?/g, "\n").trim() : "";
+    if (text.length > MAX_ROHTEXT) throw new HttpFehler(413, "Diktat zu lang.");
+    aktion = { typ: a.typ, patient_id: a.patient_id, art: a.art, text };
   }
-  return { verlauf, letzte: verlauf[verlauf.length - 1].content, aktion };
+  return { verlauf, letzte: letzteNachricht || verlauf[verlauf.length - 1].content, aktion };
 }
 
 /** Antwort als NDJSON-Strom: jede Zeile ein Ereignis ({ t: "text" | "status" | … }). Endet mit „fertig“ oder „fehler“. */
@@ -159,6 +164,7 @@ function ndjsonAntwort(arbeit) {
   const kodierer = new TextEncoder();
   const abbruch = new AbortController();
   let offen = true;
+  let puls = null;
   const senden = (ereignis) => {
     if (!offen) return;
     schreiber.write(kodierer.encode(`${JSON.stringify(ereignis)}\n`)).catch(() => {
@@ -167,6 +173,8 @@ function ndjsonAntwort(arbeit) {
     });
   };
   (async () => {
+    // Lebenszeichen alle 15 s, damit lange Werkzeuge (z. B. Bericht) die Verbindung nicht einschlafen lassen
+    puls = setInterval(() => senden({ t: "puls" }), 15_000);
     try {
       await arbeit(senden, abbruch.signal);
       senden({ t: "fertig" });
@@ -178,6 +186,7 @@ function ndjsonAntwort(arbeit) {
         senden({ t: "fehler", text: "Da ist etwas schiefgegangen. Bitte noch einmal versuchen." });
       }
     } finally {
+      clearInterval(puls);
       offen = false;
       schreiber.close().catch(() => {});
     }
@@ -272,7 +281,9 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
     if (pfad === "/api/chat") {
       const anfrage = chatAnfrage(await jsonLesen(request));
       begrenzen(`chat:${ip}`, grenzen.chat);
-      const werkzeuge = erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt });
+      // Teure KI-Werkzeuge (Entwurf, Bericht) zählen im selben Limit wie /api/strukturieren
+      const teuerErlaubt = () => begrenzer.treffer(`strukturieren:${ip}`, grenzen.strukturieren).erlaubt;
+      const werkzeuge = erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt, teuerErlaubt });
       const kontext = { letzte: anfrage.letzte };
       if (anfrage.aktion) {
         // Feste Abläufe aus den Schnellaktionen: ohne Umweg über das Gespräch, schnell und vorhersehbar
@@ -280,7 +291,7 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
         if (!patient) throw new HttpFehler(404, "Test-Patient nicht gefunden.");
         return ndjsonAntwort(async (senden) => {
           if (anfrage.aktion.typ === "diktat") {
-            const r = await werkzeuge.ausfuehren("notiz_entwurf_erstellen", { kuerzel: patient.kuerzel }, { ...kontext, senden });
+            const r = await werkzeuge.ausfuehren("notiz_entwurf_erstellen", { kuerzel: patient.kuerzel }, { letzte: anfrage.aktion.text || anfrage.letzte, senden });
             if (r.fehler) throw new ChatFehler(r.meldung);
             const n = r.ergebnis.unklar.length;
             senden({ t: "text", d: `Hier ist dein Entwurf für **${patient.kuerzel}**. Prüf ihn kurz – gespeichert wird erst, wenn du auf „Speichern“ tippst.${n ? ` ${n === 1 ? "Eine Stelle habe ich" : `${n} Stellen habe ich`} als „(unklar)“ markiert.` : ""}` });

@@ -457,7 +457,7 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .senden:disabled { background: var(--fuell); color: var(--text-4); cursor: default; }
 .mikro:disabled { opacity: 0.45; cursor: default; }
 .mikro .symbol, .senden .symbol { width: 20px; height: 20px; }
-.eingabe-fuss { text-align: center; font-size: 11.5px; color: var(--text-4); }
+.eingabe-fuss { text-align: center; font-size: 11.5px; color: var(--text-3); }
 
 /* Aufnahme: das Eingabefeld wird zur Aufnahme-Anzeige */
 .aufnahme-anzeige { display: none; flex: 1; min-width: 0; align-items: center; gap: 10px; min-height: 40px; padding: 0 4px 0 2px; overflow: hidden; }
@@ -497,7 +497,7 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .abschnitte { display: grid; gap: 14px; }
 .abschnitt { display: grid; gap: 7px; }
 .abschnitt + .abschnitt { padding-top: 14px; border-top: 1px solid var(--linie); }
-.abschnitt-leer { font-size: 13.5px; color: var(--text-4); font-style: italic; }
+.abschnitt-leer { font-size: 13.5px; color: var(--text-3); font-style: italic; }
 .abschnitt.pruefen { padding: 12px 14px; border-radius: var(--r-m); background: var(--warn-bg); border-top: 0; }
 .abschnitt.pruefen .augenbraue { color: var(--warn-text); display: flex; align-items: center; gap: 6px; }
 .abschnitt.pruefen .punkte li::before { background: var(--warn-text); }
@@ -514,6 +514,7 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .haken svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .haken path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: zeichnen var(--t-lang) var(--raus) 80ms forwards; }
 .karte-entwurf.erledigt .abschnitte, .karte-entwurf.erledigt .karte-fuss { display: none; }
+.gespraechs-karte .original summary { padding: 0; }
 .karte-entwurf.verworfen { opacity: 0.7; }
 
 .zeitleiste { list-style: none; display: grid; gap: 0; }

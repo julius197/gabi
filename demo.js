@@ -741,7 +741,7 @@
       try {
         await pause(350);
         if (aktion && aktion.typ === "diktat") {
-          const r = await werkzeuge.ausfuehren("notiz_entwurf_erstellen", { kuerzel: patient.kuerzel }, { letzte, senden: sicher });
+          const r = await werkzeuge.ausfuehren("notiz_entwurf_erstellen", { kuerzel: patient.kuerzel }, { letzte: String(aktion.text || "").trim() || letzte, senden: sicher });
           if (r.fehler) { sicher({ t: "fehler", text: r.meldung }); return; }
           await textStroemen(entwurfText(patient.kuerzel, r.ergebnis.unklar.length), sicher, pause);
         } else if (aktion && aktion.typ === "bericht") {

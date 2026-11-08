@@ -11,6 +11,7 @@ export const MAX_NACHRICHTEN = 40;
 export const MAX_ZEICHEN_NACHRICHT = 20_000;
 export const MAX_ZEICHEN_VERLAUF = 120_000;
 export const MAX_RUNDEN = 6;
+export const MAX_TEURE_WERKZEUGE = 3; // Entwürfe + Berichte je Anfrage (jeder ist ein eigener KI-Aufruf)
 const MAX_NOTIZEN_BERICHT = 30;
 const MAX_NOTIZEN_SUCHE = 10;
 const ZONE = "Europe/Berlin";
@@ -156,7 +157,13 @@ function textEingabe(wert, name, max) {
  * Werkzeuge für den Assistenten. Sie lesen nur (Notizen, Patienten) oder bereiten etwas zur Anzeige vor
  * (Entwurf, Bericht) und melden es über kontext.senden an die Oberfläche.
  */
-export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = () => new Date() }) {
+export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = () => new Date(), teuerErlaubt = () => true }) {
+  let teure = 0;
+  function teuer() {
+    teure++;
+    if (teure > MAX_TEURE_WERKZEUGE) throw new WerkzeugFehler(`Pro Nachricht gehen höchstens ${MAX_TEURE_WERKZEUGE} Entwürfe oder Berichte.`);
+    if (!teuerErlaubt()) throw new WerkzeugFehler("Gerade zu viele KI-Anfragen. Bitte kurz warten und noch einmal versuchen.");
+  }
   async function patientSuchen(roh) {
     const eingabe = textEingabe(roh, "kuerzel", 40);
     if (!eingabe) throw new WerkzeugFehler("Bitte das Kürzel des Test-Patienten angeben, z. B. TP-01.");
@@ -234,7 +241,16 @@ export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = 
       const diktat = textEingabe(e.diktat, "diktat", MAX_ROHTEXT) || String(k.letzte || "").trim();
       if (!diktat) throw new WerkzeugFehler("Es gibt noch keinen Diktat-Text.");
       if (diktat.length > MAX_ROHTEXT) throw new WerkzeugFehler("Das Diktat ist zu lang.");
-      const strukturiert = normalisieren(await strukturieren(diktat));
+      teuer();
+      let roh;
+      try {
+        roh = await strukturieren(diktat);
+      } catch (err) {
+        // Meldung aus v1 („von Hand ausfüllen“) passt im Gespräch nicht
+        if (err instanceof StrukturFehler && /noch nicht eingerichtet/.test(err.message)) throw new WerkzeugFehler("Die KI ist auf dem Server noch nicht eingerichtet – Entwürfe gehen gerade nicht.");
+        throw err;
+      }
+      const strukturiert = normalisieren(roh);
       if (istLeer(strukturiert)) throw new WerkzeugFehler("Im Text steht nichts, was in eine Behandlungsnotiz gehört. Bitte die Behandlung diktieren.");
       k.senden?.({ t: "entwurf", entwurf: { patient_id: patient.id, kuerzel: patient.kuerzel, pseudonym: patient.pseudonym || "", rohtext: diktat, strukturiert } });
       return {
@@ -253,6 +269,7 @@ export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = 
       const liste = (await speicher.notizen({ patientId: patient.id })).slice(0, MAX_NOTIZEN_BERICHT).reverse(); // alt → neu
       if (!liste.length) throw new WerkzeugFehler(`Für ${patient.kuerzel} ist noch keine Notiz gespeichert.`);
       if (!berichten) throw new WerkzeugFehler("Berichte sind auf dem Server noch nicht eingerichtet.");
+      teuer();
       const inhalt = await berichten({ patient, notizen: liste, art });
       const bericht = berichtBauen({ patient, notizen: liste, art, inhalt, erstellt: jetzt() });
       k.senden?.({ t: "bericht", bericht });
@@ -443,6 +460,9 @@ export function claudeChat(env) {
     ];
     const messages = verlauf.map((n) => ({ role: n.role, content: n.content }));
     let schonText = false;
+    let karte = false; // Entwurf oder Bericht angezeigt – dann kein „nichts gespeichert“ darunter
+    const weiter = senden;
+    senden = (e) => { if (e.t === "entwurf" || e.t === "bericht") karte = true; weiter(e); };
 
     for (let runde = 0; runde < MAX_RUNDEN; runde++) {
       let textInRunde = false;
@@ -481,12 +501,13 @@ export function claudeChat(env) {
       const aufrufe = inhalt.filter((b) => b.type === "tool_use");
       if (antwort.stop_reason !== "tool_use" || !aufrufe.length) {
         if (antwort.stop_reason === "max_tokens") senden({ t: "text", d: " …\n\n(Die Antwort war zu lang und wurde gekürzt.)" });
-        else if (!schonText) senden({ t: "text", d: "Dazu habe ich nichts gespeichert." });
+        else if (!schonText && !karte) senden({ t: "text", d: "Dazu habe ich nichts gespeichert." });
         return;
       }
       messages.push({ role: "assistant", content: inhalt });
       const ergebnisse = [];
       for (const a of aufrufe) {
+        if (signal && signal.aborted) return; // Gegenseite ist weg – keine weiteren (teuren) Werkzeuge
         const r = await werkzeuge.ausfuehren(a.name, a.input, { ...kontext, senden });
         ergebnisse.push({ type: "tool_result", tool_use_id: a.id, content: r.inhalt, ...(r.fehler ? { is_error: true } : {}) });
       }

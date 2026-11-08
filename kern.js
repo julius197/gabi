@@ -132,7 +132,12 @@
   function verlaufFuerServer(nachrichten, { maxNachrichten = 24, maxZeichen = 90000, maxProNachricht = 19000 } = {}) {
     const liste = [];
     for (const n of nachrichten || []) {
-      if (!n || n.lokal || n.fehler || n.abgebrochen) continue;
+      if (!n || n.lokal) continue;
+      if (n.fehler || n.abgebrochen) {
+        // gescheiterter Wortwechsel: auch die Frage dazu weglassen (sonst wandert z. B. ein altes Diktat in die nächste Notiz)
+        if (n.rolle === "gabi" && liste.length && liste[liste.length - 1].rolle === "nutzer") liste.pop();
+        continue;
+      }
       if (n.rolle !== "nutzer" && n.rolle !== "gabi") continue;
       let text = String(n.senden != null ? n.senden : n.text || "");
       const karten = (n.karten || []).map(karteAlsText).filter(Boolean);

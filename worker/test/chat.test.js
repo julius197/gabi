@@ -197,6 +197,23 @@ describe("Werkzeuge", () => {
     expect(zus.verlauf).toEqual([]);
   });
 
+  it("teure Werkzeuge: höchstens 3 je Anfrage und im KI-Limit mitgezählt", async () => {
+    const { speicher } = await testDaten();
+    const strukturieren = vi.fn(async () => ({ befund: ["x"] }));
+    const w = erstelleWerkzeuge({ speicher, strukturieren });
+    for (let i = 0; i < 3; i++) expect((await w.ausfuehren("notiz_entwurf_erstellen", { kuerzel: "TP-01" }, { letzte: "Knie" })).fehler).toBe(false);
+    const vierter = await w.ausfuehren("notiz_entwurf_erstellen", { kuerzel: "TP-01" }, { letzte: "Knie" });
+    expect(vierter.meldung).toMatch(/höchstens 3/);
+    expect(strukturieren).toHaveBeenCalledTimes(3);
+    const gebremst = erstelleWerkzeuge({ speicher, strukturieren, teuerErlaubt: () => false });
+    expect((await gebremst.ausfuehren("notiz_entwurf_erstellen", { kuerzel: "TP-01" }, { letzte: "Knie" })).meldung).toMatch(/zu viele KI-Anfragen/);
+    const { rufe, speicher: sp } = neueApp({ grenzen: { ...GRENZEN, strukturieren: [1, 600_000] } });
+    const p = await sp.neuerPatient({ kuerzel: "TP-01", pseudonym: "" });
+    const body = { nachrichten: [{ rolle: "nutzer", text: "Knie" }], aktion: { typ: "diktat", patient_id: p.id, text: "Knie" } };
+    expect((await zeilen(await rufe("/api/chat", { methode: "POST", body, ip: "5.5.5.5" }))).at(-1).t).toBe("fertig");
+    expect((await zeilen(await rufe("/api/chat", { methode: "POST", body, ip: "5.5.5.5" }))).at(-1)).toEqual({ t: "fehler", text: "Gerade zu viele KI-Anfragen. Bitte kurz warten und noch einmal versuchen." });
+  });
+
   it("unerwarteter Fehler: allgemeine Meldung, im Log nur die Fehlerart", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const speicher = { patienten: async () => { throw new TypeError("Inhalt TP-01 Knie geheim"); } };
@@ -214,6 +231,17 @@ describe("Gesprächsanfrage prüfen", () => {
     expect(a.verlauf).toEqual([{ role: "user", content: "a\n\nb" }, { role: "assistant", content: "c" }, { role: "user", content: "d\ne" }]);
     expect(a.letzte).toBe("d\ne");
     expect(a.aktion).toBeNull();
+  });
+
+  it("„letzte“ ist die einzelne letzte Nachricht; Diktat-Text kommt nur aus der Aktion", () => {
+    const id = crypto.randomUUID();
+    const a = chatAnfrage({ nachrichten: [{ rolle: "nutzer", text: "Diktat für TP-01: altes Diktat" }, { rolle: "nutzer", text: "neues Diktat" }], aktion: { typ: "diktat", patient_id: id, text: " neues Diktat\r\n " } });
+    expect(a.verlauf).toEqual([{ role: "user", content: "Diktat für TP-01: altes Diktat\n\nneues Diktat" }]);
+    expect(a.letzte).toBe("neues Diktat");
+    expect(a.aktion).toEqual({ typ: "diktat", patient_id: id, art: undefined, text: "neues Diktat" });
+    const status = (daten) => { try { chatAnfrage(daten); return 200; } catch (e) { return e.status; } };
+    expect(status({ nachrichten: [{ rolle: "nutzer", text: "x" }], aktion: { typ: "diktat", patient_id: id, text: 5 } })).toBe(400);
+    expect(status({ nachrichten: [{ rolle: "nutzer", text: "x" }], aktion: { typ: "diktat", patient_id: id, text: "a".repeat(50_001) } })).toBe(413);
   });
 
   it("lehnt Unsinn ab: leer, falsche Rolle, falscher Typ, Gabi zuletzt, zu lang, falsche Aktion", () => {
@@ -279,6 +307,9 @@ describe("Route /api/chat", () => {
     expect(strukturieren).toHaveBeenCalledWith("Knie rechts Flexion 90 Grad");
     expect(chatten).not.toHaveBeenCalled();
     expect(await speicher.notizen({})).toEqual([]);
+    // mit ausdrücklichem Diktat-Text: nur dieser zählt, nicht der zusammengefasste Verlauf
+    await zeilen(await rufe("/api/chat", { methode: "POST", body: { nachrichten: [{ rolle: "nutzer", text: "Diktat für TP-01: altes" }, { rolle: "nutzer", text: "neu" }], aktion: { typ: "diktat", patient_id: p.id, text: "neu" } } }));
+    expect(strukturieren).toHaveBeenLastCalledWith("neu");
     const fremd = await rufe("/api/chat", { methode: "POST", body: { nachrichten: [{ rolle: "nutzer", text: "x" }], aktion: { typ: "diktat", patient_id: crypto.randomUUID() } } });
     expect(fremd.status).toBe(404);
   });
@@ -294,6 +325,22 @@ describe("Route /api/chat", () => {
     expect(z.map((e) => e.t)).toEqual(["status", "bericht", "text", "fertig"]);
     expect(z[1].bericht).toMatchObject({ art: "zusammenfassung", kuerzel: "TP-01", anzahl: 1, zusammenfassung: ["Flexion 90°"] });
     expect(z[2].d).toMatch(/Zusammenfassung für \*\*TP-01\*\* aus einer Notiz/);
+  });
+
+  it("Lebenszeichen im Strom, solange gearbeitet wird", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const chatten = async ({ senden }) => {
+        await new Promise((r) => setTimeout(r, 0));
+        vi.advanceTimersByTime(15_000);
+        senden({ t: "text", d: "fertig gerechnet" });
+      };
+      const { rufe } = neueApp({ chatten });
+      const z = await zeilen(await rufe("/api/chat", { methode: "POST", body: { nachrichten: [{ rolle: "nutzer", text: "x" }] } }));
+      expect(z.map((e) => e.t)).toEqual(["puls", "text", "fertig"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("eigenes Rate-Limit fürs Gespräch, JSON-Pflicht und Methode", async () => {
@@ -411,6 +458,22 @@ describe("Gespräch mit Claude (Anthropic-API nachgebildet)", () => {
     const leer = sammler();
     await claudeChat(ENV_KI)({ verlauf: [{ role: "user", content: "?" }], werkzeuge: erstelleWerkzeuge({ speicher, strukturieren: vi.fn() }), senden: leer.senden });
     expect(leer.ereignisse).toEqual([{ t: "text", d: "Dazu habe ich nichts gespeichert." }]);
+  });
+
+  it("nach einer Karte ohne Text: kein „nichts gespeichert“; nach Abbruch keine weiteren Werkzeuge", async () => {
+    const { speicher } = await testDaten();
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(sse([{ type: "tool_use", id: "toolu_e", name: "notiz_entwurf_erstellen", input: { kuerzel: "TP-01" } }], "tool_use"))
+      .mockResolvedValueOnce(sse([], "end_turn")));
+    const s = sammler();
+    await claudeChat(ENV_KI)({ verlauf: [{ role: "user", content: "Notiz für TP-01: Knie frei" }], werkzeuge: erstelleWerkzeuge({ speicher, strukturieren: async () => ({ befund: ["Knie frei"] }) }), kontext: { letzte: "Notiz für TP-01: Knie frei" }, senden: s.senden });
+    expect(s.typen()).toEqual(["status", "entwurf"]);
+
+    const abbruch = new AbortController();
+    const werkzeug = vi.fn(async () => ({ inhalt: "{}", fehler: false }));
+    vi.stubGlobal("fetch", vi.fn().mockImplementationOnce(async () => { abbruch.abort(); return sse([{ type: "tool_use", id: "toolu_x", name: "patienten_auflisten", input: {} }], "tool_use"); }));
+    await claudeChat(ENV_KI)({ verlauf: [{ role: "user", content: "?" }], werkzeuge: { definitionen: WERKZEUGE, ausfuehren: werkzeug }, senden: () => {}, signal: abbruch.signal }).catch(() => {});
+    expect(werkzeug).not.toHaveBeenCalled();
   });
 
   it("endlose Werkzeug-Schleife wird nach einigen Runden beendet", async () => {

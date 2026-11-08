@@ -54,10 +54,15 @@ describe("Kern: sicherer Text für Gabis Antworten", () => {
     expect(v).toEqual([
       { rolle: "nutzer", text: "Suche in meinen Notizen: Theraband" },
       { rolle: "gabi", text: "Gefunden.\n\n[Notiz-Entwurf für TP-01 (gespeichert) – Befund: Flexion 90°]" },
-      { rolle: "nutzer", text: "Nochmal" },
+      // „Nochmal“ fehlt: die Antwort darauf ist gescheitert – der ganze Wortwechsel fällt weg
       { rolle: "nutzer", text: "Bericht" },
       { rolle: "gabi", text: "[Verlaufsbericht für TP-02 angezeigt – NRS 4]" },
     ]);
+    // altes Diktat nach Abbruch wandert nicht in die nächste Anfrage
+    expect(K.verlaufFuerServer([
+      { rolle: "nutzer", text: "Diktat für TP-01: Knie" }, { rolle: "gabi", text: "Abgebrochen.", abgebrochen: true },
+      { rolle: "nutzer", text: "Diktat für TP-02: Schulter" },
+    ])).toEqual([{ rolle: "nutzer", text: "Diktat für TP-02: Schulter" }]);
     const lang = Array.from({ length: 30 }, (_, i) => ({ rolle: i % 2 ? "gabi" : "nutzer", text: "x".repeat(5000) }));
     const kurz = K.verlaufFuerServer(lang);
     expect(kurz.length).toBeLessThanOrEqual(18);
