@@ -198,7 +198,7 @@ und pushen. Die beiden Zwischenschritte halten die internen Dateien weiter unter
 `.nojekyll` zurück und alles wäre wieder abrufbar). Der Worker 2.0 bleibt und bedient v1 weiter; Browser-Speicher von v1
 und v2 vertragen sich (offene v2-Entwurfskarten gehen in v1 allerdings verloren – vorher speichern).
 
-## v2.1 – Feinschliff (08.11.2026, Branch `gabi-v2-1`, nicht auf `main`)
+## v2.1 – Feinschliff (08.11.2026, live seit 09.11.2026)
 
 Auftrag: 2 Bugfixes (Glow, Flackern), 1 Feature (Gesprächsverlauf wie bei ChatGPT), 1 Hilfsdatei (Testdaten zurücksetzen).
 Nur Testdaten. Worker unverändert (2.0.0), Oberfläche 2.1.0.
@@ -370,6 +370,57 @@ Anleitung „Testdaten zurücksetzen in 4 Klicks“ im README.
   - `handy-320-schublade.jpg`
   - alle übrigen neu (mit ☰ in der Kopfzeile)
 
+### Live-Gang v2.1 (09.11.2026, auf „Ja, live schalten v2.1“)
+
+- **Worker nicht neu deployt:** In `worker/src`, `wrangler.toml` und `package*.json` gibt es keinen Unterschied zu v2.0.2.
+  Der Live-Worker meldet weiter 2.0.0, `bereit: true`.
+- **`main` per Fast-Forward** von 71bbb1e auf 8ace709 gebracht und gepusht. Der Pages-Build war nach 33 s fertig, die
+  Live-Seite liefert `?v=2.1.0`.
+- **Dateiabgleich** (nur GitHub Pages, keine Anfrage an den Worker):
+  - 28 App-Dateien sind byte-gleich mit `main`.
+  - Alle 86 internen Dateien liefern 404 (Log, README, Tests, Worker, `supabase/`, Screenshots …).
+  - `app.js` kommt mit `application/javascript` und `max-age=600`.
+- **Live-Ende-zu-Ende** (`GABI_LIVE=1 … tests/v2.mjs … https://gabi.automatilabs.de`): **236 von 236 grün** in Chromium
+  und WebKit, ohne Zugangscode. Der Teil „Echte API“ läuft nur lokal.
+- **Unabhängige Live-Prüfung** (Workflow): vier Blickwinkel mit je einem Gegenprüfer – Verlauf in der Demo, Ruhe und
+  Glow, Übergang von v2.0.2, echter Modus mit nachgebautem Worker.
+  - **0 Anfragen an den echten Worker:** Alles wurde im Browser abgefangen, es gab nur Fantasie-Codes.
+  - 16 Funde, alle bestätigt: 2 mittel, 14 niedrig, kein Blocker. Nichts davon gefährdet Daten auf dem Server außer
+    einer möglichen doppelten Notiz.
+  - **Noch nicht behoben** (Vorschlag: v2.1.1 nach Julius' Zustimmung).
+
+| Schwere | Fund |
+|---|---|
+| mittel | Zwei Tabs, dieselbe Entwurfskarte: Tab A speichert (oder verwirft). Tippt Tab B danach in seiner Bearbeitung, ist die Karte wieder offen. Eine zweite, gleiche Notiz ist dann möglich. |
+| mittel | „Nochmal versuchen“ nach einer Antwort mit Entwurf (zweite KI-Runde gescheitert) wirft die Karte weg. Eine gespeicherte Karte verschwindet, dadurch ist eine doppelte Notiz möglich. Korrekturen gehen ohne Rückfrage verloren. Gab es schon in v2.0.2. |
+| niedrig | „Neues Gespräch“ bei ungespeicherter Notiz-Bearbeitung: Auch „Weiter bearbeiten“ bricht die laufende Antwort ab und wechselt das Gespräch. |
+| niedrig | Demo: „Beispieldiktat nehmen“ ist nach Wechsel und Rückkehr klickbar, meldet aber „Wähle zuerst einen Test-Patienten“. Ein schneller Wechsel schluckt das Beispiel. |
+| niedrig | Safari: Nach dem Schließen der Schublade liegt der Fokus auf der Seite statt auf ☰. Nach dem Löschen erscheint ein grüner Rahmen um die Schublade. |
+| niedrig | Das Häkchen „Gespeichert bei …“ zeichnet sich bei jeder Rückkehr ins Gespräch neu, auch mit „Bewegung reduzieren“. |
+| niedrig | Erste Suche bei langsamer Leitung: Der Platzhalter hat keine Ergebniszeile, die Treffer springen 54–88 px. |
+| niedrig | Übergang: Das offene v2.0-Gespräch bleibt nicht offen, wenn der Tab beim Update im Notizordner stand. In der Liste steht es trotzdem. |
+| niedrig | Übergang: Das übernommene v2.0-Gespräch erscheint in anderen offenen Tabs erst nach dem Neuladen. „Alle löschen“ nennt dort eine falsche Anzahl. |
+| niedrig | Safari: Neuladen mitten in einer Antwort zeigt „Keine Verbindung zum Server“ statt „unterbrochen“. |
+| niedrig | 401 bei der Spracherkennung verwirft die Aufnahme ohne Hinweis. Das passiert nur, wenn der Code am Worker geändert wird, während ein Tab offen ist. |
+| niedrig | „Abmelden + Gespräche löschen“ lässt ungesendeten Text und den Suchbegriff im offenen Tab stehen. |
+| niedrig | Abmelden, während eine Notiz gespeichert wird: Eine Folgeanfrage geht mit leerem Code raus (zählt beim Worker als 1 Fehlversuch), dazu die Meldung „Code gilt nicht mehr“. |
+| niedrig | Abmelden verwirft eine ungespeicherte Notiz-Bearbeitung ohne Warnung. |
+| niedrig | Die Auswahlkarte „Für welchen Test-Patienten …“ zeigt beim Nachladen kurz den alten Fehler statt Platzhaltern. |
+| niedrig | Abmelden ohne Häkchen während einer Antwort: Später steht dort „… weil die Seite neu geladen wurde“. |
+
+Neu mit v2.1 sind die Funde zu Tabs, Gesprächswechsel, Schublade und Übergang sowie der Text nach „Abmelden ohne
+Häkchen“. Bei den übrigen ist nicht geprüft, ob es sie schon in v2.0.2 gab.
+
+**Rückweg zu v2.0.2**, falls nötig (der Worker bleibt, 2.0.0 bedient beide):
+
+```
+git revert --no-commit 71bbb1e..HEAD && git checkout HEAD -- GABI-V2-LOG.md && git commit -m "Zurück zu v2.0.2" && git push origin main
+```
+
+- Der Befehl setzt die App auf 71bbb1e zurück und behält dieses Log.
+- Gespräche bleiben im Browser (IndexedDB) liegen. v2.0.2 zeigt sie nicht, nach einem erneuten Update sind sie wieder da.
+- Wer v2.1 in den 10 Minuten davor geladen hat, muss eventuell einmal neu laden.
+
 ## Offen
 
 1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
@@ -387,3 +438,5 @@ Anleitung „Testdaten zurücksetzen in 4 Klicks“ im README.
 6. ~~Merge auf `main`~~ – erledigt am 08.11.2026 (v2 live). Rückweg zu v1 siehe „Live-Gang“.
 7. Später: Terminkalender/Praxissoftware (Baustein 2), Gesprächsverlauf über Geräte hinweg (bräuchte Konten statt
    gemeinsamem Code).
+8. **16 Funde der Live-Prüfung v2.1** (2 mittel, 14 niedrig, siehe „Live-Gang v2.1“) → v2.1.1, wenn Julius zustimmt.
+   Bei v2.1 kommen am echten iPhone dazu: Schublade, Umbenennen per Tipp, Abmelden mit Häkchen.
