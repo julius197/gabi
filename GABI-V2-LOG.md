@@ -421,6 +421,98 @@ git revert --no-commit 71bbb1e..HEAD && git checkout HEAD -- GABI-V2-LOG.md && g
 - Gespräche bleiben im Browser (IndexedDB) liegen. v2.0.2 zeigt sie nicht, nach einem erneuten Update sind sie wieder da.
 - Wer v2.1 in den 10 Minuten davor geladen hat, muss eventuell einmal neu laden.
 
+## v2.1.1 – die 16 Funde der Live-Prüfung behoben (09.11.2026, Branch `gabi-v2-1-1`, noch nicht live)
+
+Auf Julius' „Ja, beheben“. Vorgehen:
+1. Je Bereich ein Entwurf (sechs Bereiche), jeder Entwurf mit einem Gegenprüfer, der ihn zu widerlegen versucht.
+2. Entwürfe per Drei-Wege-Abgleich zusammengeführt, dann die Einwände eingearbeitet (drei waren zwingend, siehe unten).
+3. Getestet (Unit, lokaler Gesamtlauf) und noch einmal unabhängig geprüft (fünf Prüfer, je ein Gegenprüfer).
+
+Nur das Frontend hat sich geändert (`app.js`, `gespraeche.js`, `kern.js`, `style.css`, `index.html`). `worker/src` ist
+unverändert, der Worker muss nicht neu deployt werden. Version 2.1.1 (`VERSION` und alle `?v=`).
+
+| Fund | Lösung |
+|---|---|
+| Zwei Tabs, dieselbe Entwurfskarte (mittel) | „Gespeichert“ und „verworfen“ gehen nur noch vorwärts. Kein älterer Stand nimmt sie zurück: weder beim Zusammenführen noch beim Schreiben auf dem Gerät (Lesen, Nachziehen und Schreiben in einem IndexedDB-Vorgang). Tab B beendet sein Bearbeiten mit dem Hinweis „… in einem anderen Fenster gespeichert“. Speichern läuft über eine Sperre je Entwurf (Web Locks): klicken zwei Tabs gleichzeitig, wartet der zweite und findet „gespeichert“. |
+| „Nochmal versuchen“ wirft Entwurfskarten weg (mittel) | Kam schon ein Entwurf oder Bericht an, gibt es kein „Nochmal versuchen“ mehr. Stattdessen: „Gabis Antwort ist danach abgebrochen. Der Entwurf ist vollständig angekommen – fehlt noch etwas, frag einfach nochmal.“ Gabi kennt die Karte bei Folgefragen. |
+| „Neues Gespräch“ bei bearbeiteter Notiz | Fragt jetzt zuerst. „Weiter bearbeiten“ lässt alles beim Alten, auch eine laufende Antwort. Aus der Schublade: Sie schließt vor der Frage. |
+| Beispiel-Chip (Demo) | Gehört zu seinem Diktat-Modus und ist nur aktiv, solange der läuft. Schneller Wechsel → Hinweis „… wurde nicht gesendet“, nie beim falschen Patienten. |
+| Safari: Fokus nach der Schublade, grüner Rahmen | Der Fokus geht zurück auf ☰ bzw. den bedienten Knopf, nach Tippen ohne Ring, per Tastatur mit Ring. Nach jeder Rückfrage wird ein verlorener Fokus zurückgegeben. Kein Ring um ganze Dialoge. |
+| Häkchen zeichnet sich bei jeder Rückkehr neu | Zeichnet nur einmal direkt nach dem Speichern, mit „Bewegung reduzieren“ gar nicht. |
+| Such-Platzhalter springt | Der Platzhalter hat die Ergebniszeile und die Sortierung wie das Ergebnis. Die Sortierung steht jetzt auch bei 1 Treffer, am Handy ist die Kopfzeile immer zweizeilig. Gemessen: 0 px Sprung bei 1, 3 und 12 Treffern. |
+| Übergang: v2.0-Gespräch nicht offen, wenn der Tab im Notizordner stand | Bleibt offen, „Gespräch“ führt hin. |
+| Übergang: andere Tabs erfahren nichts | Meldung an die anderen Tabs. Vor „Alle löschen“ und vor der Abmelde-Rückfrage wird die Liste frisch gelesen. |
+| Safari: Neuladen mitten in der Antwort zeigt „Keine Verbindung“ | Ein Verbindungsfehler gilt erst nach 5 s als echt (oder sofort bei Wechsel, Abmelden, Hintergrund). Lädt die Seite vorher neu, steht dort „unterbrochen“. |
+| 401 bei der Spracherkennung | Die Aufnahme bleibt als Karte „Jetzt senden“ und lässt sich nach dem neuen Anmelden schicken. |
+| Abmelden lässt Text und Suchbegriff stehen | Eingabefeld, Suche, Notizordner und Adresse werden geleert. |
+| Abmelden während des Speicherns: Anfrage ohne Code | Die App schickt nie mehr eine Anfrage ohne Code. Abmelden wartet, bis Laufendes gespeichert ist (Ladekreis mit Text). Der Code ist dabei sofort vom Gerät, Fehlermeldungen bleiben auf der Zugangsseite stehen. |
+| Abmelden verwirft eine Notiz-Bearbeitung ohne Warnung | Die Rückfrage warnt (roter Knopf). |
+| Auswahlkarte zeigt beim Nachladen den alten Fehler | Zeigt Platzhalter. |
+| „… neu geladen“ nach „Abmelden ohne Häkchen“ | Jetzt „Abgebrochen.“ |
+
+**Zwingende Einwände der ersten Gegenprüfung (eingearbeitet):**
+- Die verzögerte Bestätigung eines Netzfehlers durfte eine veraltete Kopie über den Stand eines anderen Tabs schreiben.
+  Jetzt bestätigt jeder Gesprächswechsel sofort, und geschrieben wird nur das aktuelle Gespräch.
+- Abmelden wartet auf laufendes Speichern. Der Code stand in der Zeit noch im Gerät (Tab zu → weiter angemeldet).
+  Jetzt wird er als Erstes gelöscht.
+- Abmelden räumte alle Hinweise weg, auch „Nicht gespeichert: …“. Fehler bleiben jetzt stehen.
+
+**Bewusst nicht gemacht („Fix 17“, Julius 09.11.2026: nicht einbauen):** Abmelden in einem Tab meldet andere offene
+Tabs desselben Browsers nicht ab (sie behalten den Code im Speicher, bis sie neu laden). Gefunden bei der Prüfung, gehört
+nicht zu den 16 Funden. Steht unter „Offen“.
+
+**Zweite Gegenprüfung (zusammengeführter Stand):** Alle 16 Funde sind behoben, in Chromium und WebKit, jedes Mal mit
+Gegenprobe gegen main. Dabei wurden 13 neue Fehler gefunden und von je einem Gegenprüfer bestätigt: 3 × „sollte“,
+10 × „kann“, keiner „muss“. Die meisten betrafen das Abmelden mit zwei offenen Tabs. Alle 13 sind behoben:
+
+| Fund | Lösung |
+|---|---|
+| Abmelden mit Häkchen, Tab während des Wartens zu → Gespräche blieben (sollte) | Mit Häkchen wird jetzt **sofort** gelöscht, erst danach auf laufendes Speichern gewartet. |
+| Zweiter Tab wartet auf die Speicher-Sperre, Abmelden mit Häkchen → Gespräch kam zurück bzw. zweite Notiz (sollte) | Nach dem Warten prüft der Tab, ob das Gespräch inzwischen gelöscht ist, und schickt dann nichts mehr („Nicht gespeichert – das Gespräch wurde inzwischen gelöscht …“). Ein schon abgelegtes Gespräch, das ein anderer Tab gelöscht hat, wird beim Schreiben nie wieder angelegt (Prüfung im selben IndexedDB-Vorgang). |
+| Netzfehler-Frist + zweiter Tab → vorläufige Antwort ging verloren (sollte) | Ein anderer Tab übernimmt die vorläufige Fehler-Antwort gleich an ihrer Stelle und schreibt sie nicht mehr weg. Die eigene Fassung („unterbrochen“) überschreibt er nie. |
+| Web Locks ohne Frist | Hinweis „… in einem anderen Fenster gespeichert – Gabi wartet darauf.“, nach 25 s Abbruch ohne Senden („bitte dort nachsehen“). |
+| Chromium: Neuladen nach der Karte, während Gabi noch schreibt, verlor die Karte (alt) | Die Karte wird sofort auf dem Gerät gesichert. |
+| 401 während des Abmeldens wurde verschwiegen | „Nicht gespeichert (TP-01): Der Zugangscode galt nicht mehr.“ bleibt auf der Zugangsseite (auch bei Notiz ändern/löschen). |
+| Hinweise außerhalb der gesperrten Seite („Rückgängig“ startete beim Abmelden eine Spracherkennung) | Alte Hinweise gehen schon zu Beginn des Abmeldens weg, „Rückgängig“ prüft das Abmelden. |
+| Abmelde-Frist deckte die Warteschlange der Sperre nicht ab (alt) | Die Frist gilt je Anfrage: Schickt ein Entwurf erst spät los, wartet das Abmelden auf seine Antwort. |
+| Ladetext beim Abmelden für Screenreader unsichtbar | Der Text bekommt den Fokus, die Seite ist dann nicht mehr gesperrt (sonst ist nichts zu sehen). |
+| Safari + „Bewegung reduzieren“: grüner Ring um ☰ | Nach Tippen/Klicken merkt sich die Rückfrage den Knopf nicht mehr; der Fokus kommt ohne Ring zurück. |
+| Rückfragen aus dem Info-Dialog: Fokus in Safari auf body (alt) | Fokus zurück aufs Badge. |
+| Such-Platzhalter: Restsprung bei langem Begriff (alt) | Die Ergebniszeile bricht nie um (sehr lange Begriffe enden mit „…“, voll stehen sie im Suchfeld). |
+| Sortierung umstellen: Fokus auf body (alt) | Der Fokus bleibt auf der Auswahl (Suche und Patientenseite). |
+
+„(alt)“ heißt: gab es schon in v2.1, erst die Prüfung hat es gefunden.
+
+**Nachprüfung der 13 Korrekturen (letzte Prüfrunde, 09.11.2026 abends):** Vier Prüfer, je ein Gegenprüfer, nur gegen den
+lokalen Testserver (0 Anfragen an Live, Repo unverändert). Alle 13 Korrekturen sind behoben, in Chromium und WebKit, jede
+mit Gegenprobe gegen den Stand davor. Neu gefunden und bestätigt: 1 × „sollte“, 10 × „kann“, keiner „muss“.
+Julius' Regel (09.11.2026): nur bestätigte „muss“/„sollte“ einbauen, „kann“ nur ins Log, danach keine weitere Prüfrunde.
+
+| Fund | Lösung |
+|---|---|
+| Zwei Tabs, Netzfehler gleich nach dem Entwurf: Tab B übernimmt die vorläufige Antwort samt Karte. Korrigiert B den Befund, nachdem A in der Frist neu geladen hat (oder tippt B in der Frist auf „Bearbeiten“), übergeht A die Korrektur, nimmt sie beim nächsten Schreiben zurück und speichert den alten Befund (sollte, neu durch die Nachbesserung) | Sobald B an der Karte arbeitet (Bearbeiten, Übernehmen, Speichern, Verwerfen – nicht PDF), gilt die Antwort in B als bestätigt; A übernimmt B's Änderung auf dem normalen Weg. Dazu kommen „gespeichert“/„verworfen“ aus einer noch vorläufigen Fassung sofort im anderen Tab an. Lösung so vom Gegenprüfer in beiden Engines erprobt (alle Abläufe OK, auch „A korrigiert selbst in der Frist“). |
+
+Die 10 „kann“-Funde stehen unter „Offen“ (Punkt 11).
+
+**Getestet (v2.1.1):**
+- Unit-Tests: **149 grün** (v2.1: 119). Neu sind Endzustände, das Zusammenführen mit „veraltet“ und mit vorläufigen
+  Netzfehlern anderer Tabs (auch: deren Gespeichertes/Verworfenes kommt gleich an), Netzfehler beim Neuladen, „nicht
+  wieder anlegen“ in den Ablagen, der Verlauf für den Server mit Karte und Quelltext-Wächter (Fokus, keine Anfrage ohne
+  Code, Abmelde-Reihenfolge, Sperre mit Frist, übernommene vorläufige Antwort gilt beim Arbeiten an der Karte).
+- Lokaler Gesamtlauf `tests/v2.mjs`: **431 von 431 grün** (v2.1: 258), in Chromium und WebKit. Neu sind alle 16 Funde
+  als Prüfung, dazu Abschnitt 3b (Neuladen mitten in der Antwort, echter Netzfehler, zwei Tabs), 3c (die 13 Funde der
+  Gegenprüfung: zwei Tabs, Abmelden mitten im Speichern, Tab zu im Wartefenster, Sperre, 401, Frist je Anfrage,
+  Ladetext; dazu der Fund der Nachprüfung: Korrektur am Entwurf nach Netzfehler in zwei Tabs, 4 Abläufe) und 4b (Fokus
+  rund um die Schublade, getippt, per Tastatur, am Laptop mit Maus, mit „Bewegung reduzieren“).
+- Gegenprobe: Abschnitt 3c gegen den Stand vor der Nachbesserung (alte Dateien per Route) – alle 15 Fehlerprüfungen
+  schlagen an (u. a. Gespräche nach „Tab zu“ noch auf dem Gerät, zweite Notiz, Karte weg in Chromium, kein Hinweis bei
+  401, Abmelden nach 19 s statt nach der Antwort). WebKit behielt die Karte beim Neuladen schon vorher.
+- Gegenprobe für den Fund der Nachprüfung (3c h, Stand vor der Korrektur per Route): alle 6 Fehlerprüfungen schlagen an.
+  In beiden Engines ging der alte Befund zum Server, und B zeigte A's Speichern erst nach 4,5 s statt nach 0,6 s.
+  „A korrigiert selbst in der Frist“ war schon vorher richtig und bleibt es.
+- Kein Test hat eine Anfrage an den Live-Worker oder die Live-Seite geschickt. Die Wache „keine Anfrage ohne Code“ blieb
+  in allen Teilen leer.
+
 ## Offen
 
 1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
@@ -438,5 +530,29 @@ git revert --no-commit 71bbb1e..HEAD && git checkout HEAD -- GABI-V2-LOG.md && g
 6. ~~Merge auf `main`~~ – erledigt am 08.11.2026 (v2 live). Rückweg zu v1 siehe „Live-Gang“.
 7. Später: Terminkalender/Praxissoftware (Baustein 2), Gesprächsverlauf über Geräte hinweg (bräuchte Konten statt
    gemeinsamem Code).
-8. **16 Funde der Live-Prüfung v2.1** (2 mittel, 14 niedrig, siehe „Live-Gang v2.1“) → v2.1.1, wenn Julius zustimmt.
-   Bei v2.1 kommen am echten iPhone dazu: Schublade, Umbenennen per Tipp, Abmelden mit Häkchen.
+8. ~~16 Funde der Live-Prüfung v2.1~~ – behoben in v2.1.1 (Branch `gabi-v2-1-1`), dazu 13 aus der Gegenprüfung; live
+   erst nach Julius' OK. Am echten iPhone noch offen: Schublade, Umbenennen per Tipp, Abmelden mit Häkchen, Fokus.
+9. **Andere Tabs beim Abmelden nicht mit abgemeldet** („Fix 17“ – Julius 09.11.2026: nicht einbauen, bleibt offen):
+   Ein zweiter offener Tab behält den Code im Speicher, bis er neu lädt. Mit Häkchen sind seine Gespräche aber vom
+   Gerät, er legt sie nicht wieder an.
+10. **Alt (schon in v2.0/v2.1, selten):** Wird mitten in einer Antwort neu geladen und schreibt danach ein zweiter Tab
+   in dasselbe Gespräch, verschwindet die unterbrochene Antwort (die Frage bleibt). Was der Start aus der Notfall-Kopie
+   nachträgt, erfahren andere offene Tabs nicht. Beides wäre eine eigene, größere Änderung an der Ablage.
+11. **„kann“-Funde der letzten Prüfrunde (09.11.2026, nur notiert – Julius: nicht umsetzen):**
+    - Wartet ein zweiter Tab beim Abmelden noch auf die Speicher-Sperre, kann bis zu 25 s später „… bitte dort
+      nachsehen“ auf der Zugangsseite stehen. Nach schnellem neuem Anmelden kommt dazu fälschlich „… Gespräch …
+      gelöscht“. Drei Prüfer fanden das unabhängig, die Ursache ist dieselbe.
+    - Abmelden mit Häkchen, das Leeren des Geräts scheitert und das Warten dauert länger als 8 s: Der Hinweis „… nicht
+      vollständig löschen …“ ist dann schon abgelaufen und fehlt auf der Zugangsseite. Das Löschen selbst wird beim
+      nächsten Start nachgeholt.
+    - B wartet beim Speichern auf die Sperre, A löscht das Gespräch oder meldet sich mit Häkchen ab. Dann zeigt B drei
+      Hinweise zugleich: „… Gabi wartet darauf“, „Dieses Gespräch wurde in einem anderen Fenster gelöscht“ und „Nicht
+      gespeichert – das Gespräch wurde inzwischen gelöscht …“. Dabei hat A die Notiz gespeichert.
+    - Abmelden mit Häkchen, während noch gespeichert wird: Die leere Begrüßung blitzt etwa 150 ms auf, bevor der
+      Ladekreis kommt.
+    - Fokus (alt, vor allem Safari/Tastatur):
+      - Umsortieren ohne Treffer oder nach fehlgeschlagener Suche lässt den Fokus auf body.
+      - Info-Dialog mit „Verstanden“ oder Esc geschlossen: Fokus auf body (Safari).
+      - Nach „Ja“ verschwindet der auslösende Knopf, der Fokus fällt auf body. Betrifft: Notiz löschen, Änderungen
+        verwerfen, Entwurf/Aufnahme verwerfen, Neuer Test-Patient.
+      - Safari: Der erste Knopf einer Rückfrage hat nach Tippen sofort einen grünen Ring.

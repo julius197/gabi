@@ -186,3 +186,150 @@ describe("Versionsstempel", () => {
     for (const m of eigene) expect(`${m[1]}?v=${m[2]}`).toBe(`${m[1]}?v=${version}`);
   });
 });
+
+describe("Ruhe: Häkchen „Gespeichert“", () => {
+  it("steht ohne „zeichnet“ fertig da, zeichnet nur auf Zuruf und mit „Bewegung reduzieren“ gar nicht", () => {
+    const wurzel = new URL("../../", import.meta.url);
+    const css = readFileSync(new URL("style.css", wurzel), "utf8");
+    const app = readFileSync(new URL("app.js", wurzel), "utf8");
+    /** Inhalt der ersten Regel mit genau diesem Selektor (am Zeilenanfang) */
+    const regel = (quelle, selektor) => (new RegExp(`(?:^|\\n)\\s*${selektor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`).exec(quelle) || [])[1] || "";
+    const reduziert = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    // CSS-Animationen starten bei jedem Neuaufbau und bei jedem hidden → sichtbar neu – der Grundzustand darf keine haben
+    expect(regel(css, ".haken path")).toMatch(/stroke-dashoffset:\s*0\b/);
+    expect(regel(css, ".haken path")).not.toMatch(/animation/);
+    expect(regel(css, ".haken.zeichnet path")).toMatch(/animation:\s*zeichnen\b/);
+    expect(regel(reduziert, ".haken.zeichnet path")).toMatch(/animation:\s*none/);
+    expect(regel(reduziert, ".haken.zeichnet path")).toMatch(/stroke-dashoffset:\s*0\b/); // sonst bliebe der Haken unsichtbar (Grundwert 20)
+    expect(app).toMatch(/function beruhigen\(wurzel\) \{[^}]*"zeichnet"/); // beruhigen() nimmt „zeichnet“ beim Verlassen wieder weg
+  });
+});
+
+describe("Ruhe: Kopfzeile der Suche springt nicht (v2.1.1)", () => {
+  const css = readFileSync(new URL("../../style.css", import.meta.url), "utf8");
+  it("Ergebniszeile einzeilig mit „…“ – Höhe unabhängig von Trefferzahl und Begriffslänge, ohne die Seite zu verbreitern", () => {
+    expect(css).toMatch(/\n\.ergebnis-kopf \{ min-width: 0; \}/);
+    expect(css).toMatch(/\n\.ergebnis-kopf \.suche-hinweis \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;[^}]*\}/);
+    expect(css).toMatch(/@media \(min-width: 640px\) \{ \.ergebnis-kopf \{ flex-wrap: nowrap; \} \}/);
+  });
+});
+
+describe("Fokus rund um die Schublade und nach Rückfragen (Safari fokussiert Knöpfe beim Tippen nicht, v2.1.1)", () => {
+  const wurzel = new URL("../../", import.meta.url);
+  const css = readFileSync(new URL("style.css", wurzel), "utf8");
+  const app = readFileSync(new URL("app.js", wurzel), "utf8");
+  it("ein Dialog selbst zeigt keinen Fokusring (Safari fokussiert ihn nach einer Rückfrage und beim Tab-Umlauf)", () => {
+    expect(css).toMatch(/(^|\n)dialog:focus-visible\s*\{\s*outline:\s*none;?\s*\}/);
+  });
+  it("Fokus aus dem Skript: nach Tippen/Klicken ohne Ring, per Tastatur mit (FocusOptions.focusVisible)", () => {
+    expect(app).toMatch(/addEventListener\("pointerdown", \(e\) => \{\s*perZeiger = true;/);
+    expect(app).toMatch(/addEventListener\("keydown", \(\) => \{ perZeiger = false; \}, true\)/);
+    expect(app).toMatch(/\.focus\(\{ preventScroll: true, focusVisible: !perZeiger \}\)/);
+  });
+  it("die Schublade gibt den Fokus gleich nach close() zurück – nicht erst im close-Ereignis (Safari: dann schon body)", () => {
+    const schliessen = app.slice(app.indexOf("function schubladeSchliessen("), app.indexOf("el.kopfMenue.addEventListener("));
+    expect(schliessen).toMatch(/const zumachen = \(\) => \{ d\.close\(\); fokusNachSchublade\(\); \};/);
+    expect(schliessen.match(/\.close\(\)/g)).toHaveLength(1); // sofort, „Bewegung reduzieren“ und nach der Animation: alles über zumachen()
+  });
+  it("nach Tippen/Klicken merkt sich der Dialog den Knopf nicht (Safari gäbe ihn mit Ring zurück); Knöpfe im geschlossenen Dialog zählen nicht", () => {
+    const frage = app.slice(app.indexOf("function frage("), app.indexOf("// 2 API"));
+    expect(frage).toMatch(/if \(perZeiger && ausloeser && document\.activeElement === ausloeser && !ausloeser\.matches\("input, textarea, select"\)\) ausloeser\.blur\(\);/);
+    expect(frage.indexOf("ausloeser.blur()")).toBeLessThan(frage.indexOf("showModal()"));
+    expect(app).toMatch(/!\(a instanceof HTMLDialogElement\) && !a\.closest\("dialog:not\(\[open\]\)"\)\) return a;/);
+    // Rückfragen aus dem Info-Dialog („Beispieldaten zurücksetzen?“, „Abmelden?“): zurück aufs Badge
+    expect(app).toMatch(/const ausInfoDialog = \(\) => \{ el\.dialogInfo\.close\(\); zuletztBedient = \{ knopf: el\.testBadge, zeit: performance\.now\(\) \}; \};/);
+    expect(app.match(/el\.dialogInfo\.close\(\)/g)).toHaveLength(1);
+  });
+  it("Sortierung umstellen: der Fokus bleibt auf der neuen Auswahl (Suche und Patientenseite)", () => {
+    expect(app).toMatch(/ersetzenSortierungBleibt\(inhalt, notizen\.length/);
+    expect(app).toMatch(/ersetzenSortierungBleibt\(el\.notizen, patientHtml\(p, notizen\)\)/);
+  });
+  it("Löschen/„Alle löschen“ geben den bedienten Knopf als Anker weiter; jede Rückfrage gibt den Fokus danach zurück", () => {
+    expect(app).toMatch(/gespraechLoeschenFragen\(eintrag\.dataset\.gespraech, knopf\)/);
+    expect(app).toMatch(/alleGespraecheLoeschenFragen\(alle\)/);
+    expect(app).toMatch(/gespraecheZeigen\(knopf\)/);
+    expect(app).toMatch(/gespraecheLeeren\(knopf\)/);
+    const frage = app.slice(app.indexOf("function frage("), app.indexOf("// 2 API"));
+    expect(frage).toMatch(/const ausloeser = bedienterKnopf\(\);/);
+    expect(frage).toMatch(/gegenstueck\(ausloeser\)/); // auch wenn die Liste inzwischen neu gebaut wurde
+  });
+});
+
+describe("Zugang: nie eine Worker-Anfrage ohne Code, Abmelden in fester Reihenfolge (v2.1.1)", () => {
+  const quelle = readFileSync(new URL("../../app.js", import.meta.url), "utf8");
+  /** Rumpf einer Funktion der obersten Ebene im IIFE (zwei Leerzeichen eingerückt) – bis zu ihrer schließenden Klammer. */
+  const rumpf = (name) => {
+    const start = quelle.search(new RegExp(`\\n  (?:async )?function ${name}\\(`));
+    expect(start, `${name}() fehlt`).toBeGreaterThan(-1);
+    return quelle.slice(start, quelle.indexOf("\n  }\n", start));
+  };
+  const zaehle = (t) => (t.match(/\bfetch\(/g) || []).length;
+
+  it("Netz nur über api(), chatStrom() und statusHolen() – je genau ein fetch()", () => {
+    expect(zaehle(quelle)).toBe(3);
+    expect(["api", "chatStrom", "statusHolen"].map((n) => zaehle(rumpf(n)))).toEqual([1, 1, 1]);
+  });
+
+  it("api() und chatStrom() prüfen den Code nach dem Demo-Zweig und vor dem fetch() (sonst Fehlversuch am Worker)", () => {
+    for (const n of ["api", "chatStrom"]) {
+      const r = rumpf(n);
+      const pruefung = r.indexOf("if (!code) throw ohneZugang()");
+      expect(pruefung, n).toBeGreaterThan(r.indexOf("if (modus.demo)"));
+      expect(pruefung, n).toBeLessThan(r.indexOf("fetch("));
+    }
+  });
+
+  it("Abmelden: Code sofort vom Gerät, Hinweise weg, Laufendes beenden, mit Häkchen SOFORT löschen, dann warten, Sitzung beenden, Reste leeren, zuletzt Code im Tab vergessen", () => {
+    const r = rumpf("abmelden");
+    const reihe = ['speicher.loeschen("lokal", "gabi.zugang")', 'if (!t.classList.contains("fehler")) t.remove()', "aufnahme.abbrechen()", "chat.laeuft.abbruch.abort()",
+      "gespraecheLeeren()", "Promise.allSettled([...laufend])", 'if (t.classList.contains("erfolg")) t.remove()', "neuesLeeresZeigen()",
+      "verlauf.abgemeldet = true", "aufnahmen.clear()", "ordnerLeeren()", 'el.text.value = ""', "zugangVergessen()", "zugangZeigen("];
+    const stellen = reihe.map((s) => r.indexOf(s));
+    expect(stellen.filter((x) => x < 0), JSON.stringify(Object.fromEntries(reihe.map((s, i) => [s, stellen[i]])))).toEqual([]);
+    expect([...stellen].sort((a, b) => a - b)).toEqual(stellen);
+    // Hinweise der alten Sitzung (außerhalb von #app, z. B. „Rückgängig“) gleich weg – Fehler bleiben auf der Zugangsseite
+    expect(r).not.toMatch(/el\.toasts\.replaceChildren\(\)/);
+    // Frist je Anfrage: ein Entwurf, der erst auf einen anderen Tab warten musste, verlängert das Warten (speichernBis)
+    expect(r).toMatch(/const frist = \(\) => Math\.max\(beginn \+ 20000, speichernBis\);/);
+    expect(r).toMatch(/while \(laufend\.size && Date\.now\(\) < frist\(\)\)/);
+    // Ladekreis mit Text: dann ist nur er zu sehen – #app nicht mehr inert (sonst hörten Screenreader nichts), Fokus auf den Text
+    expect(r).toMatch(/ansichtZeigen\("laden"\);\s*el\.app\.inert = false;\s*el\.ladenText\.focus\(\{ preventScroll: true \}\);/);
+  });
+
+  it("während des Abmeldens: kein Zugangs-Wechsel mittendrin, kein neues Anmelden, kein „Rückgängig“, Fehler werden genannt", () => {
+    for (const n of ["api", "chatStrom"]) expect(rumpf(n), n).toMatch(/if \(!abmeldenLaeuft\) zugangZeigen\("Der Zugangscode gilt nicht mehr/);
+    expect(quelle).toMatch(/e\.preventDefault\(\);\s*if \(abmeldenLaeuft\) return;/); // Anmelde-Formular
+    expect(quelle).toMatch(/text: "Rückgängig", tun: \(\) => \{\s*if \(verwaist\(g\) \|\| abmeldenLaeuft\) \{ aufnahmeVerwaist\(null\); return; \}/);
+    const speichern = rumpf("entwurfSpeichern");
+    expect(speichern).toMatch(/else if \(f instanceof Abbruch && f\.zugang\) toast\(`Nicht gespeichert \(\$\{k\.kuerzel\}\): Der Zugangscode galt nicht mehr\.`/);
+    expect(quelle).toMatch(/if \(f\.zugang\) toast\("Änderungen an der Notiz nicht gespeichert: Der Zugangscode galt nicht mehr\."/);
+    expect(quelle).toMatch(/if \(f\.zugang\) toast\("Notiz nicht gelöscht: Der Zugangscode galt nicht mehr\."/);
+    // abmeldenLaeuft steht vor api() (sonst Zugriff vor der Deklaration beim Start)
+    expect(quelle.indexOf("let abmeldenLaeuft = false;")).toBeLessThan(quelle.indexOf("async function api("));
+  });
+
+  it("Entwurf speichern: Sperre mit Frist, vor dem Senden prüfen, ob das Gespräch noch da ist, Frist fürs Abmelden verlängern", () => {
+    const sperre = rumpf("mitSperre");
+    expect(sperre).toMatch(/navigator\.locks\.request\(name, \{ ifAvailable: true \}/);
+    expect(sperre).toMatch(/navigator\.locks\.request\(name, \{ signal: ab\.signal \}/);
+    expect(sperre).toMatch(/setTimeout\(\(\) => ab\.abort\(\), 25000\)/);
+    expect(sperre).toMatch(/if \(!bekommen && ab\.signal\.aborted\) throw Object\.assign\(new Abbruch\(\), \{ gesperrt: true \}\);/);
+    const r = rumpf("entwurfSpeichern");
+    const reihe = ["if (verwaist(g)) return gespraechWeg();", "await entwurfInAblage(g.id, k.id)", "stand.fehlt && g.abgelegt", "speichernBis = Math.max(speichernBis, Date.now() + 20500);", 'api("/api/notizen", { methode: "POST"', "await gespraechMerken(g); // erst auf dem Gerät"];
+    const stellen = reihe.map((s) => r.indexOf(s));
+    expect(stellen.filter((x) => x < 0), JSON.stringify(Object.fromEntries(reihe.map((s, i) => [s, stellen[i]])))).toEqual([]);
+    expect([...stellen].sort((a, b) => a - b)).toEqual(stellen);
+    // ein abgelegtes Gespräch wird beim Schreiben nie wieder angelegt (nurVorhanden), auch nicht beim Umbenennen
+    expect(rumpf("gespraechSchreiben")).toMatch(/\{ nurVorhanden: Boolean\(g\.abgelegt\) \}/);
+    expect(rumpf("gespraechSchreiben")).toMatch(/if \(nachgezogen && nachgezogen\.fehlt\) \{ anderswoGeloescht\(g\); return; \}/);
+    expect(rumpf("umbenennen")).toMatch(/ablageSpeichern\(\{ \.\.\.e \}, null, \{ nurVorhanden: true \}\)/);
+  });
+
+  it("zwei Tabs: eine übernommene vorläufige Antwort gilt hier, sobald an ihrer Karte gearbeitet wird (nicht beim PDF)", () => {
+    const klick = quelle.slice(quelle.indexOf('el.nachrichten.addEventListener("click"'));
+    const regel = 'if (n.unterwegs && aktion.startsWith("entwurf-") && aktion !== "entwurf-pdf" && !netzVorlaeufig.has(n) && !(chat.laeuft && chat.laeuft.gabi === n)) delete n.unterwegs;';
+    expect(klick.indexOf(regel)).toBeGreaterThan(klick.indexOf("if (!k) return;"));
+    expect(klick.indexOf(regel)).toBeLessThan(klick.indexOf('aktion === "entwurf-bearbeiten"'));
+    expect(quelle.indexOf("const netzVorlaeufig = new Map();")).toBeLessThan(quelle.indexOf('el.nachrichten.addEventListener("click"'));
+  });
+});

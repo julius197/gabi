@@ -20,7 +20,7 @@
   // Seite und Skript aus verschiedenen Versionen (Browser-Cache: alte index.html, neue Dateien – oder v1 → v2):
   // einmal je Version frisch laden; hilft das nicht, ein Hinweis mit Knopf statt einer leeren Seite.
   // VERSION muss zum ?v= in index.html passen (ein Test prüft das).
-  const VERSION = "2.1.0";
+  const VERSION = "2.1.1";
   const MERKER = `gabi.frisch-geladen.${VERSION}`;
   let geladenAls = null;
   try { geladenAls = new URL(document.currentScript.src).searchParams.get("v"); } catch { geladenAls = null; }
@@ -63,7 +63,7 @@
     app: $("#app"), kopf: $("#kopf"), haupt: $("#haupt"), testBadge: $("#test-badge"), kopfWechsel: $("#kopf-wechsel"), kopfNeu: $("#kopf-neu"), seiteNeu: $("#seite-neu"), kopfMenue: $("#kopf-menue"),
     seitenPatienten: $("#seiten-patienten"), seitenFussText: $("#seiten-fuss-text"), seitenGespraeche: $("#seiten-gespraeche"),
     schublade: $("#schublade"), schubladeListe: $("#schublade-liste"), schubladeZu: $("#schublade-zu"),
-    laden: $("#ansicht-laden"), zugang: $("#ansicht-zugang"), offline: $("#ansicht-offline"), chat: $("#ansicht-chat"), notizen: $("#ansicht-notizen"),
+    laden: $("#ansicht-laden"), ladenDrehen: $("#laden-drehen"), ladenText: $("#laden-text"), zugang: $("#ansicht-zugang"), offline: $("#ansicht-offline"), chat: $("#ansicht-chat"), notizen: $("#ansicht-notizen"),
     zugangForm: $("#zugang-form"), zugangCode: $("#zugang-code"), zugangZeigen: $("#zugang-zeigen"), zugangFehler: $("#zugang-fehler"), zugangWeiter: $("#zugang-weiter"),
     offlineTitel: $("#offline-titel"), offlineText: $("#offline-text"), offlineErneut: $("#offline-erneut"),
     willkommen: $("#willkommen"), gruss: $("#gruss"), nachrichten: $("#nachrichten"),
@@ -98,6 +98,48 @@
   const GROB = window.matchMedia("(pointer: coarse)").matches;
   const WENIG_BEWEGUNG = window.matchMedia("(prefers-reduced-motion: reduce)");
   const LAPTOP = window.matchMedia("(min-width: 1024px)");
+
+  // ---------- Fokus ----------
+  // Fokus aus dem Skript: nach Tippen oder Klicken ohne Ring, per Tastatur mit. Sonst entscheidet Safari selbst und
+  // zeigt z. B. nach einer Rückfrage einen Ring, obwohl niemand die Tastatur benutzt hat.
+  let perZeiger = false;
+  let zuletztBedient = null; // { knopf, zeit } – Safari fokussiert Knöpfe beim Tippen nicht; hier steht, was angetippt wurde
+  document.addEventListener("pointerdown", (e) => {
+    perZeiger = true;
+    const k = e.target instanceof Element ? e.target.closest("button, a[href], [tabindex]") : null;
+    zuletztBedient = k ? { knopf: k, zeit: performance.now() } : null;
+  }, true);
+  document.addEventListener("keydown", () => { perZeiger = false; }, true);
+  // Safari fokussiert Knöpfe beim Tippen und Klicken nicht. Nach dem Schließen der Schublade oder nach einer Rückfrage
+  // liegt der Fokus dann auf body, auf der Schublade selbst oder noch im geschlossenen Dialog statt auf dem bedienten Knopf.
+  const fokusVerloren = () => {
+    const a = document.activeElement;
+    return !a || a === document.body || a === el.schublade || Boolean(a.closest("dialog:not([open])"));
+  };
+  /** Fokus setzen; nimmt Safari ihn direkt nach dem Schließen eines Dialogs nicht an, einmal im nächsten Bild nachfassen. */
+  function fokusSetzen(k) {
+    if (!k) return;
+    k.focus({ preventScroll: true, focusVisible: !perZeiger });
+    if (document.activeElement !== k) requestAnimationFrame(() => { if (k.isConnected && fokusVerloren()) k.focus({ preventScroll: true, focusVisible: !perZeiger }); });
+  }
+  /** Was gerade bedient wurde: der fokussierte Knopf – oder (Safari fokussiert beim Tippen nicht) der eben angetippte. */
+  function bedienterKnopf() {
+    const a = document.activeElement;
+    // ein Knopf im eben geschlossenen Dialog (z. B. „Abmelden“ im Info-Dialog) ist kein Ziel mehr – dann der hinterlegte
+    if (a && a !== document.body && !(a instanceof HTMLDialogElement) && !a.closest("dialog:not([open])")) return a;
+    return zuletztBedient && performance.now() - zuletztBedient.zeit < 2000 ? zuletztBedient.knopf : null;
+  }
+  /** Der bediente Knopf – oder, wurde die Gesprächsliste inzwischen neu gebaut, sein Gegenstück in der bedienten Liste. */
+  function gegenstueck(knopf) {
+    if (!knopf || knopf.isConnected) return knopf;
+    const liste = el.schublade.open ? el.schubladeListe : el.seitenGespraeche;
+    if (knopf.matches('[data-gespraeche="alle-loeschen"]')) return liste.querySelector('[data-gespraeche="alle-loeschen"]');
+    const eintrag = knopf.closest("[data-gespraech]");
+    const aktion = knopf.dataset.gespraechAktion;
+    return eintrag && aktion ? liste.querySelector(`[data-gespraech="${CSS.escape(eintrag.dataset.gespraech)}"] [data-gespraech-aktion="${aktion}"]`) : null;
+  }
+  const sichtbarBedienbar = (k) => Boolean(k && k.isConnected && !k.closest("dialog:not([open]), [hidden]"));
+  const zurueckAuf = (knopf) => { const k = gegenstueck(knopf); if (sichtbarBedienbar(k) && fokusVerloren()) fokusSetzen(k); };
 
   // ---------- Toasts ----------
   // Ist ein Dialog oder die Schublade offen, gehören Hinweise hinein: Alles außerhalb ist dann inert (Knöpfe wie „Ansehen“
@@ -142,6 +184,11 @@
   function frage(titel, text, { ja = "OK", nein = "Abbrechen", gefahr = false, haken = "" } = {}) {
     if (frageOffen) return Promise.resolve(false);
     frageOffen = true;
+    const ausloeser = bedienterKnopf();
+    const ausSchublade = el.schublade.open || Boolean(ausloeser && el.schublade.contains(ausloeser));
+    // nach Tippen/Klicken: Der Dialog soll sich den Knopf nicht merken – Safari gäbe ihm beim Schließen den Fokus sonst mit
+    // Ring zurück (z. B. ☰ nach „Neues Gespräch“ mit „Bewegung reduzieren“); die Rückgabe unten setzt ihn ohne Ring
+    if (perZeiger && ausloeser && document.activeElement === ausloeser && !ausloeser.matches("input, textarea, select")) ausloeser.blur();
     el.frageTitel.textContent = titel;
     el.frageText.textContent = text;
     el.frageJa.textContent = ja;
@@ -152,7 +199,18 @@
     el.frageHaken.checked = true;
     el.dialogFrage.returnValue = "";
     return new Promise((ok) => {
-      el.dialogFrage.addEventListener("close", () => { frageOffen = false; ok(el.dialogFrage.returnValue === "ja"); }, { once: true });
+      el.dialogFrage.addEventListener("close", () => {
+        frageOffen = false;
+        ok(el.dialogFrage.returnValue === "ja");
+        // erst wenn der Aufrufer seinen Fokus gesetzt hat: Ging er verloren (Safari, oder der Knopf ist weg), zurück auf den
+        // bedienten Knopf – kam die Rückfrage aus der inzwischen geschlossenen Schublade, auf ☰ bzw. in die Seitenleiste
+        setTimeout(() => {
+          if (!fokusVerloren()) return;
+          const k = gegenstueck(ausloeser);
+          if (sichtbarBedienbar(k) && !(perZeiger && k.matches("input, textarea"))) fokusSetzen(k); // Touch: keine Tastatur aufklappen
+          else if (ausSchublade && !el.schublade.open) fokusNachSchublade();
+        }, 0);
+      }, { once: true });
       el.dialogFrage.showModal();
     });
   }
@@ -161,7 +219,13 @@
   // 2 API – Worker oder Demo
   // ==========================================================
   let zugang = speicher.lesen("lokal", "gabi.zugang") || "";
+  let abmeldenLaeuft = false; // Abmelden wartet gerade auf Laufendes (siehe abmelden)
   class Abbruch extends Error {}
+  // Grundregel: nie eine Worker-Anfrage ohne Code (außer /api/status und der Anmeldung mit eigenem Code). Der Worker
+  // zählte sie als Fehlversuch. Ohne Code (abgemeldet) oder mit abgelehntem Code (401) gibt es Abbruch mit zugang: true.
+  const ohneZugang = () => Object.assign(new Abbruch(), { zugang: true });
+  /** Anfrage oder Antwortstrom ist abgerissen – so meldet Safari auch das Verlassen der Seite (siehe antwortHolen). */
+  const netzFehler = (text) => Object.assign(new Error(text), { netz: true });
   const STATUS_TEXT = (s) =>
     s === 429 ? "Gerade zu viele Anfragen – bitte kurz warten und nochmal versuchen."
       : s === 413 ? "Das ist zu lang für einen Durchgang."
@@ -174,6 +238,7 @@
       try { return await demoApi.anfrage(pfad, { methode, body, text }); }
       catch (e) { const f = new Error((e && e.message) || "Fehler im Demo-Modus."); f.status = e && e.status; throw f; }
     }
+    if (!code) throw ohneZugang(); // z. B. eine Folgeanfrage, die erst nach dem Abmelden losgehen würde
     const headers = { "X-Gabi-Zugang": code };
     let inhalt;
     if (text !== undefined) { headers["Content-Type"] = "text/plain"; inhalt = text; }
@@ -191,8 +256,9 @@
     }
     if (r.status === 401 && code === zugang) {
       zugangVergessen();
-      zugangZeigen("Der Zugangscode gilt nicht mehr. Bitte neu eingeben.");
-      throw new Abbruch();
+      // beim Abmelden nicht mittendrin die Zugangsseite zeigen – den Fehler nennt der Aufrufer („Nicht gespeichert …“)
+      if (!abmeldenLaeuft) zugangZeigen("Der Zugangscode gilt nicht mehr. Bitte neu eingeben.");
+      throw ohneZugang();
     }
     const daten = r.status === 204 ? null : await r.json().catch(() => null);
     if (!r.ok) {
@@ -211,6 +277,8 @@
       if (signal && signal.aborted) throw new Abbruch();
       return;
     }
+    const code = zugang;
+    if (!code) throw ohneZugang();
     const abbruch = new AbortController();
     const stopp = () => abbruch.abort();
     if (signal) signal.addEventListener("abort", stopp);
@@ -218,7 +286,7 @@
     let r;
     try {
       r = await fetch(`${API}/api/chat`, {
-        method: "POST", headers: { "X-Gabi-Zugang": zugang, "Content-Type": "application/json" },
+        method: "POST", headers: { "X-Gabi-Zugang": code, "Content-Type": "application/json" },
         body: JSON.stringify(body), cache: "no-store", signal: abbruch.signal,
       });
     } catch {
@@ -226,13 +294,13 @@
       if (signal) signal.removeEventListener("abort", stopp);
       if (signal && signal.aborted) throw new Abbruch();
       if (abbruch.signal.aborted) throw new Error("Gabi antwortet gerade nicht (Zeitüberschreitung). Bitte nochmal versuchen.");
-      throw new Error(navigator.onLine === false ? "Kein Internet. Bitte Verbindung prüfen." : "Keine Verbindung zum Server. Bitte nochmal versuchen.");
+      if (navigator.onLine === false) throw new Error("Kein Internet. Bitte Verbindung prüfen.");
+      throw netzFehler("Keine Verbindung zum Server. Bitte nochmal versuchen.");
     }
     try {
       if (r.status === 401) {
-        zugangVergessen();
-        zugangZeigen("Der Zugangscode gilt nicht mehr. Bitte neu eingeben.");
-        throw new Abbruch();
+        if (code === zugang) { zugangVergessen(); if (!abmeldenLaeuft) zugangZeigen("Der Zugangscode gilt nicht mehr. Bitte neu eingeben."); }
+        throw ohneZugang();
       }
       if (!r.ok) {
         const d = await r.json().catch(() => null);
@@ -256,7 +324,7 @@
         weiter(zeilen.ende());
       } catch {
         if (signal && signal.aborted) throw new Abbruch();
-        throw new Error("Die Verbindung ist abgebrochen. Bitte nochmal versuchen.");
+        throw netzFehler("Die Verbindung ist abgebrochen. Bitte nochmal versuchen.");
       }
       if (!ende) throw new Error("Die Antwort kam nicht vollständig an. Bitte nochmal versuchen.");
     } finally {
@@ -273,11 +341,11 @@
   let gezeigteAnsicht = "laden";
   /**
    * Was schon eingeblendet ist, soll beim Wiedererscheinen nicht noch einmal einblenden: CSS-Animationen starten bei jedem
-   * hidden → sichtbar neu. Deshalb beim Verlassen einer Ansicht die Einblend-Klassen entfernen und Nachrichten,
-   * Modus-Pill und Statuszeile auf „gezeigt“ setzen.
+   * hidden → sichtbar neu. Deshalb beim Verlassen einer Ansicht die Einblend-Klassen (auch das Zeichnen der Häkchen)
+   * entfernen und Nachrichten, Modus-Pill und Statuszeile auf „gezeigt“ setzen.
    */
   function beruhigen(wurzel) {
-    for (const k of wurzel.querySelectorAll(".einblenden")) k.classList.remove("einblenden");
+    for (const k of wurzel.querySelectorAll(".einblenden, .zeichnet")) k.classList.remove("einblenden", "zeichnet");
     for (const k of wurzel.querySelectorAll(".nachricht, .modus-pill, .status-zeile")) k.style.animation = "none";
   }
   function ansichtZeigen(name) {
@@ -332,6 +400,7 @@
 
   el.zugangForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (abmeldenLaeuft) return; // erst fertig abmelden – sonst nähme das Abmelden den neuen Code gleich wieder mit
     const code = el.zugangCode.value.trim();
     if (!code) { zugangZeigen("Bitte den Zugangscode eingeben."); return; }
     el.zugangWeiter.disabled = true;
@@ -457,8 +526,10 @@
     el.infoAbmelden.hidden = modus.demo || !zugang;
     el.dialogInfo.showModal();
   });
+  // Rückfragen aus dem Info-Dialog: Der Dialog ist zu, wenn sie kommen – danach zurück aufs Badge, das ihn geöffnet hat
+  const ausInfoDialog = () => { el.dialogInfo.close(); zuletztBedient = { knopf: el.testBadge, zeit: performance.now() }; };
   el.infoZuruecksetzen.addEventListener("click", async () => {
-    el.dialogInfo.close();
+    ausInfoDialog();
     if (!(await frage("Beispieldaten zurücksetzen?", "Alle Änderungen im Demo-Modus gehen verloren, auch die Demo-Gespräche.", { ja: "Zurücksetzen", gefahr: true }))) return;
     demoApi.zuruecksetzen();
     await gespraecheLeeren(); // Demo-Gespräche verweisen sonst auf Notizen, die es nicht mehr gibt
@@ -473,33 +544,100 @@
     location.reload();
   });
   el.infoAbmelden.addEventListener("click", async () => {
-    el.dialogInfo.close();
+    ausInfoDialog();
+    await listeAuffrischen(); // Entwürfe auch aus Gesprächen, die ein anderer Tab eben angelegt hat
     const a = aufnahmen.size;
-    const e = gesamtEntwuerfe();
+    // Entwürfe, die gerade gespeichert werden, gehen nicht verloren: Abmelden wartet auf sie
+    const speichert = [...new Set([chat.gespraech, ...verlauf.inhalte.values()])].flatMap((g) => entwuerfeVon(g)).filter(({ k }) => k.speichert).length;
+    const e = Math.max(0, gesamtEntwuerfe() - speichert);
+    const notiz = ordner.geaendert; // Notiz im Notizordner bearbeitet, aber nicht gespeichert
+    const notizSpeichert = notiz && ordner.beschaeftigt;
     const text = [
       "Der Zugangscode wird auf diesem Gerät gelöscht.",
+      notizSpeichert ? "Deine Änderungen an der Notiz werden gerade gespeichert – Gabi wartet noch darauf."
+        : notiz ? "Deine Änderungen an der Notiz sind noch nicht gespeichert und gehen verloren." : "",
       a === 1 ? "Eine Aufnahme ist noch nicht gesendet und geht verloren." : a > 1 ? `${a} Aufnahmen sind noch nicht gesendet und gehen verloren.` : "",
+      speichert === 1 ? "Ein Entwurf wird gerade gespeichert – Gabi wartet noch darauf." : speichert > 1 ? `${speichert} Entwürfe werden gerade gespeichert – Gabi wartet noch darauf.` : "",
       e === 1 ? "In den Gesprächen ist ein Entwurf noch nicht gespeichert." : e > 1 ? `In den Gesprächen sind ${e} Entwürfe noch nicht gespeichert.` : "",
     ].filter(Boolean).join(" ");
-    if (!(await frage("Abmelden?", text, { ja: "Abmelden", gefahr: Boolean(a || e), haken: "Gespräche auf diesem Gerät auch löschen" }))) return;
-    if (el.frageHaken.checked) {
-      await gespraecheLeeren();
-      // „auf diesem Gerät“ heißt alle: auch die getrennt gespeicherten Demo-Gespräche (die Demo-Beispieldaten bleiben)
-      await VERLAUF.resteLoeschen({ demo: true });
-      for (const k of ["gabi.demo.gespraech.v2", "gabi.demo.gespraeche.notfall", "gabi.entwurf.demo"]) speicher.loeschen("sitzung", k);
-      speicher.schreiben("lokal", "gabi.demo.gespraeche.geleert-am", String(Date.now()));
-      const demoKanal = VERLAUF.kanal("gabi-demo-gespraeche", () => {}); // offene Demo-Tabs: alles gelöscht
-      demoKanal.senden({ art: "geleert" });
-      setTimeout(() => demoKanal.schliessen(), 500);
-    } else {
-      neuesLeeresZeigen(); // laufende Antwort sauber beenden – die Gespräche bleiben auf diesem Gerät
-      verlauf.sitzung += 1; // Sitzung endet: was jetzt noch zurückkommt (Aufnahme), wird nicht mehr geparkt
-    }
+    if (!(await frage("Abmelden?", text, { ja: "Abmelden", gefahr: Boolean(a || e || (notiz && !notizSpeichert)), haken: "Gespräche auf diesem Gerät auch löschen" }))) return;
+    await abmelden({ loeschen: el.frageHaken.checked });
+  });
+
+  /** Text unter dem Ladekreis (leer = keiner); der Ladekreis sagt dasselbe für Screenreader. */
+  function ladenText(t) {
+    el.ladenText.textContent = t;
+    el.ladenText.hidden = !t;
+    el.ladenDrehen.setAttribute("aria-label", t || "Gabi startet");
+    el.laden.setAttribute("aria-busy", t ? "false" : "true"); // mit Text: Hilfstechnik soll ihn sagen, nicht zurückhalten
+  }
+
+  /**
+   * Abmelden in fester Reihenfolge – was danach noch zurückkommt, findet weder Sitzung noch Code:
+   * 1. Code sofort vom Gerät löschen (schließt jemand den Tab während des Wartens, ist das Gerät trotzdem abgemeldet);
+   *    nichts mehr bedienbar, nichts Neues mehr starten; Hinweise der alten Sitzung weg (außer Fehlern – sonst bliebe z. B.
+   *    „Rückgängig“ bedienbar, die Hinweise liegen außerhalb von #app); Aufnahme verwerfen, laufende Antwort abbrechen
+   * 2. Häkchen: Gespräche SOFORT löschen – geht der Tab während des Wartens zu, bleibt trotzdem nichts auf dem Gerät
+   *    (was danach noch fertig wird, gehört zu keiner Sitzung mehr; eine Notiz entsteht auf dem Server trotzdem)
+   * 3. warten, bis Laufendes fertig ist: das Ende der Antwort („Abgebrochen.“), ein Entwurf (auch einer, der erst auf einen
+   *    anderen Tab warten musste – die Frist gilt je Anfrage), eine Notiz-Änderung – sonst stünde später „… neu geladen“
+   *    da bzw. böte die Karte ein zweites Speichern an (doppelte Notiz)
+   * 4. Erfolgshinweise aus der Wartezeit weg („Gespeichert bei … Ansehen“) – Fehler und Warnungen bleiben stehen
+   * 5. leeres Gespräch zeigen, dann erst die Sitzung beenden – so gehört auch dieses zu keiner Sitzung mehr
+   * 6. Reste im Tab leeren: Aufnahmen, Notizordner (Zwischenspeicher, Suche, Ansicht), getippter Text, Adresse
+   * 7. Code auch im Tab vergessen, Zugangsseite
+   */
+  async function abmelden({ loeschen = false } = {}) {
+    if (abmeldenLaeuft) return;
+    abmeldenLaeuft = true;
+    speicher.loeschen("lokal", "gabi.zugang"); // laufende Anfragen behalten den Code (zugang) bis Schritt 7
+    gestartet = false;
+    el.app.inert = true;
+    for (const t of [...el.toasts.children]) if (!t.classList.contains("fehler")) t.remove(); // z. B. „Aufnahme verworfen. Rückgängig“
+    // dauert es (Speichern läuft noch), sagen, worauf gewartet wird – auch Screenreadern: Sonst ist nichts mehr zu sehen,
+    // #app muss dann nicht mehr inert sein (der Text darin wäre es mit), der Text bekommt den Fokus
+    const ladekreis = setTimeout(() => {
+      ladenText("Abmelden … Gabi speichert noch, was gerade läuft.");
+      ansichtZeigen("laden");
+      el.app.inert = false;
+      el.ladenText.focus({ preventScroll: true });
+    }, 150);
+    try {
+      if (aufnahme.phase !== "bereit") aufnahme.abbrechen();
+      if (chat.laeuft) chat.laeuft.abbruch.abort();
+      if (loeschen) {
+        await gespraecheLeeren();
+        // „auf diesem Gerät“ heißt alle: auch die getrennt gespeicherten Demo-Gespräche (die Demo-Beispieldaten bleiben)
+        await VERLAUF.resteLoeschen({ demo: true });
+        for (const k of ["gabi.demo.gespraech.v2", "gabi.demo.gespraeche.notfall", "gabi.entwurf.demo"]) speicher.loeschen("sitzung", k);
+        speicher.schreiben("lokal", "gabi.demo.gespraeche.geleert-am", String(Date.now()));
+        const demoKanal = VERLAUF.kanal("gabi-demo-gespraeche", () => {}); // offene Demo-Tabs: alles gelöscht
+        demoKanal.senden({ art: "geleert" });
+        setTimeout(() => demoKanal.schliessen(), 500);
+      }
+      // höchstens so lange wie eine Anfrage – ab Beginn bzw. ab dem Losschicken eines Entwurfs (speichernBis)
+      const beginn = Date.now();
+      const frist = () => Math.max(beginn + 20000, speichernBis);
+      while (laufend.size && Date.now() < frist()) await Promise.race([Promise.allSettled([...laufend]), warte(Math.max(0, frist() - Date.now()))]);
+      for (const t of [...el.toasts.children]) if (t.classList.contains("erfolg")) t.remove(); // z. B. „Gespeichert bei … Ansehen“
+      neuesLeeresZeigen(); // bestätigt auch vorläufige Netzfehler – solange die Sitzung noch gilt
+    } catch { /* trotzdem abmelden */ }
+    verlauf.abgemeldet = true; // ab hier wird nichts mehr gespeichert oder geparkt – bis zum nächsten Anmelden
+    verlauf.sitzung += 1;
     aufnahmen.clear();
-    ordnerZwischenspeicherLeeren();
+    ordnerLeeren();
+    el.text.value = "";
+    autoHoehe(el.text);
+    if (jetzigerHash() !== "#/") history.replaceState(null, "", "#/");
+    letzterHash = "#/";
+    clearTimeout(ladekreis);
+    ladenText("");
+    el.app.inert = false;
+    abmeldenLaeuft = false;
+    eingabeAktualisieren();
     zugangVergessen();
     zugangZeigen();
-  });
+  }
 
   // ==========================================================
   // 4 Navigation: #/ = neues Gespräch · #/gespraech/<id> = gespeichertes Gespräch · #/notizen …
@@ -522,6 +660,14 @@
     ersetzen(el.kopfWechsel, notizen ? `${symbol("chat")}<span class="beschriftung">Gespräch</span>` : `${symbol("notizen")}<span class="beschriftung">Notizen</span>`);
   }
 
+  /** Notiz mit ungespeicherten Änderungen verlassen? true = ja („Verwerfen“ oder nichts geändert), false = „Weiter bearbeiten“. */
+  async function notizVerlassenOk() {
+    if (!ordner.geaendert) return true;
+    if (!(await frage("Änderungen verwerfen?", "Du hast die Notiz bearbeitet, aber noch nicht gespeichert.", { ja: "Verwerfen", nein: "Weiter bearbeiten", gefahr: true }))) return false;
+    ordner.geaendert = false;
+    return true;
+  }
+
   async function route() {
     if (!gestartet || routeLaeuft) return;
     // alte v1-Adressen (#/aufnahme, #/ordner/…) auf v2 umleiten
@@ -530,7 +676,7 @@
     if (ziel !== roh) history.replaceState(null, "", ziel);
     routeLaeuft = true;
     try {
-      if (ziel !== letzterHash && ordner.geaendert && !(await frage("Änderungen verwerfen?", "Du hast die Notiz bearbeitet, aber noch nicht gespeichert.", { ja: "Verwerfen", nein: "Weiter bearbeiten", gefahr: true }))) {
+      if (ziel !== letzterHash && ordner.geaendert && !(await notizVerlassenOk())) {
         history.replaceState(null, "", letzterHash);
         return;
       }
@@ -582,15 +728,26 @@
   // eintraege = Liste (ohne Inhalt) · inhalte = in diesem Tab geöffnete Gespräche · geloescht = nie wieder anlegen ·
   // sitzung zählt bei Start, „Alle löschen“ und Abmelden hoch: Gespräche einer früheren Sitzung werden nie mehr geschrieben
   // (z. B. eine Spracherkennung, die erst nach „Abmelden + Gespräche löschen“ zurückkommt)
-  const verlauf = { ablage: null, eintraege: [], inhalte: new Map(), geloescht: new Set(), kanal: null, umbenennen: null, fehlerGezeigt: false, sitzung: 0 };
+  // abgemeldet: zwischen Abmelden und nächstem Anmelden gehört nichts zu einer Sitzung (auch kein später angelegtes Gespräch)
+  const verlauf = { ablage: null, eintraege: [], inhalte: new Map(), geloescht: new Set(), kanal: null, umbenennen: null, fehlerGezeigt: false, sitzung: 0, abgemeldet: false };
   const gespraechAnlegen = () => {
     const jetzt = Date.now();
     return { id: neueId(), titel: "", titelEigen: false, erstellt: jetzt, geaendert: jetzt, gespeichert: false, nachrichten: [], sitzung: verlauf.sitzung };
   };
   // chat.gespraech = das offene Gespräch; chat.nachrichten zeigt immer auf dessen Nachrichten
   const chat = { gespraech: gespraechAnlegen(), laeuft: null, modus: null, patienten: null, get nachrichten() { return this.gespraech.nachrichten; } };
+  /** Antworten und Speichern von Entwürfen, die noch laufen – Abmelden wartet, bis ihr Ergebnis gespeichert ist. */
+  const laufend = new Set();
+  // Abmelden wartet mindestens bis hier: Ein Entwurf, der erst auf einen anderen Tab warten musste, schickt spät los
+  let speichernBis = 0;
+  function abwarten(p) {
+    laufend.add(p);
+    const weg = () => laufend.delete(p);
+    p.then(weg, weg);
+    return p;
+  }
   /** Gehört nicht mehr dazu: gelöscht oder aus einer früheren Sitzung. */
-  const verwaist = (g) => !g || g.sitzung !== verlauf.sitzung || verlauf.geloescht.has(g.id);
+  const verwaist = (g) => !g || verlauf.abgemeldet || g.sitzung !== verlauf.sitzung || verlauf.geloescht.has(g.id);
   /** Adresse des offenen Gesprächs: gespeichert → #/gespraech/<id>, sonst #/. */
   const chatHash = (g = chat.gespraech) => (g.gespeichert ? `#/gespraech/${g.id}` : "#/");
 
@@ -610,6 +767,7 @@
   // ---------- Öffnen beim Start ----------
   async function verlaufStarten() {
     verlauf.sitzung += 1;
+    verlauf.abgemeldet = false;
     if (verlauf.kanal) verlauf.kanal.schliessen();
     verlauf.ablage = await VERLAUF.ablageOeffnen({ demo: modus.demo });
     unbestaetigt.clear();
@@ -644,9 +802,12 @@
       toast("Das bisherige Gespräch konnte noch nicht übernommen werden – es bleibt in diesem Tab, der nächste Start versucht es wieder.", { art: "warn", dauer: 7000 });
       return;
     }
+    g.abgelegt = true;
     if (verlauf.ablage.art !== "speicher") speicher.loeschen("sitzung", schl);
     verlauf.inhalte.set(g.id, g);
     eintragSetzen(m);
+    chat.gespraech = g; // bleibt offen – auch wenn der Tab gerade im Notizordner steht („Gespräch“ führt dann hierher)
+    if (verlauf.kanal) verlauf.kanal.senden({ art: "geaendert", id: g.id }); // andere offene Tabs: Liste auffrischen
     // war es gerade offen (v2.0-Adresse #/ bzw. v1 #/aufnahme): gleich wieder zeigen
     if (["#/", "#/aufnahme"].includes(jetzigerHash())) history.replaceState(null, "", `#/gespraech/${g.id}`);
   }
@@ -657,6 +818,13 @@
     const da = new Set(liste.map((m) => m.id));
     for (const g of verlauf.inhalte.values()) if (g.gespeichert && !da.has(g.id) && !verlauf.geloescht.has(g.id)) liste.push(VERLAUF.meta(g));
     verlauf.eintraege = liste.filter((m) => !verlauf.geloescht.has(m.id));
+  }
+
+  /** Vor Rückfragen über alle Gespräche: Liste frisch aus der Ablage – eine Meldung eines anderen Tabs kann fehlen. */
+  async function listeAuffrischen() {
+    if (!verlauf.ablage) return;
+    try { await listeNeuLesen(); } catch { return; }
+    gespraecheZeigen();
   }
 
   /** Ein anderer Tab hat etwas geändert: Liste neu lesen; dort Gelöschtes hier nicht wieder anlegen. */
@@ -678,6 +846,23 @@
   }
 
   /**
+   * Beim Schreiben fehlte ein schon abgelegtes Gespräch in der Ablage: Ein anderer Tab hat es gelöscht, seine Meldung ist
+   * noch unterwegs. Hier wie nach der Meldung (fremdeAenderung): nicht wieder anlegen; war es offen, ein leeres zeigen.
+   */
+  function anderswoGeloescht(g, { still = false } = {}) {
+    if (verlauf.geloescht.has(g.id)) return;
+    verlauf.geloescht.add(g.id);
+    zuSchreiben.delete(g);
+    verlauf.eintraege = verlauf.eintraege.filter((e) => e.id !== g.id);
+    if (g === chat.gespraech) {
+      neuesLeeresZeigen();
+      if (!still && !abmeldenLaeuft) toast("Dieses Gespräch wurde in einem anderen Fenster gelöscht.", { art: "warn" });
+    }
+    verlauf.inhalte.delete(g.id);
+    gespraecheZeigen();
+  }
+
+  /**
    * Ein anderer Tab hat ein Gespräch geändert, das hier geladen ist: Namen übernehmen; ist es hier offen und gerade nichts
    * in Arbeit, den neuen Stand zeigen – so überschreibt dieser Tab beim nächsten Speichern nichts aus dem anderen.
    */
@@ -691,18 +876,52 @@
     try { fremd = await verlauf.ablage.laden(id); } catch { return; }
     if (!Array.isArray(fremd) || g !== chat.gespraech) return;
     // zusammenführen: hier Laufendes und Bearbeitetes bleibt, Änderungen und neue Nachrichten des anderen Tabs kommen dazu
-    // (antwortet der andere noch, folgt nach seinem Ende eine weitere Meldung)
-    const laufend = chat.laeuft && chat.laeuft.gabi;
-    const r = VERLAUF.zusammenfuehren(g.nachrichten, VERLAUF.vorbereiten(fremd.filter((n) => n && !n.unterwegs), { fremd: true }), {
-      inArbeit: (n) => n === laufend || (n.karten || []).some((k) => k.bearbeiten || k.speichert || k.sendet || aufnahmen.has(k.id)),
+    // (antwortet der andere noch, folgt nach seinem Ende eine weitere Meldung; einen dort vorläufigen Netzfehler übernimmt
+    // zusammenfuehren gleich – sonst schriebe dieser Tab ihn beim nächsten Speichern aus der Ablage)
+    const laufendeAntwort = chat.laeuft && chat.laeuft.gabi;
+    const bearbeitet = entwuerfeVon(g, { nurBearbeitet: true });
+    const r = VERLAUF.zusammenfuehren(g.nachrichten, VERLAUF.vorbereiten(fremd, { fremd: true }), {
+      inArbeit: (n) => n === laufendeAntwort || (n.karten || []).some((k) => k.bearbeiten || k.speichert || k.sendet || aufnahmen.has(k.id)),
     });
-    if (!r.neu.length && !r.geaendert.length) return;
+    // ein Tab mit der Vorversion hat hier schon Gespeichertes/Verworfenes überschrieben: eigenen Stand zurückschreiben
+    if (!r.neu.length && !r.geaendert.length) { if (r.veraltet) gespraechMerken(g); return; }
     const unten = nahUnten();
     g.nachrichten = r.nachrichten;
     g.geaendert = Math.max(Number(m.geaendert) || 0, g.geaendert);
     for (const n of r.geaendert) nachrichtNeuZeichnen(n);
     if (r.neu.length) nachrichtenAbgleichen();
     if (unten && !el.chat.hidden) nachUntenRollen();
+    anderswoAbgeschlossen(g, bearbeitet);
+    if (r.veraltet) gespraechMerken(g);
+  }
+
+  /** Offene Entwürfe des Gesprächs samt Nachricht (auf Wunsch nur die, die hier gerade bearbeitet werden). */
+  function entwuerfeVon(g, { nurBearbeitet = false } = {}) {
+    return g.nachrichten.flatMap((n) => (n.karten || []).filter((k) => k.typ === "entwurf" && !k.gespeichert && !k.verworfen && (!nurBearbeitet || k.bearbeiten)).map((k) => ({ n, k })));
+  }
+  /** Einer dieser Entwürfe wurde gerade in einem anderen Tab abgeschlossen: sagen, warum das Bearbeiten hier endet. */
+  function anderswoAbgeschlossen(g, vorher) {
+    const b = g === chat.gespraech && vorher.find(({ k }) => k.gespeichert || k.verworfen);
+    if (!b) return;
+    // das Textfeld ist weg: Fokus nicht ins Leere fallen lassen – auf „Notiz ansehen“ bzw. die verworfene Karte selbst
+    if (document.activeElement === document.body) {
+      const karte = nachrichtKnoten.get(b.n.id)?.querySelector(`[data-karte="${CSS.escape(b.k.id)}"]`);
+      fokusSetzen(karte && (karte.querySelector("a") || (karte.matches("[tabindex]") ? karte : null)));
+    }
+    if (b.k.gespeichert) toast("Dieser Entwurf wurde in einem anderen Fenster gespeichert.", { art: "erfolg", aktion: { text: "Ansehen", tun: () => { location.hash = `#/notizen/n/${b.k.gespeichert}`; } } });
+    else toast("Dieser Entwurf wurde in einem anderen Fenster verworfen.", { art: "warn" });
+  }
+
+  /** Die Ablage kannte schon Endzustände (anderer Tab hat gespeichert/verworfen), die diesem Tab fehlten: nachziehen und zeigen. */
+  function endzustaendeNachziehen(g, quelle) {
+    if (verwaist(g)) return;
+    const offen = entwuerfeVon(g);
+    const geaendert = VERLAUF.endzustaendeUebernehmen(g.nachrichten, quelle);
+    if (!geaendert.length) return;
+    const e = verlauf.eintraege.find((x) => x.id === g.id);
+    if (e) e.entwuerfe = VERLAUF.offeneEntwuerfe(g.nachrichten);
+    if (g === chat.gespraech) for (const n of geaendert) nachrichtNeuZeichnen(n);
+    anderswoAbgeschlossen(g, offen); // dieser Tab hat gerade selbst daran gearbeitet (geschrieben): immer sagen
   }
 
   // ---------- Speichern (nur dieses Gerät) ----------
@@ -713,8 +932,8 @@
    * ein Neuladen direkt danach verliert nichts). Nur Tippen in einer Karte wird gebündelt (spaeter: true, 300 ms).
    */
   function gespraechMerken(g = chat.gespraech, { spaeter = false } = {}) {
-    if (!g) return;
-    if (!spaeter || !g.gespeichert) { zuSchreiben.delete(g); gespraechSchreiben(g); return; }
+    if (!g) return undefined;
+    if (!spaeter || !g.gespeichert) { zuSchreiben.delete(g); return gespraechSchreiben(g); } // Versprechen: geschrieben
     zuSchreiben.add(g);
     clearTimeout(merkenUhr);
     merkenUhr = setTimeout(allesSchreiben, 300);
@@ -735,11 +954,11 @@
   // Was noch nicht bestätigt ist, kommt beim Verlassen synchron in sessionStorage; der nächste Start trägt es nach.
   const unbestaetigt = new Map(); // id → { m, nachrichten } · { id, weg: true } · "*" → { alle: true }
   const NOTFALL = () => schluessel("gespraeche.notfall");
-  function ablageSpeichern(m, nachrichten) {
+  function ablageSpeichern(m, nachrichten, optionen) {
     const vorher = unbestaetigt.get(m.id);
     const eintrag = { m, nachrichten: nachrichten || (vorher && vorher.nachrichten) || null };
     unbestaetigt.set(m.id, eintrag);
-    return verlauf.ablage.speichern(m, nachrichten).then(() => { if (unbestaetigt.get(m.id) === eintrag) unbestaetigt.delete(m.id); });
+    return verlauf.ablage.speichern(m, nachrichten, optionen).then((nachgezogen) => { if (unbestaetigt.get(m.id) === eintrag) unbestaetigt.delete(m.id); return nachgezogen; });
   }
   function ablageLoeschen(ids) {
     const eintraege = ids.map((id) => { const e = { id, weg: true }; unbestaetigt.set(id, e); return e; });
@@ -757,6 +976,31 @@
     if (unbestaetigt.size) speicher.schreiben("sitzung", NOTFALL(), JSON.stringify([...unbestaetigt.values()])); // … und sichert sie synchron
   });
   window.addEventListener("pageshow", (e) => { if (e.persisted) speicher.loeschen("sitzung", NOTFALL()); }); // aus dem Zurück-Cache: läuft einfach weiter
+
+  // ---------- Netzfehler oder Neuladen? ----------
+  // Safari bricht laufende Anfragen schon beim Start eines Neuladens ab, noch vor pagehide („Load failed“) – das sieht aus
+  // wie ein Verbindungsfehler. Deshalb bleibt eine Antwort mit Netzfehler zuerst als „unterwegs“ gespeichert (nach dem
+  // Neuladen: „unterbrochen“). Angezeigt wird der Fehler sofort. Bleibt die Seite da, gilt er und wird gespeichert:
+  // nach NETZ_FRIST oder sobald die App in den Hintergrund geht (dabei kommt kein pagehide).
+  const NETZ_FRIST = 5000;
+  let seiteGeht = false;
+  const netzVorlaeufig = new Map(); // Antwort → { g, uhr }
+  function netzfehlerBestaetigen(gabi) {
+    const v = netzVorlaeufig.get(gabi);
+    if (!v || seiteGeht) return;
+    netzVorlaeufig.delete(gabi);
+    clearTimeout(v.uhr);
+    delete gabi.unterwegs;
+    if (v.g === chat.gespraech || verlauf.inhalte.get(v.g.id) === v.g) gespraechMerken(v.g); // nie eine veraltete Kopie schreiben
+  }
+  function netzfehlerVergessen(gabi) {
+    const v = netzVorlaeufig.get(gabi);
+    if (v) { clearTimeout(v.uhr); netzVorlaeufig.delete(gabi); }
+  }
+  window.addEventListener("pagehide", () => { seiteGeht = true; });
+  window.addEventListener("pageshow", () => { seiteGeht = false; });
+  document.addEventListener("visibilitychange", () => { if (document.hidden && !seiteGeht) for (const gabi of [...netzVorlaeufig.keys()]) netzfehlerBestaetigen(gabi); });
+
   /** Beim Start: abgebrochene Schreibvorgänge der letzten Seite nachtragen (nie Neueres überschreiben). */
   // dauerhaft (localStorage): gelöschte IDs und Zeitpunkt von „Alle löschen“ – damit eine Notfall-Kopie nichts zurückbringt,
   // was inzwischen (auch in einem anderen Tab) gelöscht wurde
@@ -808,15 +1052,22 @@
   }
 
   function gespraechSchreiben(g) {
-    if (!verlauf.ablage || verwaist(g) || VERLAUF.istLeer(g.nachrichten)) return; // gelöscht/alte Sitzung/leer: nicht speichern
+    if (!verlauf.ablage || verwaist(g) || VERLAUF.istLeer(g.nachrichten)) return undefined; // gelöscht/alte Sitzung/leer: nicht speichern
     if (!g.titelEigen) g.titel = VERLAUF.titelAus(g.nachrichten);
     const erstes = !g.gespeichert;
     g.gespeichert = true;
     verlauf.inhalte.set(g.id, g);
     const m = { ...VERLAUF.meta(g), gespeichertAm: Date.now() };
     eintragSetzen(m);
-    ablageSpeichern(m, VERLAUF.bereinigen(g.nachrichten))
-      .then(() => verlauf.kanal && verlauf.kanal.senden({ art: "geaendert", id: g.id }))
+    // schon einmal abgelegt und jetzt nicht mehr da: ein anderer Tab hat es gelöscht (seine Meldung ist noch unterwegs) –
+    // dann nicht wieder anlegen (z. B. nach „Abmelden + Gespräche löschen“ dort)
+    const geschrieben = ablageSpeichern(m, VERLAUF.bereinigen(g.nachrichten), { nurVorhanden: Boolean(g.abgelegt) })
+      .then((nachgezogen) => {
+        if (nachgezogen && nachgezogen.fehlt) { anderswoGeloescht(g); return; }
+        g.abgelegt = true;
+        if (nachgezogen) endzustaendeNachziehen(g, nachgezogen); // dort schon gespeichert/verworfen: nicht zurücknehmen
+        if (verlauf.kanal) verlauf.kanal.senden({ art: "geaendert", id: g.id });
+      })
       .catch(speicherFehler);
     if (erstes) {
       if (g === chat.gespraech && !jetzigerHash().startsWith("#/notizen")) {
@@ -828,6 +1079,7 @@
       limitPruefen();
     }
     gespraecheZeigen();
+    return geschrieben;
   }
 
   /** Mehr als 50 Gespräche: die am längsten unbenutzten fliegen raus – mit dezentem Hinweis. */
@@ -872,7 +1124,7 @@
     try { nachrichten = await verlauf.ablage.laden(id); } catch { nachrichten = null; }
     if (!Array.isArray(nachrichten)) return null;
     if (verlauf.inhalte.has(id)) return verlauf.inhalte.get(id); // inzwischen geladen
-    const g = { id, titel: m.titel, titelEigen: Boolean(m.titelEigen), erstellt: m.erstellt, geaendert: m.geaendert, gespeichert: true, nachrichten: VERLAUF.vorbereiten(nachrichten), sitzung: verlauf.sitzung };
+    const g = { id, titel: m.titel, titelEigen: Boolean(m.titelEigen), erstellt: m.erstellt, geaendert: m.geaendert, gespeichert: true, abgelegt: true, nachrichten: VERLAUF.vorbereiten(nachrichten), sitzung: verlauf.sitzung };
     verlauf.inhalte.set(id, g);
     return g;
   }
@@ -883,6 +1135,7 @@
    */
   function gespraechAktivieren(g) {
     if (!g || g === chat.gespraech) return;
+    for (const gabi of [...netzVorlaeufig.keys()]) netzfehlerBestaetigen(gabi); // Wechsel (auch Abmelden): die Seite bleibt – Netzfehler gelten
     if (chat.laeuft) { chat.laeuft.abbruch.abort(); chat.laeuft = null; }
     sprechenStoppen();
     sofortSichern();
@@ -903,6 +1156,13 @@
 
   /** „Neues Gespräch“: das alte bleibt in der Liste (nichts geht verloren, auch keine Aufnahme oder kein Entwurf). */
   function neuesGespraech() {
+    // Notiz mit ungespeicherten Änderungen offen: ERST fragen – „Weiter bearbeiten“ lässt alles beim Alten (offenes Gespräch,
+    // laufende Antwort, Links, Schublade); erst nach „Verwerfen“ entsteht das neue Gespräch
+    if (ordner.geaendert) {
+      if (el.schublade.open) schubladeSchliessen(); // wie ein Eintrag in der Schublade: erst zu, dann fragen – „Weiter bearbeiten“ führt in die Notiz
+      notizVerlassenOk().then((weiter) => { if (weiter) neuesGespraech(); });
+      return;
+    }
     const ausSchublade = el.schublade.open;
     if (chat.nachrichten.length || chat.gespraech.gespeichert) gespraechAktivieren(gespraechAnlegen());
     if (jetzigerHash() !== "#/") location.hash = "#/";
@@ -916,7 +1176,7 @@
   el.seiteNeu.addEventListener("click", neuesGespraech);
 
   /** Alle Gespräche dieses Modus löschen (Liste, Inhalte, nicht gesendete Aufnahmen) – danach ein leeres Gespräch. */
-  async function gespraecheLeeren() {
+  async function gespraecheLeeren(anker = null) {
     verlauf.sitzung += 1; // was jetzt noch zurückkommt (Antwort, Spracherkennung), gehört zu nichts mehr
     speicher.schreiben("lokal", GELEERT(), String(Date.now()));
     for (const e of verlauf.eintraege) verlauf.geloescht.add(e.id);
@@ -944,7 +1204,7 @@
     speicher.loeschen("sitzung", schluessel("gespraech.v2"));
     speicher.loeschen("sitzung", NOTFALL());
     speicher.loeschen("sitzung", modus.demo ? "gabi.entwurf.demo" : "gabi.entwurf");
-    gespraecheZeigen();
+    gespraecheZeigen(anker);
   }
 
   const offeneEntwuerfe = () => chat.nachrichten.flatMap((n) => n.karten || []).filter((k) => k.typ === "entwurf" && !k.gespeichert && !k.verworfen);
@@ -987,12 +1247,15 @@
         <button class="knopf leise klein" type="button" data-gespraeche="alle-loeschen">${symbol("muell")}Alle Gespräche löschen</button></div>`;
   }
 
-  function gespraecheZeigen() {
+  /** anker: der bediente Knopf (Löschen, „Alle löschen“). Ging der Fokus verloren (Safari), gilt er als Fokus in der Liste. */
+  function gespraecheZeigen(anker = null) {
     if (verlauf.umbenennen) { verlauf.verpasst = true; return; } // nicht unter den Fingern neu bauen – danach nachholen
     const html = gespraecheHtml();
+    const bedient = el.schublade.open ? el.schubladeListe : el.seitenGespraeche;
     for (const liste of [el.seitenGespraeche, el.schubladeListe]) {
       // Tastatur-Fokus in der Liste merken und nach dem Neuaufbau wiederherstellen (gleicher Eintrag, sonst ein Nachbar)
-      const f = document.activeElement && liste.contains(document.activeElement) ? document.activeElement : null;
+      const a = document.activeElement;
+      const f = a && liste.contains(a) ? a : anker && liste === bedient && fokusVerloren() ? anker : null;
       const eintrag = f && f.closest("[data-gespraech]");
       const merke = f && { id: eintrag && eintrag.dataset.gespraech, aktion: f.dataset.gespraechAktion || "", alle: f.matches('[data-gespraeche="alle-loeschen"]'),
         nachbarn: eintrag ? [...liste.querySelectorAll("[data-gespraech]")].map((x) => x.dataset.gespraech) : [] };
@@ -1002,19 +1265,20 @@
         || merke.nachbarn.slice(merke.nachbarn.indexOf(merke.id) + 1).concat(merke.nachbarn.slice(0, merke.nachbarn.indexOf(merke.id)).reverse())
           .map((nid) => liste.querySelector(`[data-gespraech="${CSS.escape(nid)}"] .gespraech-link`)).find(Boolean)
         || (liste === el.schubladeListe ? el.schublade.querySelector("[data-gespraech-neu]") : el.seiteNeu);
-      if (ziel) ziel.focus({ preventScroll: true });
+      fokusSetzen(ziel);
     }
   }
 
   document.addEventListener("click", (e) => {
     if (e.target.closest("[data-gespraech-neu]")) { neuesGespraech(); return; }
-    if (e.target.closest('[data-gespraeche="alle-loeschen"]')) { alleGespraecheLoeschenFragen(); return; }
+    const alle = e.target.closest('[data-gespraeche="alle-loeschen"]');
+    if (alle) { alleGespraecheLoeschenFragen(alle); return; }
     const knopf = e.target.closest("[data-gespraech-aktion]");
     if (knopf) {
       const eintrag = knopf.closest("[data-gespraech]");
       if (!eintrag) return;
       if (knopf.dataset.gespraechAktion === "umbenennen") umbenennenStarten(eintrag.dataset.gespraech, eintrag);
-      else gespraechLoeschenFragen(eintrag.dataset.gespraech);
+      else gespraechLoeschenFragen(eintrag.dataset.gespraech, knopf);
       return;
     }
     if (e.target.closest(".gespraech-link") && el.schublade.open) schubladeSchliessen(); // die Adresse wechselt über den Link
@@ -1088,8 +1352,8 @@
     if (g) { g.titel = titel; g.titelEigen = true; }
     if (verlauf.ablage) {
       e.gespeichertAm = Date.now();
-      ablageSpeichern({ ...e }, null)
-        .then(() => verlauf.kanal && verlauf.kanal.senden({ art: "geaendert", id }))
+      ablageSpeichern({ ...e }, null, { nurVorhanden: true }) // inzwischen anderswo gelöscht: keinen leeren Eintrag anlegen
+        .then((r) => { if (r && r.fehlt) { listeAuffrischen(); return; } if (verlauf.kanal) verlauf.kanal.senden({ art: "geaendert", id }); })
         .catch(speicherFehler);
     }
   }
@@ -1097,24 +1361,25 @@
   // ---------- Löschen ----------
   const entwurfSatz = (n, wo = "") => (n === 1 ? ` Ein Entwurf${wo} ist noch nicht gespeichert und geht verloren.` : n > 1 ? ` ${n} Entwürfe${wo} sind noch nicht gespeichert und gehen verloren.` : "");
 
-  async function gespraechLoeschenFragen(id) {
+  async function gespraechLoeschenFragen(id, knopf = null) {
     const e = verlauf.eintraege.find((x) => x.id === id);
     if (!e) return;
     const g = verlauf.inhalte.get(id);
     const entwuerfe = g ? VERLAUF.offeneEntwuerfe(g.nachrichten) : Number(e.entwuerfe) || 0;
-    if (!(await frage("Gespräch löschen?", `„${e.titel}“ wird von diesem Gerät gelöscht.${entwurfSatz(entwuerfe, " darin")} Gespeicherte Notizen bleiben erhalten.`, { ja: "Löschen", gefahr: true }))) return;
+    if (!(await frage("Gespräch löschen?", `„${e.titel}“ wird von diesem Gerät gelöscht.${entwurfSatz(entwuerfe, " darin")} Gespeicherte Notizen bleiben erhalten.`, { ja: "Löschen", gefahr: true }))) { zurueckAuf(knopf); return; }
     if (chat.gespraech.id === id) neuesLeeresZeigen();
     entfernen([id]);
-    gespraecheZeigen();
+    gespraecheZeigen(knopf);
     toast("Gespräch gelöscht.", { art: "erfolg", dauer: 2500 });
   }
 
-  async function alleGespraecheLoeschenFragen() {
+  async function alleGespraecheLoeschenFragen(knopf = null) {
+    await listeAuffrischen(); // eine Meldung eines anderen Tabs kann fehlen – Anzahl und Entwürfe frisch zählen
     const anzahl = verlauf.eintraege.length;
     if (!anzahl) return;
     const wer = anzahl === 1 ? "Das Gespräch wird" : `Alle ${anzahl} Gespräche werden`;
-    if (!(await frage("Alle Gespräche löschen?", `${wer} von diesem Gerät gelöscht.${entwurfSatz(gesamtEntwuerfe())} Gespeicherte Notizen bleiben erhalten.`, { ja: "Alle löschen", gefahr: true }))) return;
-    await gespraecheLeeren();
+    if (!(await frage("Alle Gespräche löschen?", `${wer} von diesem Gerät gelöscht.${entwurfSatz(gesamtEntwuerfe())} Gespeicherte Notizen bleiben erhalten.`, { ja: "Alle löschen", gefahr: true }))) { zurueckAuf(knopf); return; }
+    await gespraecheLeeren(knopf);
     toast("Alle Gespräche sind gelöscht.", { art: "erfolg", dauer: 2500 });
   }
 
@@ -1126,15 +1391,25 @@
     el.schublade.showModal();
     const aktiv = el.schubladeListe.querySelector('[aria-current="true"]');
     if (aktiv) aktiv.scrollIntoView({ block: "nearest" });
-    (aktiv || el.schublade.querySelector("[data-gespraech-neu]")).focus({ preventScroll: true });
+    fokusSetzen(aktiv || el.schublade.querySelector("[data-gespraech-neu]"));
   }
   let nachSchliessen = null; // z. B. Fokus ins Eingabefeld, sobald die Schublade zu ist
+  /**
+   * Fokus zurück auf ☰ (Handy) bzw. in die Seitenleiste (Laptop), wenn er in der Schublade war oder verloren ging.
+   * Chromium gibt ihn beim Schließen selbst an ☰ zurück. Safari fokussiert Knöpfe beim Tippen und Klicken nicht und
+   * gibt deshalb nichts zurück – bis zum close-Ereignis liegt der Fokus dort schon auf body.
+   */
+  function fokusNachSchublade() {
+    if (el.kopf.hidden || !(fokusVerloren() || el.schublade.contains(document.activeElement))) return;
+    fokusSetzen(LAPTOP.matches ? el.seitenGespraeche.querySelector('[aria-current="true"]') || el.seiteNeu : el.kopfMenue);
+  }
   function schubladeSchliessen(sofort = false, danach = null) {
     const d = el.schublade;
     if (danach) nachSchliessen = danach;
     if (!d || !d.open) { if (nachSchliessen) { const f = nachSchliessen; nachSchliessen = null; f(); } return; }
     if (d.classList.contains("schliesst")) return;
-    if (sofort || WENIG_BEWEGUNG.matches) { d.close(); return; }
+    const zumachen = () => { d.close(); fokusNachSchublade(); }; // gleich danach – wie Chromium, ohne Lücke bis zum Ereignis
+    if (sofort || WENIG_BEWEGUNG.matches) { zumachen(); return; }
     d.classList.add("schliesst");
     let erledigt = false;
     const zu = (e) => {
@@ -1142,7 +1417,7 @@
       erledigt = true;
       d.removeEventListener("animationend", zu);
       d.classList.remove("schliesst");
-      if (d.open) d.close();
+      if (d.open) zumachen();
     };
     d.addEventListener("animationend", zu);
     setTimeout(zu, 400); // falls kein animationend kommt
@@ -1155,11 +1430,7 @@
     el.schublade.classList.remove("schliesst");
     const danach = nachSchliessen;
     nachSchliessen = null;
-    if (!el.kopf.hidden && el.schublade.contains(document.activeElement)) {
-      // Handy: zurück auf den Menü-Knopf; am Laptop gibt es ihn nicht – dann in die Seitenleiste
-      const ziel = LAPTOP.matches ? el.seitenGespraeche.querySelector('[aria-current="true"]') || el.seiteNeu : el.kopfMenue;
-      ziel.focus({ preventScroll: true });
-    }
+    fokusNachSchublade(); // falls die Schublade einmal anders als über schubladeSchliessen zugeht
     if (danach) danach();
   });
   LAPTOP.addEventListener("change", () => { if (LAPTOP.matches) schubladeSchliessen(true); });
@@ -1242,10 +1513,37 @@
   function nachrichtNeuZeichnen(n) {
     if (!chat.nachrichten.includes(n)) return; // gehört zu einem verworfenen Gespräch
     const alt = nachrichtKnoten.get(n.id);
+    // Tippt die Nutzerin gerade in einem Feld dieser Nachricht (z. B. Entwurf 1, während ein anderer Tab Entwurf 2
+    // abschließt): Feld, Cursor und Höhe nach dem Neuaufbau wiederherstellen – sonst gingen die nächsten Tasten ins Leere
+    const a = document.activeElement;
+    const feld = alt && alt.isConnected && a && alt.contains(a) && a.matches("textarea[data-abschnitt]") ? a : null;
+    const merke = feld && { karte: (feld.closest("[data-karte]") || {}).dataset?.karte, abschnitt: feld.dataset.abschnitt, von: feld.selectionStart, bis: feld.selectionEnd, richtung: feld.selectionDirection, oben: feld.scrollTop };
     const neu = nachrichtBauen(n);
     if (alt && alt.isConnected) alt.replaceWith(neu);
     else el.nachrichten.append(neu);
     neu.style.animation = "none"; // nur neue Nachrichten tauchen auf, Aktualisierungen nicht
+    if (!el.chat.hidden && neu.querySelector("textarea")) autoHoeheAlle(neu); // Felder in Bearbeitung behalten ihre Höhe
+    if (merke) {
+      const t = [...neu.querySelectorAll("textarea[data-abschnitt]")].find((x) => x.dataset.abschnitt === merke.abschnitt && (x.closest("[data-karte]") || {}).dataset?.karte === merke.karte);
+      if (t) {
+        t.focus({ preventScroll: true });
+        try { t.setSelectionRange(merke.von, merke.bis, merke.richtung); } catch { /* egal */ }
+        t.scrollTop = merke.oben;
+      }
+    }
+  }
+
+  /**
+   * Das Häkchen einer Karte nur einmal zeichnen: direkt nach „Speichern“ bzw. „Nochmal senden“ und nur, wenn man zusieht.
+   * Ohne „zeichnet“ steht es fertig da – Neuaufbau, Gesprächswechsel und Neuladen zeichnen also nichts neu, und beim
+   * Verlassen der Ansicht nimmt beruhigen() die Klasse wieder weg (hidden → sichtbar startete die Animation sonst neu).
+   */
+  function hakenZeichnen(n, k) {
+    const knoten = nachrichtKnoten.get(n.id);
+    if (!chat.nachrichten.includes(n) || !knoten || !knoten.isConnected || el.chat.hidden) return;
+    const karte = [...knoten.querySelectorAll("[data-karte]")].find((x) => x.dataset.karte === k.id);
+    const haken = karte && karte.querySelector(".haken");
+    if (haken) haken.classList.add("zeichnet");
   }
 
   function nutzerHtml(n) {
@@ -1265,7 +1563,10 @@
       teile.push(`<div class="quellen"><span class="augenbraue">Gefundene Notizen</span>${n.quellen.slice(0, 6).map((q) => `<a class="quelle" href="#/notizen/n/${esc(q.id)}">${symbol("dokument")}${esc(q.kuerzel)} · ${esc(K.datumKurz(q.erstellt_am))}</a>`).join("")}</div>`);
     }
     if (n.fehler) {
-      teile.push(`<div class="hinweis-box"><div class="hinweis-box-kopf">${symbol("warn")}<span>${esc(n.fehlerText || "Da ist etwas schiefgegangen.")}</span></div>${n.wiederholbar ? `<div><button class="knopf sekundaer klein" type="button" data-aktion="wiederholen">${symbol("zuruecksetzen")}Nochmal versuchen</button></div>` : ""}</div>`);
+      // Kam schon ein Entwurf/Bericht an, fehlt nur Gabis Text dazu: kein „Nochmal versuchen“ (siehe wiederholen)
+      const karte = karteDerAntwort(n);
+      const text = karte ? `Gabis Antwort ist danach abgebrochen. Der ${karte} ist vollständig angekommen – fehlt noch etwas, frag einfach nochmal.` : n.fehlerText || "Da ist etwas schiefgegangen.";
+      teile.push(`<div class="hinweis-box${karte ? " neutral" : ""}"><div class="hinweis-box-kopf">${symbol(karte ? "info" : "warn")}<span>${esc(text)}</span></div>${n.wiederholbar && !karte ? `<div><button class="knopf sekundaer klein" type="button" data-aktion="wiederholen">${symbol("zuruecksetzen")}Nochmal versuchen</button></div>` : ""}</div>`);
     }
     if (n.laeuft && n.wartet !== false) {
       const neuerStatus = statusGezeigt.get(n) !== n.status; // gleicher Status wie im letzten Bild: nicht neu einblenden
@@ -1343,23 +1644,25 @@
    * aktion: feste Abläufe (Diktat, Bericht) · art/kuerzel/beispiel: nur für die Anzeige
    */
   async function senden({ text, senden: anGabi, aktion = null, art = "", kuerzel = "", beispiel = false }) {
-    if (chat.laeuft || !String(text || "").trim()) return;
+    if (chat.laeuft || abmeldenLaeuft || !String(text || "").trim()) return;
     const g = chat.gespraech; // die Antwort gehört fest zu diesem Gespräch
     const nutzer = nachrichtHinzufuegen({ id: neueId(), rolle: "nutzer", text: text.trim(), ...(anGabi ? { senden: anGabi } : {}), art, kuerzel, beispiel }, g);
     const gabi = nachrichtHinzufuegen({ id: neueId(), rolle: "gabi", text: "", karten: [], quellen: [], laeuft: true, wartet: true, status: "" }, g);
     const fuerServer = K.verlaufFuerServer(g.nachrichten.filter((n) => n !== gabi));
     if (aktion && fuerServer.length) fuerServer[fuerServer.length - 1] = { rolle: "nutzer", text: nutzer.text }; // Diktat pur, ohne Vorsatz
-    await antwortHolen(gabi, { nachrichten: fuerServer, ...(aktion ? { aktion } : {}) }, g);
+    await abwarten(antwortHolen(gabi, { nachrichten: fuerServer, ...(aktion ? { aktion } : {}) }, g));
   }
 
   async function antwortHolen(gabi, body, g = chat.gespraech) {
     const abbruch = new AbortController();
     chat.laeuft = { abbruch, gabi, gespraech: g };
+    netzfehlerVergessen(gabi); // „Nochmal versuchen“, während ein Netzfehler noch vorläufig war
     // falls die Seite mitten in der Antwort neu lädt: erkennbar unterbrochen, mit „Nochmal versuchen“
     gabi.unterwegs = true;
     gabi.body = body;
     gespraechMerken(g);
     eingabeAktualisieren();
+    let netz = false;
     try {
       await chatStrom(body, (e) => ereignis(gabi, e, g), abbruch.signal);
     } catch (e) {
@@ -1371,10 +1674,14 @@
         gabi.fehlerText = e.message;
         gabi.wiederholbar = true;
         gabi.body = body;
+        netz = Boolean(e.netz);
       }
     } finally {
-      delete gabi.unterwegs;
-      if (gabi.fehler) gabi.body = body; // damit „Nochmal versuchen“ auch bei Fehlern mitten im Strom geht
+      // Netzfehler: bleibt vorläufig „unterwegs“ gespeichert, bis klar ist, dass die Seite bleibt (siehe netzfehlerBestaetigen)
+      if (netz) netzVorlaeufig.set(gabi, { g, uhr: setTimeout(() => netzfehlerBestaetigen(gabi), NETZ_FRIST) });
+      else delete gabi.unterwegs;
+      if (gabi.fehler && karteDerAntwort(gabi)) gabi.wiederholbar = false; // Karte ist da: nicht wiederholen
+      if (gabi.fehler && gabi.wiederholbar) gabi.body = body; // damit „Nochmal versuchen“ auch bei Fehlern mitten im Strom geht
       else delete gabi.body;
       gabi.laeuft = false;
       gabi.status = "";
@@ -1427,16 +1734,31 @@
       default:
         return;
     }
-    if (e.t === "entwurf" || e.t === "bericht") patientenLaden().catch(() => {});
+    if (e.t === "entwurf" || e.t === "bericht") {
+      patientenLaden().catch(() => {});
+      // die Karte gleich auf dem Gerät sichern: Chromium meldet ein Neuladen erst nach pagehide als Abbruch – ohne das wäre
+      // die schon gezeigte Karte danach weg (gespeichert noch als „unterwegs“: nach dem Neuladen „unterbrochen“, Karte bleibt)
+      gespraechMerken(g);
+    }
     spaeterZeichnen(gabi);
   }
 
+  /**
+   * Hat die Antwort schon eine Karte („Entwurf“/„Bericht“)? Sie kommt nur ganz an (eine Zeile im Strom). Dann wird nicht
+   * wiederholt: Der Server strukturiert das Diktat neu (zweiter KI-Aufruf, neue Karte mit neuer ID), die alte Karte samt
+   * „Gespeichert“ und Korrekturen wäre weg – und entwurfInAblage erkennt die neue nicht (doppelte Notiz).
+   */
+  function karteDerAntwort(n) {
+    const k = (n.karten || []).find((x) => x.typ === "entwurf" || x.typ === "bericht");
+    return k ? (k.typ === "bericht" ? "Bericht" : "Entwurf") : "";
+  }
+
   async function wiederholen(gabi) {
-    if (chat.laeuft || !gabi.body) return;
+    if (chat.laeuft || !gabi.body || karteDerAntwort(gabi)) return;
     const body = gabi.body;
     Object.assign(gabi, { text: "", karten: [], quellen: [], fehler: false, fehlerText: "", wiederholbar: false, laeuft: true, wartet: true, status: "", body: undefined });
     nachrichtNeuZeichnen(gabi);
-    await antwortHolen(gabi, body);
+    await abwarten(antwortHolen(gabi, body));
   }
 
   // ---------- Schnellaktionen ----------
@@ -1450,6 +1772,7 @@
       el.text.focus();
       return;
     }
+    if (!chat.patienten) chat.patientenFehler = ""; // lädt unten neu: die Auswahl zeigt Platzhalter, nicht den alten Fehler
     if (art === "diktat") {
       modusSetzen(null);
       lokaleAntwort("Für welchen Test-Patienten möchtest du diktieren?", [{ typ: "auswahl", id: neueId(), wahl: "patient", zweck: "diktat" }]);
@@ -1466,7 +1789,13 @@
   });
 
   function modusSetzen(m) {
+    const alt = chat.modus;
     chat.modus = m;
+    // endet ein Diktat-Modus (✕, Esc, Entwurf da, andere Schnellaktion, neuer Patient): sein Beispiel-Chip wird gesperrt
+    if (alt && alt.beispiel && alt.beispiel !== (m && m.beispiel)) {
+      const n = chat.nachrichten.find((x) => (x.karten || []).some((k) => k.id === alt.beispiel && !k.benutzt));
+      if (n) nachrichtNeuZeichnen(n);
+    }
     modusAnzeigen();
     gespraechMerken();
     eingabeAktualisieren();
@@ -1491,10 +1820,12 @@
   el.modusWeg.addEventListener("click", () => { modusSetzen(null); el.text.focus(); });
 
   function diktatStarten(patient) {
-    modusSetzen({ typ: "diktat", patient_id: patient.id, kuerzel: patient.kuerzel, pseudonym: patient.pseudonym || "" });
+    // Demo: der Beispiel-Chip gehört zu genau diesem Diktat-Modus – aktiv nur, solange er läuft (wie nach dem Neuladen)
+    const beispiel = modus.demo ? { typ: "beispiel", id: neueId() } : null;
+    modusSetzen({ typ: "diktat", patient_id: patient.id, kuerzel: patient.kuerzel, pseudonym: patient.pseudonym || "", beispiel: beispiel ? beispiel.id : "" });
     lokaleAntwort(
       `Alles klar, **${patient.kuerzel}**. Halte das Mikrofon gedrückt und erzähl, was ihr in der Behandlung gemacht habt – oder tipp es ein. Ich sortiere es dann in Befund, Maßnahmen, Verlauf und Hausaufgaben.`,
-      modus.demo ? [{ typ: "beispiel", id: neueId() }] : [],
+      beispiel ? [beispiel] : [],
     );
     if (!GROB) el.text.focus();
   }
@@ -1517,7 +1848,8 @@
       </div>`;
     }
     if (k.typ === "beispiel") {
-      return `<div class="chip-gruppe" data-karte="${esc(k.id)}"><button class="chip akzent" type="button" data-aktion="beispiel" ${k.benutzt ? "disabled" : ""}>${symbol("funke")}Beispieldiktat nehmen</button></div>`;
+      const an = !k.benutzt && Boolean(chat.modus && chat.modus.beispiel === k.id); // nur solange sein Diktat-Modus läuft
+      return `<div class="chip-gruppe" data-karte="${esc(k.id)}"><button class="chip akzent" type="button" data-aktion="beispiel" ${an ? "" : "disabled"}>${symbol("funke")}Beispieldiktat nehmen</button></div>`;
     }
     if (k.typ === "aufnahme") {
       if (k.erledigt) return `<div class="karte-zustand ok" data-karte="${esc(k.id)}"><span class="haken"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Nachgeschickt.</span></div>`;
@@ -1582,7 +1914,7 @@
       </article>`;
     }
     if (k.verworfen) {
-      return `<article class="karte gespraechs-karte karte-entwurf erledigt verworfen" data-karte="${esc(k.id)}">${kopf}<div class="karte-zustand">Dieser Entwurf wurde verworfen.</div></article>`;
+      return `<article class="karte gespraechs-karte karte-entwurf erledigt verworfen" data-karte="${esc(k.id)}" tabindex="-1">${kopf}<div class="karte-zustand">Dieser Entwurf wurde verworfen.</div></article>`;
     }
     const abschnitte = K.ABSCHNITTE.map(([key, titel]) => {
       const liste = K.stichpunkte(s[key]);
@@ -1663,6 +1995,7 @@
   // einmal eingeblendet = fertig: auch beim Wiedererscheinen (hidden → sichtbar) nicht noch einmal
   for (const art of ["animationend", "animationcancel"]) {
     el.nachrichten.addEventListener(art, (e) => { if (e.target.classList && e.target.classList.contains("nachricht")) e.target.style.animation = "none"; });
+    el.nachrichten.addEventListener(art, (e) => { if (e.animationName === "zeichnen") e.target.closest(".haken")?.classList.remove("zeichnet"); }); // einmal gezeichnet = fertig
     el.notizen.addEventListener(art, (e) => { const c = e.target.parentElement; if (c && c.classList.contains("einblenden") && (c.classList.contains("raster") || c.classList.contains("notiz-liste"))) c.classList.remove("einblenden"); });
     el.modusPill.addEventListener(art, (e) => { if (e.target === el.modusPill) el.modusPill.style.animation = "none"; });
   }
@@ -1683,6 +2016,9 @@
     if (aktion === "vorlesen") return vorlesen(n);
     if (aktion === "neu-laden") return location.reload();
     if (!k) return;
+    // eine aus einem anderen Tab übernommene vorläufige Antwort (dort Netzfehler, „unterwegs“) gilt hier, sobald an ihrer
+    // Karte gearbeitet wird: sonst übergeht der andere Tab die Änderung, und sein nächstes Schreiben nimmt sie zurück
+    if (n.unterwegs && aktion.startsWith("entwurf-") && aktion !== "entwurf-pdf" && !netzVorlaeufig.has(n) && !(chat.laeuft && chat.laeuft.gabi === n)) delete n.unterwegs;
 
     if (aktion === "patienten-neu-laden") {
       chat.patientenFehler = "";
@@ -1710,16 +2046,21 @@
     if (aktion === "waehle") return waehlen(n, k, b.dataset.wert);
     if (aktion === "neuer-patient") {
       const p = await patientAnlegenDialog();
-      if (p) waehlen(n, k, p.id);
+      if (p && g === chat.gespraech && chat.nachrichten.includes(n)) waehlen(n, k, p.id); // inzwischen gelöscht (anderer Tab): nicht im neuen Gespräch diktieren
       return;
     }
     if (aktion === "beispiel") {
-      if (!chat.modus || chat.modus.typ !== "diktat" || chat.laeuft) { toast("Wähle zuerst einen Test-Patienten für das Diktat."); return; }
+      const m = chat.modus; // fest an dieses Gespräch (g) und diesen Diktat-Modus gebunden – wie eine Aufnahme
+      if (chat.laeuft || erkennt) { toast("Einen Moment – Gabi ist noch beschäftigt."); return; }
+      if (!m || m.beispiel !== k.id) { toast("Wähle zuerst einen Test-Patienten für das Diktat."); return; }
       k.benutzt = true;
       nachrichtNeuZeichnen(n);
       try {
-        const d = await demoApi.beispielDiktat(chat.modus.kuerzel);
-        diktatSenden(d.text, { beispiel: true });
+        const d = await demoApi.beispielDiktat(m.kuerzel);
+        if (g !== chat.gespraech) { if (!verwaist(g)) toast("Du hast das Gespräch gewechselt – das Beispieldiktat wurde nicht gesendet."); return; }
+        if (chat.laeuft || erkennt) { toast("Gabi ist noch beschäftigt – das Beispieldiktat wurde nicht gesendet."); return; }
+        if (chat.modus && chat.modus !== m) { toast("Du hast etwas Neues begonnen – das Beispieldiktat wurde nicht gesendet."); return; } // z. B. Diktat für einen anderen Patienten
+        diktatSenden(d.text, { beispiel: true, modusBeiAufnahme: m });
       } catch (f) { toast(f.message, { art: "fehler" }); }
       return;
     }
@@ -1735,10 +2076,16 @@
       gespraechMerken(g);
       return;
     }
-    if (aktion === "entwurf-speichern") return entwurfSpeichern(n, k, b, g);
+    if (aktion === "entwurf-speichern") return abwarten(entwurfSpeichern(n, k, b, g));
     if (aktion === "entwurf-verwerfen") {
       if (!(await frage("Entwurf verwerfen?", `Der Entwurf für ${k.kuerzel} wird nicht gespeichert.`, { ja: "Verwerfen", gefahr: true }))) return;
-      k.verworfen = true;
+      const akt = (n.karten || []).find((x) => x.id === k.id) || k; // während der Rückfrage kann ein anderer Tab die Karte ersetzt haben
+      if (akt.gespeichert || akt.verworfen) { // inzwischen anderswo abgeschlossen
+        nachrichtNeuZeichnen(n);
+        toast(akt.gespeichert ? "Dieser Entwurf wurde inzwischen in einem anderen Fenster gespeichert." : "Dieser Entwurf wurde inzwischen in einem anderen Fenster verworfen.", { art: akt.gespeichert ? "erfolg" : "warn" });
+        return;
+      }
+      akt.verworfen = true;
       nachrichtNeuZeichnen(n);
       gespraechMerken(g);
       return;
@@ -1787,32 +2134,61 @@
 
   async function entwurfSpeichern(n, k, knopf, g = chat.gespraech) {
     if (k.speichert) return;
+    if (k.gespeichert || k.verworfen) { nachrichtNeuZeichnen(n); return; } // inzwischen anderswo abgeschlossen
     k.speichert = true;
     knopf.disabled = true;
     knopf.innerHTML = '<span class="drehen"></span>Speichere …';
+    // Dasselbe Gespräch in mehreren Tabs: Prüfen, Speichern und Ablegen auf dem Gerät nacheinander (Web Locks). Ein zweiter
+    // Tab, der im selben Moment speichert, wartet und findet danach „gespeichert“ – sonst gäbe es zwei Notizen.
+    const nacheinander = g.gespeichert && verlauf.ablage && navigator.locks ? (f) => mitSperre(`gabi-entwurf-${k.id}`, f) : (f) => f();
+    // das Gespräch ist inzwischen gelöscht (in einem anderen Tab, auch per „Abmelden + Gespräche löschen“): nicht senden,
+    // nichts wieder anlegen – die Notiz kann dort schon gespeichert sein
+    const gespraechWeg = () => {
+      if (!verwaist(g)) anderswoGeloescht(g, { still: true }); // Meldung des anderen Tabs noch unterwegs
+      knopf.disabled = false;
+      knopf.innerHTML = `${symbol("haken")}Speichern`;
+      if (!abmeldenLaeuft && !verlauf.abgemeldet) toast("Nicht gespeichert – das Gespräch wurde inzwischen gelöscht. Ob die Notiz schon da ist, siehst du im Notizordner.", { art: "warn", dauer: 8000 });
+    };
     try {
-      // dasselbe Gespräch in einem anderen Tab: dort schon gespeichert? Dann nicht ein zweites Mal (doppelte Notiz)
-      const schon = g.gespeichert && verlauf.ablage ? await entwurfSchonGespeichert(g.id, k.id) : null;
-      if (schon) {
-        k.gespeichert = schon;
-        k.bearbeiten = false;
-        delete k.bearbeitung;
+      await nacheinander(async () => {
+        if (verwaist(g)) return gespraechWeg();
+        // dort schon gespeichert? Dann nicht ein zweites Mal (doppelte Notiz)
+        // (auch: während des Wartens hat das Zusammenführen den Entwurf als anderswo gespeichert/verworfen gemeldet)
+        const stand = g.gespeichert && verlauf.ablage ? await entwurfInAblage(g.id, k.id) : null;
+        if (verwaist(g) || (stand && stand.fehlt && g.abgelegt)) return gespraechWeg();
+        const schon = k.gespeichert || (stand && stand.notiz) || k.gespeichert;
+        if (!schon && k.verworfen) {
+          nachrichtNeuZeichnen(n);
+          toast("Dieser Entwurf wurde inzwischen in einem anderen Fenster verworfen.", { art: "warn" });
+          return;
+        }
+        if (schon) {
+          k.gespeichert = schon;
+          delete k.verworfen;
+          k.bearbeiten = false;
+          delete k.bearbeitung;
+          nachrichtNeuZeichnen(n);
+          hakenZeichnen(n, k);
+          await gespraechMerken(g);
+          toast("Dieser Entwurf wurde schon in einem anderen Fenster gespeichert.", { art: "erfolg", aktion: { text: "Ansehen", tun: () => { location.hash = `#/notizen/n/${schon}`; } } });
+          return;
+        }
+        speichernBis = Math.max(speichernBis, Date.now() + 20500); // Abmelden wartet auf diese Antwort (api: höchstens 20 s)
+        const { notiz } = await api("/api/notizen", { methode: "POST", body: { patient_id: k.patient_id, rohtext: k.rohtext || "", strukturiert: k.strukturiert } });
+        k.gespeichert = notiz.id;
+        ordner.notizenVon.delete(notiz.patient_id); // Patientenseite beim nächsten Besuch frisch
+        ordner.notizen.set(notiz.id, notiz); // „Ansehen“ öffnet sofort
+        if (g === chat.gespraech && chat.modus && chat.modus.typ === "diktat" && chat.modus.patient_id === k.patient_id) modusSetzen(null);
         nachrichtNeuZeichnen(n);
-        gespraechMerken(g);
-        toast("Dieser Entwurf wurde schon in einem anderen Fenster gespeichert.", { art: "erfolg", aktion: { text: "Ansehen", tun: () => { location.hash = `#/notizen/n/${schon}`; } } });
-        return;
-      }
-      const { notiz } = await api("/api/notizen", { methode: "POST", body: { patient_id: k.patient_id, rohtext: k.rohtext || "", strukturiert: k.strukturiert } });
-      k.gespeichert = notiz.id;
-      ordner.notizenVon.delete(notiz.patient_id); // Patientenseite beim nächsten Besuch frisch
-      ordner.notizen.set(notiz.id, notiz); // „Ansehen“ öffnet sofort
-      if (g === chat.gespraech && chat.modus && chat.modus.typ === "diktat" && chat.modus.patient_id === k.patient_id) modusSetzen(null);
-      nachrichtNeuZeichnen(n);
-      gespraechMerken(g);
-      patientenLaden().catch(() => {});
-      toast(`Gespeichert bei ${k.kuerzel}${modus.demo ? " (Demo)" : ""}.`, { art: "erfolg", aktion: { text: "Ansehen", tun: () => { location.hash = `#/notizen/n/${notiz.id}`; } } });
+        hakenZeichnen(n, k);
+        patientenLaden().catch(() => {});
+        toast(`Gespeichert bei ${k.kuerzel}${modus.demo ? " (Demo)" : ""}.`, { art: "erfolg", aktion: { text: "Ansehen", tun: () => { location.hash = `#/notizen/n/${notiz.id}`; } } });
+        await gespraechMerken(g); // erst auf dem Gerät, dann die Sperre freigeben
+      });
     } catch (f) {
-      if (!(f instanceof Abbruch)) toast(`Nicht gespeichert: ${f.message}`, { art: "fehler", dauer: 6000 });
+      if (f instanceof Abbruch && f.gesperrt) toast("Dieser Entwurf wird gerade in einem anderen Fenster gespeichert – bitte dort nachsehen.", { art: "warn", dauer: 7000 });
+      else if (f instanceof Abbruch && f.zugang) toast(`Nicht gespeichert (${k.kuerzel}): Der Zugangscode galt nicht mehr.`, { art: "fehler", dauer: 8000 });
+      else if (!(f instanceof Abbruch)) toast(`Nicht gespeichert: ${f.message}`, { art: "fehler", dauer: 6000 });
       knopf.disabled = false;
       knopf.innerHTML = `${symbol("haken")}Speichern`;
     } finally {
@@ -1820,13 +2196,39 @@
     }
   }
 
-  /** Gespeicherte Fassung des Gesprächs (Ablage) – ist dieser Entwurf dort schon gespeichert? Gibt die Notiz-ID zurück. */
-  async function entwurfSchonGespeichert(gespraechId, kartenId) {
+  /**
+   * Web Lock mit Frist: frei → sofort. Belegt (ein anderer Tab speichert denselben Entwurf) → sagen, worauf gewartet wird,
+   * und höchstens 25 s warten (länger als eine Anfrage) – hält ein angehaltener Tab (iOS) die Sperre fest, nicht ewig.
+   */
+  async function mitSperre(name, f) {
+    let frei = false;
+    const wert = await navigator.locks.request(name, { ifAvailable: true }, (sperre) => { if (!sperre) return null; frei = true; return f(); });
+    if (frei) return wert;
+    toast("Dieser Entwurf wird gerade in einem anderen Fenster gespeichert – Gabi wartet darauf.");
+    const ab = new AbortController();
+    const uhr = setTimeout(() => ab.abort(), 25000);
+    let bekommen = false;
+    try {
+      return await navigator.locks.request(name, { signal: ab.signal }, () => { bekommen = true; clearTimeout(uhr); return f(); });
+    } catch (e) {
+      if (!bekommen && ab.signal.aborted) throw Object.assign(new Abbruch(), { gesperrt: true });
+      throw e;
+    } finally {
+      clearTimeout(uhr);
+    }
+  }
+
+  /**
+   * Gespeicherte Fassung des Gesprächs (Ablage): Ist dieser Entwurf dort schon gespeichert (notiz = ID)? Fehlt das Gespräch
+   * dort (fehlt) – dann hat es ein anderer Tab gelöscht, wenn es hier schon abgelegt war.
+   */
+  async function entwurfInAblage(gespraechId, kartenId) {
     try {
       const nachrichten = await verlauf.ablage.laden(gespraechId);
-      for (const m of Array.isArray(nachrichten) ? nachrichten : []) for (const k of m.karten || []) if (k.id === kartenId && k.gespeichert) return k.gespeichert;
+      if (!Array.isArray(nachrichten)) return { notiz: null, fehlt: nachrichten === null };
+      for (const m of nachrichten) for (const k of (m && m.karten) || []) if (k && k.id === kartenId && k.gespeichert) return { notiz: k.gespeichert, fehlt: false };
     } catch { /* egal – dann normal speichern */ }
-    return null;
+    return { notiz: null, fehlt: false };
   }
 
   function pdfSpeichern(notiz) {
@@ -2034,10 +2436,11 @@
     },
     beiHinweis(text) { fussHinweis(text); },
     beiVerworfen({ holen }) {
+      if (!gestartet) return; // beim Abmelden verworfen: nichts zum Zurückholen anbieten
       const m = chat.modus ? { ...chat.modus } : null;
       const g = chat.gespraech; // die Aufnahme gehört zu diesem Gespräch
       toast("Aufnahme verworfen.", { dauer: 9000, aktion: { text: "Rückgängig", tun: () => {
-        if (verwaist(g)) { aufnahmeVerwaist(null); return; }
+        if (verwaist(g) || abmeldenLaeuft) { aufnahmeVerwaist(null); return; } // beim Abmelden nichts mehr senden
         if (g === chat.gespraech && !erkennt && !chat.laeuft && aufnahme.phase === "bereit") return erkennen(holen, m);
         // Gabi ist beschäftigt oder ein anderes Gespräch ist offen: nicht parallel/woanders schicken, sondern als Karte parken
         const k = { typ: "aufnahme", id: neueId(), zurueck: true, erneut: true, fehlerText: "Zurückgeholte Aufnahme – noch nicht gesendet." };
@@ -2083,7 +2486,7 @@
       const demoZusatz = modus.demo ? `?zweck=${zweck}${zweck === "diktat" ? `&patient=${encodeURIComponent(modusBeiAufnahme.kuerzel)}` : ""}` : "";
       const d = await api(`/api/transkribieren${demoZusatz}`, { methode: "POST", text: b64, zeit: 180000 });
       const text = String((d && d.text) || "").trim();
-      if (verwaist(g)) { aufnahmeVerwaist(wiederholung); return; }
+      if (verwaist(g) || abmeldenLaeuft) { aufnahmeVerwaist(wiederholung); return; } // gelöscht oder beim Abmelden: nichts mehr senden
       if (!text) {
         if (wiederholung) {
           // dieselbe leere Aufnahme nicht nochmal schicken – nur „Verwerfen“ bleibt
@@ -2113,6 +2516,7 @@
         Object.assign(wiederholung.k, { erledigt: true, sendet: false });
         aufnahmen.delete(wiederholung.k.id);
         nachrichtNeuZeichnen(wiederholung.n);
+        hakenZeichnen(wiederholung.n, wiederholung.k);
       }
       if (modus.demo) toast("Demo-Modus: Statt deiner Aufnahme steht hier ein Beispieltext.", { dauer: 5000 });
       if (chat.laeuft) {
@@ -2124,19 +2528,23 @@
       }
       textSenden(text, "stimme", modusBeiAufnahme, { beispiel: modus.demo });
     } catch (f) {
-      if (f instanceof Abbruch) return;
-      if (verwaist(g)) { aufnahmeVerwaist(wiederholung); return; }
-      // bleibende Karte statt Toast: die Aufnahme bleibt erhalten, bis sie nachgeschickt oder verworfen ist
+      if (f instanceof Abbruch && !f.zugang) return;
+      if (verwaist(g) || abmeldenLaeuft) { aufnahmeVerwaist(wiederholung); return; } // abgemeldet oder Gespräch gelöscht: nichts parken
+      // bleibende Karte statt Toast: die Aufnahme bleibt erhalten, bis sie nachgeschickt oder verworfen ist –
+      // auch wenn der Code nicht mehr galt (401): nach dem neuen Anmelden „Jetzt senden“
+      const ohneCode = f instanceof Abbruch;
+      const fehlerText = ohneCode ? "Noch nicht gesendet – der Zugangscode galt nicht mehr." : f.message;
       if (wiederholung) {
-        Object.assign(wiederholung.k, { sendet: false, fehlerText: f.message, erneut: !f.keineWiederholung });
+        Object.assign(wiederholung.k, { sendet: false, fehlerText, erneut: !f.keineWiederholung, ...(ohneCode ? { zurueck: true } : {}) });
         nachrichtNeuZeichnen(wiederholung.n);
         gespraechMerken(g);
       } else {
-        const k = { typ: "aufnahme", id: neueId(), fehlerText: f.message, erneut: !f.keineWiederholung };
+        const k = { typ: "aufnahme", id: neueId(), fehlerText, erneut: !f.keineWiederholung, ...(ohneCode ? { zurueck: true } : {}) };
         aufnahmen.set(k.id, { holen, modusBeiAufnahme });
         if (g === chat.gespraech && jetzigerHash() !== chatHash()) location.hash = chatHash();
         const fuer = modusBeiAufnahme && modusBeiAufnahme.typ === "diktat" ? ` für **${modusBeiAufnahme.kuerzel}**` : "";
-        lokaleAntwort(`Dein ${fuer ? "Diktat" : "gesprochener Text"}${fuer} ist nicht angekommen.`, [k], g);
+        lokaleAntwort(ohneCode ? "Deine Aufnahme ist noch nicht gesendet. Tipp auf „Jetzt senden“, um sie zu schicken."
+          : `Dein ${fuer ? "Diktat" : "gesprochener Text"}${fuer} ist nicht angekommen.`, [k], g);
         if (g !== chat.gespraech) toast("Die Aufnahme ist nicht angekommen – sie wartet im vorigen Gespräch.", { art: "warn", dauer: 6000 });
       }
     } finally {
@@ -2160,7 +2568,7 @@
     return { x: e.clientX - ((vv && vv.offsetLeft) || 0), y: e.clientY - ((vv && vv.offsetTop) || 0) };
   };
   function aufnahmeBeginnen() {
-    if (chat.laeuft || erkennt || aufnahme.phase !== "bereit") return false;
+    if (chat.laeuft || erkennt || abmeldenLaeuft || aufnahme.phase !== "bereit") return false;
     if (mikroGesperrt) {
       lokaleAntwort("Ich komme gerade nicht ans Mikrofon.", [{ typ: "hilfe", id: neueId(), titel: AUFNAHME.BLOCKIERT.titel, text: AUFNAHME.BLOCKIERT.text, schritte: AUFNAHME.HILFE_SCHRITTE }]);
       return false;
@@ -2221,6 +2629,15 @@
     notizen: new Map(), // Notiz-ID → vollständige Notiz
   };
   function ordnerZwischenspeicherLeeren() { ordner.notizenVon.clear(); ordner.notizen.clear(); ordner.bearbeiten = null; ordner.geaendert = false; }
+  /** Abmelden: nichts aus dem Notizordner bleibt im Tab – Zwischenspeicher, Suchbegriff, gezeigte Notiz, Ansicht. */
+  function ordnerLeeren() {
+    ordnerZwischenspeicherLeeren();
+    clearTimeout(sucheUhr);
+    ordner.suche = "";
+    ordner.suchNummer += 1; // eine noch laufende Suche zeigt nichts mehr an
+    offeneNotiz = null;
+    ersetzen(el.notizen, "");
+  }
   const SORTIERUNG = "gabi.sortierung";
   const sortierung = () => (speicher.lesen("lokal", SORTIERUNG) === "alt" ? "alt" : "neu");
   const sortiert = (liste) => [...liste].sort((a, b) => (sortierung() === "alt" ? 1 : -1) * (a.erstellt_am < b.erstellt_am ? -1 : a.erstellt_am > b.erstellt_am ? 1 : 0));
@@ -2259,10 +2676,25 @@
       <p>${K.mitUnklar(vorschau)}</p></a>`;
   }
 
-  function sortierungHtml() {
-    return `<label class="sortierung"><span class="unsichtbar">Sortierung</span><select id="sortierung">
+  function sortierungHtml(platzhalter = false) {
+    return `<label class="sortierung${platzhalter ? " skelett" : ""}"><span class="unsichtbar">Sortierung</span><select${platzhalter ? "" : ' id="sortierung"'}>
       <option value="neu"${sortierung() === "neu" ? " selected" : ""}>Neueste zuerst</option>
       <option value="alt"${sortierung() === "alt" ? " selected" : ""}>Älteste zuerst</option></select>${symbol("runter")}</label>`;
+  }
+  /**
+   * Platzhalter der Suche wie das Ergebnis aufgebaut: Kopfzeile (Text + Sortierung, am Handy zweizeilig), dann Karten.
+   * Ergebniszeile (nur per CSS, nicht im Text der Seite) und Auswahl stehen unsichtbar darin und geben Breite, Höhe und
+   * Umbruch vor – nichts rutscht, wenn die Treffer kommen.
+   */
+  const suchePlatzhalterHtml = (q) => `<div class="ergebnis-kopf platzhalter" aria-hidden="true"><p class="suche-hinweis skelett" data-text="2 Notizen zu „${esc(q)}“ gefunden"></p>${sortierungHtml(true)}</div>${skelettHtml(2, "notiz")}`;
+
+  /** Wie ersetzen() – stand der Fokus auf der Sortierung (eben umgestellt), bleibt er auf der neuen statt auf body. */
+  function ersetzenSortierungBleibt(knoten, html) {
+    const a = document.activeElement;
+    const hatte = Boolean(a && a.id === "sortierung" && knoten.contains(a));
+    const neu = ersetzen(knoten, html);
+    if (neu && hatte) fokusSetzen(knoten.querySelector("#sortierung"));
+    return neu;
   }
 
   async function notizenZeigen(hash) {
@@ -2329,8 +2761,8 @@
     const fertig = api(`/api/notizen?q=${encodeURIComponent(q)}`).then(({ notizen }) => {
       if (nummer !== ordner.suchNummer || !inhalt.isConnected) return; // eine neuere Suche läuft schon
       inhalt.dataset.suche = q;
-      ersetzen(inhalt, notizen.length
-        ? `<div class="ergebnis-kopf"><p class="suche-hinweis">${notizen.length === 1 ? "1 Notiz" : `${notizen.length} Notizen`} zu „${esc(q)}“ gefunden</p>${notizen.length > 1 ? sortierungHtml() : ""}</div><div class="notiz-liste">${sortiert(notizen).map((n) => notizKarteHtml(n, true)).join("")}</div>`
+      ersetzenSortierungBleibt(inhalt, notizen.length
+        ? `<div class="ergebnis-kopf"><p class="suche-hinweis">${notizen.length === 1 ? "1 Notiz" : `${notizen.length} Notizen`} zu „${esc(q)}“ gefunden</p>${sortierungHtml()}</div><div class="notiz-liste">${sortiert(notizen).map((n) => notizKarteHtml(n, true)).join("")}</div>`
         : leerHtml({ sym: "suche", titel: "Nichts gefunden", text: `Keine Notiz enthält „${q}“.`, knopf: `<button class="knopf sekundaer" type="button" data-ordner="suche-loeschen">Suche löschen</button>` }));
     }).catch((f) => {
       if (f instanceof Abbruch || nummer !== ordner.suchNummer || !inhalt.isConnected) return;
@@ -2341,7 +2773,7 @@
     // wenn es länger dauert und noch kein Ergebnis steht
     await mitFrist(fertig, () => {
       if (nummer !== ordner.suchNummer || !inhalt.isConnected || inhalt.querySelector(".notiz-liste") || inhalt.dataset.suche === q) return;
-      ersetzen(inhalt, skelettHtml(2, "notiz"));
+      ersetzen(inhalt, suchePlatzhalterHtml(q));
     });
   }
 
@@ -2387,7 +2819,7 @@
       const p = (chat.patienten || []).find((x) => x.id === id);
       const notizen = ordner.notizenVon.get(id);
       if (!p || !notizen) return false;
-      if (ersetzen(el.notizen, patientHtml(p, notizen))) erstesMal(`p:${id}`, el.notizen.querySelector(".notiz-liste"));
+      if (ersetzenSortierungBleibt(el.notizen, patientHtml(p, notizen))) erstesMal(`p:${id}`, el.notizen.querySelector(".notiz-liste"));
       return true;
     };
     const schonDa = zeigen(); // schon einmal geladen: sofort, im Hintergrund auffrischen
@@ -2519,7 +2951,7 @@
       ordner.beschaeftigt = true;
       l.disabled = true;
       try {
-        const { notiz } = await api(`/api/notizen/${n.id}`, { methode: "PATCH", body: { strukturiert: s } });
+        const { notiz } = await abwarten(api(`/api/notizen/${n.id}`, { methode: "PATCH", body: { strukturiert: s } })); // Abmelden wartet darauf
         ordner.notizen.set(notiz.id, notiz);
         ordner.notizenVon.delete(notiz.patient_id);
         offeneNotiz = notiz;
@@ -2528,7 +2960,8 @@
         leserZeichnen();
         toast("Änderungen gespeichert.", { art: "erfolg" });
       } catch (f) {
-        if (!(f instanceof Abbruch)) toast(`Nicht gespeichert: ${f.message}`, { art: "fehler", dauer: 6000 });
+        if (f instanceof Abbruch) { if (f.zugang) toast("Änderungen an der Notiz nicht gespeichert: Der Zugangscode galt nicht mehr.", { art: "fehler", dauer: 8000 }); }
+        else toast(`Nicht gespeichert: ${f.message}`, { art: "fehler", dauer: 6000 });
         l.disabled = false;
       } finally {
         ordner.beschaeftigt = false;
@@ -2539,7 +2972,7 @@
       if (!(await frage("Notiz löschen?", `Die Notiz vom ${K.datum(n.erstellt_am)} (${n.kuerzel}) wird endgültig gelöscht.`, { ja: "Löschen", gefahr: true }))) return;
       ordner.beschaeftigt = true;
       try {
-        await api(`/api/notizen/${n.id}`, { methode: "DELETE" });
+        await abwarten(api(`/api/notizen/${n.id}`, { methode: "DELETE" })); // Abmelden wartet darauf
         ordner.notizen.delete(n.id);
         ordner.notizenVon.delete(n.patient_id);
         offeneNotiz = null;
@@ -2547,7 +2980,8 @@
         toast("Notiz gelöscht.", { art: "erfolg" });
         location.hash = `#/notizen/p/${n.patient_id}`;
       } catch (f) {
-        if (!(f instanceof Abbruch)) toast(`Nicht gelöscht: ${f.message}`, { art: "fehler" });
+        if (f instanceof Abbruch) { if (f.zugang) toast("Notiz nicht gelöscht: Der Zugangscode galt nicht mehr.", { art: "fehler", dauer: 8000 }); }
+        else toast(`Nicht gelöscht: ${f.message}`, { art: "fehler" });
       } finally {
         ordner.beschaeftigt = false;
       }

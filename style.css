@@ -305,6 +305,12 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .skelett.skelett-augenbraue { height: 18.4px; width: 12rem; border-radius: var(--r-s); } /* = .augenbraue (11,5 px × 1,6) */
 .skelett.skelett-titel { height: 31.2px; width: min(18rem, 80%); border-radius: var(--r-s); } /* = .leser-kopf h1 (26 px × 1,2) */
 .skelett.chip-skelett { display: inline-block; width: 128px; height: 38px; border-radius: var(--rund); }
+/* Such-Platzhalter: Ergebniszeile und Auswahl unsichtbar – gleiche Höhe und gleicher Umbruch wie die Ergebnis-Kopfzeile */
+.ergebnis-kopf.platzhalter { pointer-events: none; user-select: none; -webkit-user-select: none; }
+.ergebnis-kopf.platzhalter .skelett { color: transparent; border-radius: var(--r-s); }
+.ergebnis-kopf.platzhalter .suche-hinweis::before { content: attr(data-text); }
+.ergebnis-kopf.platzhalter .sortierung.skelett { border-radius: var(--rund); }
+.ergebnis-kopf.platzhalter .skelett > * { visibility: hidden; }
 .chip strong { font-weight: 600; }
 .chip .stumm { font-size: 13px; }
 
@@ -358,6 +364,9 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .kachel.warn { background: var(--warn-bg); color: var(--warn-text); }
 .kachel .symbol { width: 24px; height: 24px; }
 .hinweis-seite p { color: var(--text-2); }
+.laden-inhalt { display: grid; justify-items: center; gap: 14px; max-width: 320px; text-align: center; } /* Ladekreis, beim Abmelden mit Text */
+.laden-text { font-size: 15px; }
+.laden-text:focus { outline: none; } /* bekommt beim Abmelden den Fokus – damit Screenreader ihn sagen, nicht als Bedienelement */
 .knopf-reihe { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 
 /* 6 Gespräch --------------------------------------------------------------- */
@@ -549,11 +558,20 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .karte-fuss .rund-knopf:hover { color: var(--fehler); background: var(--fehler-bg); }
 .ergebnis-kopf { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
 .ergebnis-kopf .sortierung select { height: 38px; font-size: 13.5px; }
+/* schmal immer zweizeilig (Text, darunter Sortierung): gleiche Höhe für jede Trefferzahl – der Platzhalter rutscht nicht */
+@media (max-width: 639.98px) { .ergebnis-kopf { flex-direction: column; align-items: flex-start; } }
+/* die Ergebniszeile bricht nie um (sonst hinge die Höhe an Trefferzahl und Begriffslänge – „1 Notiz“ ist kürzer als der
+   Platzhalter „2 Notizen“); ein sehr langer Begriff endet mit „…“, voll steht er im Suchfeld. min-width: 0 hält die Zeile
+   in ihrer Spalte (sonst wüchse sie samt Seite in die Breite) */
+.ergebnis-kopf { min-width: 0; }
+.ergebnis-kopf .suche-hinweis { min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 640px) { .ergebnis-kopf { flex-wrap: nowrap; } }
 .karte-zustand { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-2); }
 .karte-zustand.ok { color: var(--ok); font-weight: 500; }
 .haken { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--akzent); color: var(--akzent-auf); }
 .haken svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-.haken path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: zeichnen var(--t-lang) var(--raus) 80ms forwards; }
+.haken path { stroke-dasharray: 20; stroke-dashoffset: 0; } /* fertig gezeichnet: Neuaufbau, Wechsel, Rückkehr */
+.haken.zeichnet path { stroke-dashoffset: 20; animation: zeichnen var(--t-lang) var(--raus) 80ms forwards; } /* einmal, direkt nach dem Speichern (app.js: hakenZeichnen) */
 .karte-entwurf.erledigt .abschnitte, .karte-entwurf.erledigt .karte-fuss { display: none; }
 .gespraechs-karte .original summary { padding: 0; }
 .karte-entwurf.verworfen { opacity: 0.7; }
@@ -655,6 +673,7 @@ dialog.dialog {
 }
 dialog.dialog[open] { animation: aufploppen var(--t-lang) var(--raus); }
 dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+dialog:focus-visible { outline: none; } /* Safari fokussiert nach einer Rückfrage oder beim Tab-Umlauf den Dialog selbst – kein Rahmen ums Ganze */
 .dialog-form { display: grid; gap: 16px; padding: 24px; }
 .dialog-form h2 { font-size: 19px; }
 .dialog-form p { color: var(--text-2); font-size: 15px; }
@@ -868,4 +887,5 @@ html:has(dialog.schublade[open]) { overflow: hidden; }
   .knopf:active, .chip:active, .vorschlag:hover, .vorschlag:active, .patient-karte:hover, .notiz-karte:hover, .rund-knopf:active, .senden:active, .mikro:active { transform: none !important; }
   .punkte-tippen i, .aufnahme-punkt, .drehen, .skelett::after, .mikro.lockt::after, .nachricht-text.laeuft > :last-child::after { animation: none !important; }
   .eingabe.nimmt-auf .mikro::after { animation: none !important; opacity: 0; }
+  .haken.zeichnet path { animation: none; stroke-dashoffset: 0; } /* Häkchen steht gleich fertig da – kein Zeichnen, keine Lücke */
 }

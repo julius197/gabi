@@ -133,7 +133,10 @@
     const liste = [];
     for (const n of nachrichten || []) {
       if (!n || n.lokal) continue;
-      if (n.fehler || n.abgebrochen) {
+      // Kam vor dem Fehler/Abbruch schon ein Entwurf oder Bericht an, gilt der Wortwechsel: die Karte steht im Gespräch
+      // (gespeichert oder nicht) und Gabi soll sie bei Folgefragen kennen
+      const mitKarte = (n.karten || []).some((k) => k && (k.typ === "entwurf" || k.typ === "bericht"));
+      if ((n.fehler || n.abgebrochen) && !mitKarte) {
         // gescheiterter Wortwechsel: auch die Frage dazu weglassen (sonst wandert z. B. ein altes Diktat in die nächste Notiz)
         if (n.rolle === "gabi" && liste.length && liste[liste.length - 1].rolle === "nutzer") liste.pop();
         continue;

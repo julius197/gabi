@@ -136,12 +136,55 @@
   }
 
   /**
+   * Endzustände von Karten sind einbahnig: Entwurf gespeichert (Notiz-ID) oder verworfen, Aufnahme nachgeschickt oder
+   * verworfen, Auswahl getroffen. Kein älterer Stand nimmt sie zurück – weder beim Zusammenführen zweier Tabs noch beim
+   * Schreiben in die Ablage. Überträgt sie aus quelle nach ziel (gleiche Karten-ID, ziel wird geändert) und beendet dort
+   * das Bearbeiten. Gespeichert schlägt verworfen (die Notiz gibt es dann). Ergebnis: die geänderten Nachrichten aus ziel.
+   */
+  const ENDE = { entwurf: ["gespeichert", "verworfen"], aufnahme: ["erledigt", "verworfen"], auswahl: ["gewaehlt"] };
+  function endzustaendeUebernehmen(ziel, quelle) {
+    const fertig = new Map();
+    for (const k of kartenVon(quelle)) if (k && k.id && ENDE[k.typ] && ENDE[k.typ].some((f) => k[f])) fertig.set(k.id, k);
+    const geaendert = [];
+    if (!fertig.size) return geaendert;
+    for (const n of Array.isArray(ziel) ? ziel : []) {
+      let anders = false;
+      for (const k of n && Array.isArray(n.karten) ? n.karten : []) {
+        const q = k && fertig.get(k.id);
+        if (!q || q.typ !== k.typ) continue;
+        if (k.typ === "entwurf") {
+          if (q.gespeichert && !k.gespeichert) {
+            k.gespeichert = q.gespeichert;
+            if (q.strukturiert) k.strukturiert = q.strukturiert; // gespeichert wurde dieser Inhalt
+            delete k.verworfen;
+          } else if (q.verworfen && !k.verworfen && !k.gespeichert) k.verworfen = true;
+          else continue;
+          delete k.bearbeiten; // abgeschlossen: hier nicht weiter bearbeiten
+          delete k.bearbeitung;
+        } else {
+          const neu = ENDE[k.typ].filter((f) => q[f] && !k[f]);
+          if (!neu.length) continue;
+          for (const f of neu) k[f] = q[f];
+        }
+        anders = true;
+      }
+      if (anders) geaendert.push(n);
+    }
+    return geaendert;
+  }
+
+  /**
    * Stand eines anderen Tabs übernehmen, ohne Eigenes zu verlieren (dasselbe Gespräch in zwei Tabs):
    * - eigene Nachrichten bleiben dieselben Objekte (laufende Antworten schreiben weiter hinein);
-   * - was der andere Tab an einer Nachricht geändert hat (z. B. Entwurf gespeichert), wird übernommen – außer bei
-   *   Nachrichten, die hier gerade in Arbeit sind (inArbeit);
-   * - neue Nachrichten des anderen Tabs kommen an ihrer Stelle dazu; antwortet der andere noch (unterwegs), später.
-   * Ergebnis: { nachrichten, neu, geaendert } – neu/geaendert zum gezielten Nachzeichnen.
+   * - was der andere Tab an einer Nachricht geändert hat (z. B. Entwurf gespeichert), wird übernommen – bei Nachrichten,
+   *   die hier gerade in Arbeit sind (inArbeit), nur die Endzustände der Karten (endzustaendeUebernehmen);
+   * - eigene Endzustände nimmt ein älterer Stand des anderen Tabs nie zurück;
+   * - neue Nachrichten des anderen Tabs kommen an ihrer Stelle dazu; antwortet der andere noch (unterwegs), später –
+   *   außer einem dort vorläufigen Netzfehler (unterwegs + fehler): der gleich, sonst schriebe dieser Tab ihn beim nächsten
+   *   Speichern aus der Ablage (nach einem Neuladen dort wäre die Antwort weg); eine eigene Fassung überschreibt ein
+   *   „unterwegs“ des anderen Tabs nie (z. B. hier schon „unterbrochen“ nach dem Neuladen).
+   * Ergebnis: { nachrichten, neu, geaendert, veraltet } – neu/geaendert zum gezielten Nachzeichnen; veraltet: dem fremden
+   * (= gespeicherten) Stand fehlen eigene Endzustände – dann den eigenen Stand zurückschreiben.
    */
   // Bearbeiten-Zustand einer Karte (offenes Bearbeiten, Getipptes) gehört nur dem Tab, in dem bearbeitet wird
   const OHNE_BEARBEITUNG = (n) => ({ ...n, karten: (Array.isArray(n.karten) ? n.karten : []).map(({ bearbeiten: _b, bearbeitung: _t, benutzt: _u, ...k }) => k) });
@@ -151,14 +194,33 @@
     const neu = [];
     const geaendert = [];
     let nach = -1;
+    let veraltet = false;
     for (const roh of Array.isArray(fremde) ? fremde : []) {
-      if (!roh || !roh.id || roh.unterwegs) continue;
+      if (!roh || !roh.id) continue;
+      if (roh.unterwegs) {
+        const j = ergebnis.findIndex((x) => x.id === roh.id);
+        if (j >= 0) {
+          // nur ihre Stelle merken – dort Gespeichertes/Verworfenes aber gleich übernehmen (sonst böte dieser Tab
+          // „Speichern“ weiter an, bis er selbst schreibt)
+          nach = j;
+          if (endzustaendeUebernehmen([ergebnis[j]], [roh]).length) geaendert.push(ergebnis[j]);
+          continue;
+        }
+        if (!roh.fehler) continue; // antwortet dort noch → später
+      }
       const f = OHNE_BEARBEITUNG(roh);
       const i = ergebnis.findIndex((x) => x.id === f.id);
       if (i >= 0) {
         nach = i;
         const e = ergebnis[i];
-        if (inArbeit(e) || vergleichbar(e) === vergleichbar(f)) continue;
+        if (inArbeit(e)) {
+          // hier in Arbeit (z. B. Entwurf offen zum Bearbeiten): nur dort Gespeichertes/Verworfenes übernehmen – sonst
+          // schriebe dieser Tab den alten Kartenstand zurück, der Entwurf wäre wieder offen (doppelte Notiz)
+          if (endzustaendeUebernehmen([e], [f]).length) geaendert.push(e);
+          if (endzustaendeUebernehmen([f], [e]).length) veraltet = true; // dem fremden Stand fehlen eigene Endzustände
+          continue;
+        }
+        if (vergleichbar(e) === vergleichbar(f)) continue;
         // eigenen Bearbeiten-Zustand der Karten behalten
         const eigen = new Map((Array.isArray(e.karten) ? e.karten : []).map((k) => [k.id, k]));
         for (const k of Object.keys(e)) if (!(k in f)) delete e[k];
@@ -170,6 +232,8 @@
           for (const feld of ["bearbeiten", "bearbeitung", "benutzt"]) if (alt[feld] !== undefined) lokal[feld] = alt[feld];
           return { ...k, ...lokal };
         });
+        // eigene Endzustände bleiben (älterer fremder Stand, z. B. ein Tab mit der Vorversion)
+        if (endzustaendeUebernehmen([e], [{ karten: [...eigen.values()] }]).length) veraltet = true;
         geaendert.push(e);
       } else {
         ergebnis.splice(nach + 1, 0, f);
@@ -177,7 +241,7 @@
         neu.push(f);
       }
     }
-    return { nachrichten: ergebnis, neu, geaendert };
+    return { nachrichten: ergebnis, neu, geaendert, veraltet };
   }
 
   /** Listeneintrag (ohne Inhalt): Titel, Zeiten, offene Entwürfe. */
@@ -194,7 +258,9 @@
 
   // ------------------------------------------------------------------
   // Ablage: IndexedDB → localStorage → nur dieser Tab (Arbeitsspeicher)
-  // Gleiche Schnittstelle: bereit, liste, laden, speichern(meta, nachrichten?), loeschen(ids), leeren
+  // Gleiche Schnittstelle: bereit, liste, laden, speichern(meta, nachrichten?, { nurVorhanden }) → nachgezogener Stand | null |
+  // { fehlt: true }, loeschen(ids), leeren. nurVorhanden: ein Gespräch, das schon abgelegt war und jetzt fehlt, hat ein anderer
+  // Tab gelöscht – nicht wieder anlegen (im selben Vorgang geprüft), sondern { fehlt: true } melden
   // ------------------------------------------------------------------
   const PROBE = "__probe";
 
@@ -238,9 +304,25 @@
         const r = t.objectStore("inhalt").get(id);
         r.onsuccess = () => { e.wert = r.result ? r.result.nachrichten : null; };
       }),
-      speichern: (m, nachrichten) => tx(["meta", "inhalt"], "readwrite", (t) => {
-        t.objectStore("meta").put(m);
-        if (nachrichten) t.objectStore("inhalt").put({ id: m.id, nachrichten });
+      // Endzustände nie mit einem älteren Stand überschreiben (ein anderer Tab hat inzwischen gespeichert/verworfen):
+      // im selben Schreibvorgang lesen und zusammenführen. readwrite-Vorgänge auf denselben Stores laufen auch über Tabs
+      // hinweg nacheinander – dazwischen schreibt niemand. Ergebnis: der nachgezogene Stand (Tab muss nachziehen) oder null.
+      speichern: (m, nachrichten, { nurVorhanden = false } = {}) => tx(["meta", "inhalt"], "readwrite", (t, e) => {
+        if (!nachrichten) {
+          if (!nurVorhanden) { t.objectStore("meta").put(m); return; }
+          const r = t.objectStore("meta").get(m.id);
+          r.onsuccess = () => { if (r.result) t.objectStore("meta").put(m); else e.wert = { fehlt: true }; };
+          return;
+        }
+        const inhalt = t.objectStore("inhalt");
+        const r = inhalt.get(m.id);
+        r.onsuccess = () => {
+          if (nurVorhanden && !r.result) { e.wert = { fehlt: true }; return; }
+          const nachgezogen = endzustaendeUebernehmen(nachrichten, r.result && r.result.nachrichten).length > 0;
+          t.objectStore("meta").put(nachgezogen ? { ...m, entwuerfe: offeneEntwuerfe(nachrichten) } : m);
+          inhalt.put({ id: m.id, nachrichten });
+          e.wert = nachgezogen ? nachrichten : null;
+        };
       }),
       loeschen: (ids) => tx(["meta", "inhalt"], "readwrite", (t) => {
         for (const id of ids) { t.objectStore("meta").delete(id); t.objectStore("inhalt").delete(id); }
@@ -260,9 +342,17 @@
       async bereit() { const k = `${vorsatz}probe`; ls.setItem(k, "1"); ls.removeItem(k); },
       async liste() { return liste(); },
       async laden(id) { try { return JSON.parse(ls.getItem(INHALT(id)) || "null"); } catch { return null; } },
-      async speichern(m, nachrichten) {
-        if (nachrichten) ls.setItem(INHALT(m.id), JSON.stringify(nachrichten));
-        ls.setItem(LISTE, JSON.stringify([...liste().filter((x) => x.id !== m.id), m]));
+      async speichern(m, nachrichten, { nurVorhanden = false } = {}) { // Endzustände wie bei IndexedDB: lesen, zusammenführen, schreiben
+        if (nurVorhanden && (nachrichten ? ls.getItem(INHALT(m.id)) === null : !liste().some((x) => x.id === m.id))) return { fehlt: true };
+        let nachgezogen = false;
+        if (nachrichten) {
+          let alt = null;
+          try { alt = JSON.parse(ls.getItem(INHALT(m.id)) || "null"); } catch { alt = null; }
+          nachgezogen = endzustaendeUebernehmen(nachrichten, alt).length > 0;
+          ls.setItem(INHALT(m.id), JSON.stringify(nachrichten));
+        }
+        ls.setItem(LISTE, JSON.stringify([...liste().filter((x) => x.id !== m.id), nachgezogen ? { ...m, entwuerfe: offeneEntwuerfe(nachrichten) } : m]));
+        return nachgezogen ? nachrichten : null;
       },
       async loeschen(ids) {
         const weg = new Set(ids);
@@ -285,7 +375,17 @@
       async bereit() {},
       async liste() { return [...meta.values()].map(kopie); },
       async laden(id) { return inhalt.has(id) ? kopie(inhalt.get(id)) : null; },
-      async speichern(m, nachrichten) { meta.set(m.id, kopie(m)); if (nachrichten) inhalt.set(m.id, kopie(nachrichten)); },
+      async speichern(m, nachrichten, { nurVorhanden = false } = {}) {
+        if (nurVorhanden && !(nachrichten ? inhalt.has(m.id) : meta.has(m.id))) return { fehlt: true };
+        let nachgezogen = false;
+        if (nachrichten) {
+          const neu = kopie(nachrichten);
+          nachgezogen = endzustaendeUebernehmen(neu, inhalt.get(m.id) || null).length > 0;
+          inhalt.set(m.id, neu);
+        }
+        meta.set(m.id, kopie(nachgezogen ? { ...m, entwuerfe: offeneEntwuerfe(inhalt.get(m.id)) } : m));
+        return nachgezogen ? kopie(inhalt.get(m.id)) : null;
+      },
       async loeschen(ids) { for (const id of ids) { meta.delete(id); inhalt.delete(id); } },
       async leeren() { meta.clear(); inhalt.clear(); },
     };
@@ -377,7 +477,7 @@
 
   return {
     MAX, TITEL_MAX, TITEL_EIGEN_MAX,
-    istLeer, kuerzen, titelAus, titelSaeubern, gruppieren, ueberzaehlige, bereinigen, vorbereiten, ausVersion20, meta, offeneEntwuerfe, kartenVon, zusammenfuehren,
+    istLeer, kuerzen, titelAus, titelSaeubern, gruppieren, ueberzaehlige, bereinigen, vorbereiten, ausVersion20, meta, offeneEntwuerfe, kartenVon, zusammenfuehren, endzustaendeUebernehmen,
     ablageOeffnen, idbAblage, lsAblage, speicherAblage, kanal, resteLoeschen, leerenNachholen,
   };
 });

@@ -70,6 +70,24 @@ describe("Kern: sicherer Text für Gabis Antworten", () => {
     expect(kurz.reduce((s, n) => s + n.text.length, 0)).toBeLessThanOrEqual(90000);
   });
 
+  it("Verlauf für den Server: Wortwechsel mit Entwurf/Bericht bleibt, auch wenn die Antwort danach abbrach (v2.1.1)", () => {
+    const entwurf = { typ: "entwurf", kuerzel: "TP-01", strukturiert: { befund: ["Flexion 100°"] } };
+    expect(K.verlaufFuerServer([
+      { rolle: "nutzer", text: "Knie rechts", senden: "Diktat für TP-01: Knie rechts" },
+      { rolle: "gabi", text: "Hier ist", fehler: true, karten: [entwurf] },
+      { rolle: "nutzer", text: "Ergänz noch Kühlen" },
+    ])).toEqual([
+      { rolle: "nutzer", text: "Diktat für TP-01: Knie rechts" },
+      { rolle: "gabi", text: "Hier ist\n\n[App-Hinweis: Notiz-Entwurf für TP-01 angezeigt (noch nicht gespeichert) – Befund: Flexion 100°]" },
+      { rolle: "nutzer", text: "Ergänz noch Kühlen" },
+    ]);
+    // ohne Entwurf/Bericht wie bisher: der gescheiterte Wortwechsel fällt ganz weg
+    expect(K.verlaufFuerServer([
+      { rolle: "nutzer", text: "Frage" }, { rolle: "gabi", text: "Teil", fehler: true, karten: [{ typ: "beispiel", id: "b" }] },
+      { rolle: "nutzer", text: "Weiter" },
+    ])).toEqual([{ rolle: "nutzer", text: "Weiter" }]);
+  });
+
   it("Datum in deutscher Zeit, „Heute“ und „Gestern“", () => {
     expect(K.datumKurz("2026-11-07T23:30:00.000Z")).toBe("08.11.");
     expect(K.datum("2026-11-07T23:30:00.000Z")).toBe("08.11.2026");

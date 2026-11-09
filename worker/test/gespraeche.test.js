@@ -159,6 +159,92 @@ describe("Dasselbe Gespräch in zwei Tabs: zusammenführen statt überschreiben"
   });
 });
 
+describe("Endzustände sind einbahnig (gespeichert, verworfen, nachgeschickt, gewählt)", () => {
+  const entwurf = (extra = {}) => ({ typ: "entwurf", id: "e1", kuerzel: "TP-03", strukturiert: { befund: ["alt"] }, ...extra });
+
+  it("überträgt „gespeichert“ samt gespeichertem Inhalt und beendet das Bearbeiten – zurück geht es nie", () => {
+    const hier = [gabi("x", { id: "g1", karten: [entwurf({ bearbeiten: true, bearbeitung: { befund: "B tippt" }, strukturiert: { befund: ["B übernommen"] } })] })];
+    const dort = [gabi("x", { id: "g1", karten: [entwurf({ gespeichert: "notiz-1", strukturiert: { befund: ["A gespeichert"] } })] })];
+    expect(G.endzustaendeUebernehmen(hier, dort)).toEqual([hier[0]]);
+    expect(hier[0].karten[0]).toEqual(entwurf({ gespeichert: "notiz-1", strukturiert: { befund: ["A gespeichert"] } }));
+    // ein älterer Stand ohne Endzustand nimmt nichts zurück …
+    expect(G.endzustaendeUebernehmen(hier, [gabi("x", { id: "g1", karten: [entwurf()] })])).toEqual([]);
+    expect(hier[0].karten[0].gespeichert).toBe("notiz-1");
+    // … und eine gespeicherte Karte behält ihre Notiz-ID
+    expect(G.endzustaendeUebernehmen(hier, [gabi("x", { karten: [entwurf({ gespeichert: "notiz-2" })] })])).toEqual([]);
+    expect(hier[0].karten[0].gespeichert).toBe("notiz-1");
+  });
+
+  it("„verworfen“ wird übernommen; „gespeichert“ schlägt „verworfen“ (die Notiz gibt es)", () => {
+    const a = [gabi("x", { karten: [entwurf({ bearbeiten: true })] })];
+    expect(G.endzustaendeUebernehmen(a, [gabi("x", { karten: [entwurf({ verworfen: true })] })])).toHaveLength(1);
+    expect(a[0].karten[0].verworfen).toBe(true);
+    expect(a[0].karten[0].bearbeiten).toBeUndefined();
+    expect(G.endzustaendeUebernehmen(a, [gabi("x", { karten: [entwurf({ gespeichert: "n-1" })] })])).toHaveLength(1);
+    expect(a[0].karten[0].gespeichert).toBe("n-1");
+    expect(a[0].karten[0].verworfen).toBeUndefined();
+    const b = [gabi("x", { karten: [entwurf({ gespeichert: "n-1" })] })];
+    expect(G.endzustaendeUebernehmen(b, [gabi("x", { karten: [entwurf({ verworfen: true })] })])).toEqual([]);
+    expect(b[0].karten[0].verworfen).toBeUndefined();
+  });
+
+  it("auch Aufnahme und Auswahl; Beispiel, andere Kartentypen und Unsinn bleiben unberührt", () => {
+    const hier = [gabi("x", { karten: [{ typ: "aufnahme", id: "a1" }, { typ: "auswahl", id: "w1" }, { typ: "beispiel", id: "b1" }, { typ: "bericht", id: "r1" }] })];
+    const dort = [gabi("x", { karten: [{ typ: "aufnahme", id: "a1", erledigt: true }, { typ: "auswahl", id: "w1", gewaehlt: "p-2" }, { typ: "beispiel", id: "b1", benutzt: true }, { typ: "entwurf", id: "r1", gespeichert: "x" }] })];
+    expect(G.endzustaendeUebernehmen(hier, dort)).toHaveLength(1);
+    expect(hier[0].karten).toEqual([{ typ: "aufnahme", id: "a1", erledigt: true }, { typ: "auswahl", id: "w1", gewaehlt: "p-2" }, { typ: "beispiel", id: "b1" }, { typ: "bericht", id: "r1" }]);
+    expect(G.endzustaendeUebernehmen(null, dort)).toEqual([]);
+    expect(G.endzustaendeUebernehmen(hier, null)).toEqual([]);
+    expect(G.endzustaendeUebernehmen([null, { karten: null }], [{ karten: [null, { id: "a1", erledigt: true }] }])).toEqual([]);
+  });
+
+  it("zwei Tabs: dort gespeichert, hier gerade in Bearbeitung → hier auch gespeichert, Bearbeiten endet (sonst doppelte Notiz)", () => {
+    const hier = gabi("Hier ist dein Entwurf", { id: "g1", karten: [entwurf({ bearbeiten: true, bearbeitung: { befund: "x" } })] });
+    const fremd = [gabi("Hier ist dein Entwurf", { id: "g1", karten: [entwurf({ gespeichert: "notiz-7", strukturiert: { befund: ["A"] } })] }), gabi("neu", { id: "g2" })];
+    const r = G.zusammenfuehren([hier], fremd, { inArbeit: (n) => (n.karten || []).some((k) => k.bearbeiten) });
+    expect(r.geaendert).toEqual([hier]);
+    expect(hier.karten[0]).toEqual(entwurf({ gespeichert: "notiz-7", strukturiert: { befund: ["A"] } }));
+    expect(r.neu.map((n) => n.id)).toEqual(["g2"]);
+    // dort verworfen: ebenso
+    const hier2 = gabi("x", { id: "g4", karten: [entwurf({ bearbeiten: true })] });
+    G.zusammenfuehren([hier2], [gabi("x", { id: "g4", karten: [entwurf({ verworfen: true })] })], { inArbeit: () => true });
+    expect(hier2.karten[0]).toMatchObject({ verworfen: true });
+    // alles andere an einer Nachricht in Arbeit bleibt die eigene Fassung
+    const laeuft = gabi("hier", { id: "g3" });
+    expect(G.zusammenfuehren([laeuft], [gabi("dort", { id: "g3" })], { inArbeit: () => true }).geaendert).toEqual([]);
+    expect(laeuft.text).toBe("hier");
+  });
+
+  it("zwei Tabs: ein älterer Stand des anderen Tabs nimmt eigenes „gespeichert“/„verworfen“ nicht zurück", () => {
+    const hier = gabi("x", { id: "g1", karten: [entwurf({ gespeichert: "notiz-7", strukturiert: { befund: ["gespeichert"] } }), entwurf({ id: "e2", verworfen: true })] });
+    const r = G.zusammenfuehren([hier], [gabi("x neu", { id: "g1", karten: [entwurf({ strukturiert: { befund: ["dort übernommen"] } }), entwurf({ id: "e2" })] })]);
+    expect(r.geaendert).toEqual([hier]);
+    expect(hier.text).toBe("x neu"); // übrige Änderungen kommen an
+    expect(hier.karten[0]).toMatchObject({ gespeichert: "notiz-7", strukturiert: { befund: ["gespeichert"] } });
+    expect(hier.karten[1].verworfen).toBe(true);
+    // dem gespeicherten Stand (anderer Tab, Vorversion) fehlen eigene Endzustände: zurückschreiben
+    expect(r.veraltet).toBe(true);
+  });
+
+  it("„veraltet“ nur, wenn dem fremden Stand eigene Endzustände fehlen – auch bei Nachrichten in Arbeit", () => {
+    // gleicher Stand: nichts zurückzuschreiben
+    const a = gabi("x", { id: "g1", karten: [entwurf({ gespeichert: "n-1" })] });
+    expect(G.zusammenfuehren([a], [gabi("x", { id: "g1", karten: [entwurf({ gespeichert: "n-1" })] })]).veraltet).toBe(false);
+    // dort neuer (dort gespeichert, hier noch offen): übernehmen, nichts zurückschreiben
+    const b = gabi("x", { id: "g1", karten: [entwurf()] });
+    expect(G.zusammenfuehren([b], [gabi("x", { id: "g1", karten: [entwurf({ gespeichert: "n-2" })] })]).veraltet).toBe(false);
+    expect(b.karten[0].gespeichert).toBe("n-2");
+    // hier in Arbeit (zweiter Entwurf wird bearbeitet), dort fehlt das eigene „gespeichert“ des ersten
+    const c = gabi("x", { id: "g1", karten: [entwurf({ gespeichert: "n-3" }), entwurf({ id: "e2", bearbeiten: true })] });
+    const r = G.zusammenfuehren([c], [gabi("x", { id: "g1", karten: [entwurf(), entwurf({ id: "e2" })] })], { inArbeit: () => true });
+    expect(r).toMatchObject({ geaendert: [], veraltet: true });
+    expect(c.karten[0].gespeichert).toBe("n-3");
+    expect(c.karten[1].bearbeiten).toBe(true);
+    // ohne gemeinsame Nachrichten nie
+    expect(G.zusammenfuehren([], [gabi("y", { id: "g9" })]).veraltet).toBe(false);
+  });
+});
+
 describe("Übernahme aus v2.0 (ein Gespräch pro Tab)", () => {
   it("übernimmt nur, was sich zu behalten lohnt", () => {
     const alt = JSON.stringify({ nachrichten: [nutzer("Was wollte TP-01?"), gabi("Am 03.11. …")] });
@@ -255,8 +341,132 @@ describe("Ablagen", () => {
     expect(ls.getItem("gabi.gespraeche.leeren-offen")).toBeNull();
   });
 
+  it("Speichern nimmt Endzustände der Ablage nie zurück: ein älterer Stand (anderer Tab) wird nachgezogen", async () => {
+    for (const a of [G.lsAblage("gabi.", lsAttrappe()), G.speicherAblage()]) {
+      await a.bereit();
+      const karte = { typ: "entwurf", id: "e1", kuerzel: "TP-03", strukturiert: { befund: ["A"] } };
+      expect(await a.speichern({ id: "g", entwuerfe: 0 }, [gabi("x", { id: "m1", karten: [{ ...karte, gespeichert: "notiz-1" }] })])).toBeNull();
+      // der andere Tab schreibt seinen alten Stand (Karte noch offen und in Bearbeitung) samt einer neuen Nachricht
+      const alt = [gabi("x", { id: "m1", karten: [{ ...karte, strukturiert: { befund: ["B"] }, bearbeitung: { befund: "B tippt" } }] }), nutzer("neu", { id: "m2" })];
+      const nachgezogen = await a.speichern({ id: "g", entwuerfe: 1 }, alt);
+      expect(nachgezogen[0].karten[0]).toEqual({ ...karte, gespeichert: "notiz-1" }); // für den Tab zum Nachziehen
+      const da = await a.laden("g");
+      expect(da[0].karten[0]).toEqual({ ...karte, gespeichert: "notiz-1" });
+      expect(da[1].text).toBe("neu"); // das Übrige des neueren Stands bleibt
+      expect((await a.liste()).find((m) => m.id === "g").entwuerfe).toBe(0);
+      expect(await a.speichern({ id: "g", titel: "Nur der Titel" }, null)).toBeNull();
+      expect((await a.laden("g"))[0].karten[0].gespeichert).toBe("notiz-1");
+    }
+  });
+
+  it("nurVorhanden: ein schon abgelegtes Gespräch, das ein anderer Tab gelöscht hat, wird nicht wieder angelegt", async () => {
+    for (const a of [G.lsAblage("gabi.", lsAttrappe()), G.speicherAblage()]) {
+      await a.bereit();
+      await a.speichern({ id: "g", titel: "x" }, nachrichten);
+      expect(await a.speichern({ id: "g", titel: "x" }, nachrichten, { nurVorhanden: true })).toBeNull(); // noch da: normal
+      await a.leeren(); // der andere Tab: „Abmelden + Gespräche löschen“
+      expect(await a.speichern({ id: "g", titel: "x" }, nachrichten, { nurVorhanden: true })).toEqual({ fehlt: true });
+      expect(await a.speichern({ id: "g", titel: "Neuer Name" }, null, { nurVorhanden: true })).toEqual({ fehlt: true }); // Umbenennen
+      expect(await a.liste()).toEqual([]);
+      expect(await a.laden("g")).toBeNull();
+      expect(await a.speichern({ id: "neu", titel: "y" }, nachrichten)).toBeNull(); // ohne die Vorgabe: neu anlegen wie bisher
+      expect((await a.liste()).map((m) => m.id)).toEqual(["neu"]);
+    }
+  });
+
   it("kaputte IndexedDB (open wirft) → nächste Möglichkeit", async () => {
     const umgebung = { indexedDB: { open() { throw new Error("SecurityError"); } }, localStorage: lsAttrappe() };
     expect((await G.ablageOeffnen({ umgebung })).art).toBe("localstorage");
+  });
+});
+
+describe("Netzfehler beim Neuladen (Safari bricht die Antwort schon vor pagehide ab)", () => {
+  // So legt app.js eine Antwort mit Netzfehler ab, solange nicht klar ist, ob die Seite bleibt: Fehler fürs Auge,
+  // „unterwegs“ für den nächsten Start. Bleibt die Seite, wird ohne „unterwegs“ nachgespeichert.
+  const vorlaeufig = () => gabi("Erster Teil der Antwort", {
+    id: "g1", unterwegs: true, fehler: true, fehlerText: "Keine Verbindung zum Server. Bitte nochmal versuchen.", wiederholbar: true,
+    body: { nachrichten: [{ rolle: "nutzer", text: "Frage" }] }, laeuft: false, status: "",
+    karten: [{ typ: "entwurf", id: "e1", kuerzel: "TP-01", strukturiert: { befund: ["Flexion 100°"] } }],
+  });
+
+  it("gespeichert wird „unterwegs“ zusammen mit dem Fehler und dem Teilinhalt", () => {
+    const [n] = G.bereinigen([vorlaeufig()]);
+    expect(n).toMatchObject({ unterwegs: true, fehler: true, wiederholbar: true, text: "Erster Teil der Antwort" });
+    expect(n.karten).toHaveLength(1);
+    expect(n).not.toHaveProperty("laeuft");
+  });
+
+  it("nach dem Neuladen: „unterbrochen“ statt „Keine Verbindung“ – Teilinhalt und „Nochmal versuchen“ bleiben", () => {
+    const [frage, antwort] = G.vorbereiten(JSON.parse(JSON.stringify(G.bereinigen([nutzer("Frage", { id: "n1" }), vorlaeufig()]))));
+    expect(frage.text).toBe("Frage");
+    expect(antwort.fehlerText).toBe("Die Antwort wurde unterbrochen, weil die Seite neu geladen wurde.");
+    expect(antwort).toMatchObject({ fehler: true, wiederholbar: true, text: "Erster Teil der Antwort" });
+    expect(antwort.unterwegs).toBeUndefined();
+    expect(antwort.karten.map((k) => k.id)).toEqual(["e1"]);
+  });
+
+  it("bestätigter Netzfehler (Seite blieb) bleibt nach dem Neuladen ein Verbindungsfehler", () => {
+    const { unterwegs: _u, ...bestaetigt } = vorlaeufig();
+    const [n] = G.vorbereiten(G.bereinigen([bestaetigt]));
+    expect(n.fehlerText).toBe("Keine Verbindung zum Server. Bitte nochmal versuchen.");
+    expect(n.wiederholbar).toBe(true);
+  });
+
+  it("ein anderer Tab übernimmt einen vorläufigen Netzfehler gleich – sonst schriebe er ihn beim nächsten Speichern weg", () => {
+    const frage = nutzer("Frage", { id: "n1" });
+    const fremd = () => G.vorbereiten(G.bereinigen([{ ...frage }, vorlaeufig(), nutzer("Frage zwei", { id: "n2" })]), { fremd: true });
+    const r = G.zusammenfuehren([frage], fremd());
+    expect(r.nachrichten.map((n) => n.id)).toEqual(["n1", "g1", "n2"]); // an seiner Stelle, vor der späteren Frage
+    expect(r.neu[0]).toMatchObject({ id: "g1", unterwegs: true, fehler: true, fehlerText: "Keine Verbindung zum Server. Bitte nochmal versuchen." });
+    expect(r.neu[0].karten.map((k) => k.id)).toEqual(["e1"]); // samt ungespeichertem Entwurf
+    // eine noch laufende Antwort (unterwegs ohne Fehler) kommt wie bisher erst nach ihrem Ende
+    const laeuft = G.zusammenfuehren([frage], G.vorbereiten(G.bereinigen([{ ...frage }, gabi("Teil", { id: "g7", unterwegs: true })]), { fremd: true }));
+    expect(laeuft).toMatchObject({ neu: [], geaendert: [] });
+  });
+
+  it("ein „unterwegs“ des anderen Tabs überschreibt nie die eigene Fassung – es merkt nur die Stelle", () => {
+    const frage = nutzer("Frage", { id: "n1" });
+    // der Tab mit dem Netzfehler nach dem Neuladen: „unterbrochen“ – der andere Tab schreibt noch den vorläufigen Stand
+    const [eigen] = G.vorbereiten(G.bereinigen([vorlaeufig()]));
+    const r = G.zusammenfuehren([frage, eigen], G.vorbereiten(G.bereinigen([{ ...frage }, vorlaeufig(), nutzer("dazu", { id: "n3" })]), { fremd: true }));
+    expect(r.geaendert).toEqual([]);
+    expect(eigen.fehlerText).toBe("Die Antwort wurde unterbrochen, weil die Seite neu geladen wurde.");
+    expect(r.nachrichten.map((n) => n.id)).toEqual(["n1", "g1", "n3"]);
+    // bestätigt (ohne „unterwegs“): das gilt – auch das „unterwegs“ der übernommenen Kopie fällt weg
+    const kopie = G.vorbereiten(G.bereinigen([vorlaeufig()]), { fremd: true })[0];
+    const { unterwegs: _u, ...bestaetigt } = vorlaeufig();
+    const r2 = G.zusammenfuehren([frage, kopie], G.vorbereiten(G.bereinigen([{ ...frage }, bestaetigt]), { fremd: true }));
+    expect(r2.geaendert).toEqual([kopie]);
+    expect(kopie.unterwegs).toBeUndefined();
+    expect(kopie.fehlerText).toBe("Keine Verbindung zum Server. Bitte nochmal versuchen.");
+  });
+
+  it("… bringt aber dort Gespeichertes/Verworfenes gleich mit (sonst böte dieser Tab weiter „Speichern“ an)", () => {
+    const frage = nutzer("Frage", { id: "n1" });
+    const mitKarte = (extra) => { const n = vorlaeufig(); n.karten = [{ ...n.karten[0], ...extra }]; return n; };
+    // hier nach dem Neuladen („unterbrochen“, Entwurf offen); der andere Tab hat den Entwurf seiner Kopie gespeichert
+    const [eigen] = G.vorbereiten(G.bereinigen([vorlaeufig()]));
+    const r = G.zusammenfuehren([frage, eigen], G.vorbereiten(G.bereinigen([{ ...frage }, mitKarte({ gespeichert: "notiz-3", strukturiert: { befund: ["Flexion 110°"] } })]), { fremd: true }));
+    expect(r.geaendert).toEqual([eigen]);
+    expect(eigen.karten[0]).toMatchObject({ gespeichert: "notiz-3", strukturiert: { befund: ["Flexion 110°"] } }); // dieser Inhalt ging zum Server
+    expect(eigen.fehlerText).toBe("Die Antwort wurde unterbrochen, weil die Seite neu geladen wurde."); // sonst bleibt die eigene Fassung
+    expect(r.nachrichten.map((n) => n.id)).toEqual(["n1", "g1"]);
+    // verworfen ebenso
+    const [eigen2] = G.vorbereiten(G.bereinigen([vorlaeufig()]));
+    const r2 = G.zusammenfuehren([frage, eigen2], G.vorbereiten(G.bereinigen([{ ...frage }, mitKarte({ verworfen: true })]), { fremd: true }));
+    expect(r2.geaendert).toEqual([eigen2]);
+    expect(eigen2.karten[0].verworfen).toBe(true);
+  });
+});
+
+describe("Übernahme aus v2.0: was andere Tabs aus der Liste lesen", () => {
+  it("offener Entwurf im übernommenen Gespräch steht im Listeneintrag (für „Alle löschen“/„Abmelden“ in anderen Tabs)", () => {
+    const alt = JSON.stringify({ nachrichten: [
+      nutzer("Knie rechts, Flexion 100 Grad", { id: "c1", art: "diktat", kuerzel: "TP-01" }),
+      gabi("Hier ist dein Entwurf.", { id: "c2", karten: [{ typ: "entwurf", id: "c3", kuerzel: "TP-01", strukturiert: {} }] }),
+    ] });
+    const nachrichten = G.vorbereiten(G.ausVersion20(alt));
+    const m = G.meta({ id: "x", nachrichten, erstellt: 1, geaendert: 2 });
+    expect(m).toMatchObject({ titel: "Diktat TP-01: Knie rechts, Flexion 100…", entwuerfe: 1 });
   });
 });

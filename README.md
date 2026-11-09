@@ -9,6 +9,10 @@ Suche, Bearbeiten, Löschen, PDF).
 **v2.1:** Gesprächsverlauf wie bei ChatGPT – mehrere Gespräche, Liste links (Laptop) bzw. Schublade über ☰ (Handy),
 gruppiert nach Heute/Gestern/Letzte 7 Tage/Älter, eigene Adresse `#/gespraech/<id>`, Umbenennen, Löschen, höchstens 50.
 **Gespräche liegen nur auf diesem Gerät** (IndexedDB, sonst localStorage) – nie im Worker oder in Supabase.
+**v2.1.1:** die 16 kleinen Funde der Live-Prüfung behoben – u. a. zwei Tabs mit demselben Entwurf (keine doppelte
+Notiz), Abmelden in fester Reihenfolge (nie eine Anfrage ohne Code), Fokus in Safari, ruhige Platzhalter – dazu 13
+weitere aus der Gegenprüfung (v. a. Abmelden mit zwei offenen Tabs) und 1 aus der Nachprüfung (Korrektur am Entwurf
+nach einem Netzfehler in zwei Tabs, siehe Log).
 
 > **Testversion – nur Testdaten.** Keine Klarnamen, keine echten Patientendaten. Kürzel brauchen deshalb eine Ziffer (z. B. `TP-01`).
 > Gabi stellt keine Diagnosen und gibt keine Therapieempfehlungen; sie antwortet nur aus gespeicherten Notizen und der Wissensdatei.
@@ -168,15 +172,18 @@ Prüfen: `https://gabi-api.<konto>.workers.dev/api/status` zeigt `"bereit": true
 - **Gespräche nur auf diesem Gerät** (v2.1): IndexedDB bzw. localStorage dieses Browsers, getrennt für Demo und echten
   Betrieb, höchstens 50 (die ältesten fliegen mit Hinweis raus). Nie in Supabase oder im Worker – es gibt nur einen
   gemeinsamen Zugangscode, gespeicherte Gespräche auf dem Server wären für alle sichtbar. „Abmelden“ fragt
-  „Gespräche auf diesem Gerät auch löschen?“ (vorbelegt: ja). Entwürfe sind bis zum Klick auf „Speichern“ nur Teil des
-  Gesprächs auf dem Gerät.
+  „Gespräche auf diesem Gerät auch löschen?“ (vorbelegt: ja). Der Code ist dabei sofort vom Gerät, mit Häkchen auch
+  die Gespräche – auch wenn der Tab danach gleich zugeht; was gerade gespeichert wird, wartet die App noch ab (v2.1.1).
+  Ein Gespräch, das ein Tab gelöscht hat, legt ein anderer Tab nicht wieder an. Entwürfe sind bis zum Klick auf
+  „Speichern“ nur Teil des Gesprächs auf dem Gerät.
+- Die App schickt nie eine Anfrage ohne Zugangscode an den Worker (er zählte sie als Fehlversuch) – v2.1.1.
 - Gabi hat kein Werkzeug zum Speichern, Ändern oder Löschen – das macht nur die Therapeutin per Knopf.
 - Worker: nur Anfragen von gabi.automatilabs.de (und localhost zum Testen), Rate-Limit je IP (300/min, Spracherkennung
   und KI je 120/10 min, Gespräch 120 Nachrichten/10 min), Sperre nach 20 falschen Zugangscodes für 15 Minuten,
   Größenlimits (Aufnahme ≤ 5 Minuten, JSON ≤ 300 KB, Gespräch ≤ 40 Nachrichten, höchstens 6 Werkzeug-Runden),
   Eingaben werden auf Typ geprüft.
 
-## Was geht · was fehlt (Stand v2.1)
+## Was geht · was fehlt (Stand v2.1.1)
 **Geht:** Gesprächsverlauf (mehrere Gespräche, nur auf dem Gerät, eigene Adressen, Umbenennen, Löschen, Limit 50),
 Gesprächs-erste Oberfläche mit Schnellaktionen, Push-to-Talk (Finger, Maus, Leertaste; Wegziehen verwirft),
 Antworten live mit Tipp-Animation, Quellen, Kopieren, Vorlesen, Stopp, Wiederholen; Diktat → Entwurf → Bearbeiten →
