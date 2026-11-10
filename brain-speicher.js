@@ -38,6 +38,7 @@
     schema: "Die Schema-Nummer verwaltet der Speicher selbst.",
     leerenApi: "Das gemeinsame Brain lässt sich von diesem Gerät aus nicht leeren.",
     fremd: "Dieses Brain wurde mit einer neueren Gabi angelegt. Bitte lade die Seite neu.",
+    gestoert: "Das Brain ließ sich gerade nicht öffnen.",
   };
 
   // ------------------------------------------------------------------
@@ -645,13 +646,24 @@
 
   // ------------------------------------------------------------------
   // Öffnen: beste verfügbare Ablage – IndexedDB → localStorage → nur dieser Tab
+  // Liegt das Brain einmal in IndexedDB, merkt sich das eine kleine Marke in localStorage („<vorsatz>ablage“; resteLoeschen
+  // nimmt sie mit). Antwortet IndexedDB dann bei einem Start nicht (Hänger, Fehler beim Öffnen), wird NICHT in eine leere
+  // Ersatz-Ablage ausgewichen: Dort spielte der Seed ein zweites Brain ein – ohne die eigenen Einträge, ohne jeden Hinweis,
+  // und was man darin anlegte, wäre beim nächsten normalen Start unsichtbar. Stattdessen: Fehler mit Satz (gestoert) – die
+  // Oberfläche zeigt ihn mit „Nochmal versuchen“, das Brain in IndexedDB bleibt unberührt.
   // ------------------------------------------------------------------
   async function oeffnen({ demo = false, umgebung = WELT, zeitlimit = ZEITLIMIT } = {}) {
     const n = namen(demo);
+    const ORT = `${n.vorsatz}ablage`;
     let idb = null;
     let ls = null;
     try { idb = umgebung.indexedDB || null; } catch { idb = null; }
     try { ls = umgebung.localStorage || null; } catch { ls = null; }
+    const lies = (schluessel) => { try { return ls ? ls.getItem(schluessel) : null; } catch { return null; } };
+    const liegtInIdb = lies(ORT) === "indexeddb";
+    // offenes Löschen von einem früheren Abmelden (IndexedDB hing damals): Das alte Brain soll weg – dann darf ausgewichen werden
+    const loeschenOffen = lies(n.marke) === "1";
+    if (!idb && liegtInIdb && !loeschenOffen) throw fehler(TEXT.gestoert, { gestoert: true });
     const versuche = [];
     if (idb) versuche.push(() => idbAblage(n.db, idb, { zeitlimit }));
     if (ls) versuche.push(() => lsAblage(n.vorsatz, ls));
@@ -659,15 +671,13 @@
       const a = neu();
       try {
         await a.bereit();
-        // offenes Löschen von einem früheren Abmelden (IndexedDB hing damals): jetzt zuerst nachholen
         if (a.art === "indexeddb" && ls) {
-          let offen = false;
-          try { offen = ls.getItem(n.marke) === "1"; } catch { offen = false; }
-          if (offen) {
-            await a.leeren(); // scheitert es wieder: Marke bleibt, weiter mit der nächsten Ablage
+          if (loeschenOffen) {
+            await a.leeren(); // jetzt zuerst nachholen – scheitert es wieder: Marke bleibt, weiter mit der nächsten Ablage
             try { ls.removeItem(n.marke); } catch { /* egal */ }
             a.nachgeholt = true;
           }
+          if (!liegtInIdb) { try { ls.setItem(ORT, "indexeddb"); } catch { /* voll oder gesperrt: dann ohne Marke */ } }
         }
         return a;
       } catch (e) {
@@ -680,6 +690,8 @@
           ersatz.schemaFremd = true;
           return ersatz;
         }
+        // Hier liegt schon ein Brain, und IndexedDB antwortet gerade nicht: kein zweites Brain im Ersatz (siehe oben)
+        if (a.art === "indexeddb" && liegtInIdb && !loeschenOffen) throw fehler(TEXT.gestoert, { gestoert: true });
         /* sonst: nächste Möglichkeit */
       }
     }

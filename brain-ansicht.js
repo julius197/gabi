@@ -129,7 +129,11 @@
         // Kennt die Ablage den Grund (Stand von einer neueren Gabi, Verbindung zu …), steht ihr Satz da – sonst der allgemeine
         const vonAblage = Boolean(e && e.brain && typeof e.message === "string" && e.message);
         z.fehler = vonAblage ? e.message : "Das Brain ließ sich nicht laden.";
-        z.fehlerText = vonAblage ? "Deine Notizen und Gespräche sind davon nicht betroffen." : "";
+        // gestoert: Das Brain liegt in IndexedDB, sie antwortet gerade nicht – bewusst kein Ersatz-Brain (siehe brain-speicher.js)
+        z.fehlerText = e && e.gestoert ? "Dein Wissen liegt weiter auf diesem Gerät, es ist nichts verloren. Bis das Brain wieder geladen ist, antwortet Gabi aus dem eingebauten Wissen."
+          : vonAblage ? "Deine Notizen und Gespräche sind davon nicht betroffen." : "";
+        // wer gerade nicht im Brain ist, sähe sonst nichts davon – Gabi antwortet ohne Brain aus dem eingebauten Wissen
+        if (wurzel.hidden) toast("Das Brain ließ sich nicht laden – Gabi antwortet solange aus dem eingebauten Wissen.", { art: "warn", dauer: 7000 });
         zeichnenBald();
       });
       return lauf;

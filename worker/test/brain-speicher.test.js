@@ -643,7 +643,8 @@ describe("oeffnen(): beste verfügbare Ablage", () => {
     expect(a.art).toBe("indexeddb");
     expect(a.schema).toBe(1);
     expect(u.indexedDB.namen()).toEqual(["gabi-brain"]);
-    expect(u.localStorage.schluessel()).toEqual([]); // kein Ersatz-Dokument angelegt
+    expect(u.localStorage.schluessel()).toEqual(["gabi.brain.ablage"]); // kein Ersatz-Dokument angelegt – nur die Marke „das Brain liegt in IndexedDB“ (Prüfrunde 1, Fund 4)
+    expect(u.localStorage.getItem("gabi.brain.ablage")).toBe("indexeddb");
   });
 
   it("IndexedDB hängt → localStorage", async () => {
@@ -673,7 +674,7 @@ describe("oeffnen(): beste verfügbare Ablage", () => {
     expect(a.art).toBe("indexeddb");
     expect(a.nurLesen).toBe(true);
     expect((await a.laden()).knoten.map((k) => k.id)).toEqual(["k-eins"]);
-    expect(u.localStorage.schluessel()).toEqual([]);
+    expect(u.localStorage.schluessel()).toEqual(["gabi.brain.ablage"]); // nur die Marke aus dem ersten Öffnen, kein Ersatz-Dokument
     // soll aber gelöscht werden (offene Marke) und es geht nicht: Marke bleibt, weiter im Ersatz – das alte Brain wird nicht gezeigt
     a.schliessen();
     u.localStorage.setItem("gabi.brain.leeren-offen", "1");
@@ -688,6 +689,70 @@ describe("oeffnen(): beste verfügbare Ablage", () => {
     const u = umgebung();
     u.indexedDB.oeffnenScheitert = true;
     expect((await S.oeffnen({ umgebung: u, zeitlimit: 500 })).art).toBe("localstorage");
+  });
+
+  // ---- Prüfrunde 1, Fund 4: kein stilles zweites Brain, wenn IndexedDB bei einem Start nicht antwortet ----
+  const mitBrain = async () => {
+    const u = umgebung();
+    const vorher = await S.oeffnen({ umgebung: u, zeitlimit: 500 });
+    await vorher.stapel({ knoten: [knoten("k-eigener", { titel: "Mein eigener Eintrag" })], meta: { seed: "v1" } });
+    vorher.schliessen();
+    return u;
+  };
+
+  it.each([
+    ["hängt", (u) => { u.indexedDB.oeffnenHaengt = true; }, (u) => { u.indexedDB.oeffnenHaengt = false; }],
+    ["meldet beim Öffnen einen Fehler", (u) => { u.indexedDB.oeffnenScheitert = true; }, (u) => { u.indexedDB.oeffnenScheitert = false; }],
+  ])("lag das Brain schon in IndexedDB und sie %s: KEIN Ausweichen in ein Ersatz-Brain – Fehler mit Satz, nichts wird angelegt, danach ist alles wieder da", async (_name, stoeren, heilen) => {
+    const u = await mitBrain();
+    stoeren(u);
+    const f = await S.oeffnen({ umgebung: u, zeitlimit: 20 }).catch((e) => e);
+    expect(f).toBeInstanceOf(Error);
+    expect(f).toMatchObject({ brain: true, gestoert: true, message: "Das Brain ließ sich gerade nicht öffnen." });
+    expect(u.localStorage.schluessel()).toEqual(["gabi.brain.ablage"]); // kein Ersatz-Dokument „gabi.brain.v1“ – dort entstünde das zweite Brain
+    expect(u.indexedDB.verbindungen("gabi-brain")).toBe(0);
+    expect(u.indexedDB.inhalt("gabi-brain", "knoten").map((k) => k.id)).toEqual(["k-eigener"]); // unberührt
+    // ein zweiter Versuch scheitert genauso (kein Ausweichen beim Wiederholen)
+    await expect(S.oeffnen({ umgebung: u, zeitlimit: 20 })).rejects.toMatchObject({ gestoert: true });
+    expect(u.localStorage.schluessel()).toEqual(["gabi.brain.ablage"]);
+    // nächster normaler Start: das Brain mit dem eigenen Eintrag
+    heilen(u);
+    const a = await S.oeffnen({ umgebung: u, zeitlimit: 500 });
+    expect(a.art).toBe("indexeddb");
+    expect((await a.laden()).knoten.map((k) => k.titel)).toEqual(["Mein eigener Eintrag"]);
+  });
+
+  it("die Marke gilt je Betrieb: hängt IndexedDB, bleibt die Demo ohne eigenes Brain beim Ersatz – das echte Brain weicht nicht aus", async () => {
+    const u = await mitBrain();
+    expect(u.localStorage.getItem("gabi.demo.brain.ablage")).toBeNull();
+    u.indexedDB.oeffnenHaengt = true;
+    const demo = await S.oeffnen({ demo: true, umgebung: u, zeitlimit: 20 }); // die Demo lag noch nie in IndexedDB: Ersatz wie bisher
+    expect(demo.art).toBe("localstorage");
+    await expect(S.oeffnen({ umgebung: u, zeitlimit: 20 })).rejects.toMatchObject({ gestoert: true });
+    // IndexedDB fehlt ganz (z. B. abgeschaltet), die Marke sagt aber: dort liegt das Brain → ebenfalls kein Ersatz-Brain
+    await expect(S.oeffnen({ umgebung: { localStorage: u.localStorage, sessionStorage: u.sessionStorage } })).rejects.toMatchObject({ gestoert: true });
+    expect(u.localStorage.schluessel().filter((k) => k.startsWith("gabi.brain."))).toEqual(["gabi.brain.ablage"]);
+  });
+
+  it("nach „alles vom Gerät“ ist auch die Marke weg: ein Hänger beim nächsten Start weicht wieder aus (dort gibt es nichts zu verstecken); ein offenes Löschen ebenso", async () => {
+    const u = await mitBrain();
+    expect(await S.resteLoeschen({ umgebung: u, zeitlimit: 500 })).toBe(true);
+    expect(u.localStorage.schluessel()).toEqual([]);
+    u.indexedDB.oeffnenHaengt = true;
+    expect((await S.oeffnen({ umgebung: u, zeitlimit: 20 })).art).toBe("localstorage");
+    // offenes Löschen (Marke „leeren-offen“) und IndexedDB hängt: Das alte Brain soll weg – weiter im Ersatz, wie bisher
+    const v = await mitBrain();
+    v.localStorage.setItem("gabi.brain.leeren-offen", "1");
+    v.indexedDB.oeffnenHaengt = true;
+    const ersatz = await S.oeffnen({ umgebung: v, zeitlimit: 20 });
+    expect(ersatz.art).toBe("localstorage");
+    expect((await ersatz.laden()).knoten).toEqual([]);
+    expect(v.localStorage.getItem("gabi.brain.leeren-offen")).toBe("1");
+    // sobald IndexedDB wieder antwortet, wird zuerst gelöscht – das alte Brain taucht nicht wieder auf
+    v.indexedDB.oeffnenHaengt = false;
+    const danach = await S.oeffnen({ umgebung: v, zeitlimit: 500 });
+    expect(danach).toMatchObject({ art: "indexeddb", nachgeholt: true });
+    expect((await danach.laden()).knoten).toEqual([]);
   });
 
   it("weder IndexedDB noch localStorage (fehlt, gesperrt oder schon der Zugriff wirft) → nur dieser Tab", async () => {
@@ -942,7 +1007,8 @@ describe("resteLoeschen(): alles vom Gerät", () => {
     const { u, echt, demo } = await gefuellt();
     expect(await S.resteLoeschen({ umgebung: u, zeitlimit: 500 })).toBe(true);
     for (const s of S.STORES) expect(u.indexedDB.inhalt("gabi-brain", s), s).toEqual([]);
-    expect(u.localStorage.schluessel()).toEqual(["gabi.demo.brain.positionen", "gabi.demo.brain.v1", "gabi.demo.v1", "gabi.gespraeche.v1", "gabi.zugang"]);
+    // (auch die Marke „liegt in IndexedDB“ des gewählten Betriebs ist weg – die der Demo bleibt, bis die Demo gelöscht wird)
+    expect(u.localStorage.schluessel()).toEqual(["gabi.demo.brain.ablage", "gabi.demo.brain.positionen", "gabi.demo.brain.v1", "gabi.demo.v1", "gabi.gespraeche.v1", "gabi.zugang"]);
     expect(u.sessionStorage.schluessel()).toEqual(["gabi.demo.brain.notfall", "gabi.gespraeche.notfall"]);
     expect((await demo.laden()).knoten.map((k) => k.id)).toEqual(["k-demo"]);
     expect(await demo.verlauf("k-demo")).toHaveLength(1);
@@ -953,7 +1019,8 @@ describe("resteLoeschen(): alles vom Gerät", () => {
     expect(await (await S.oeffnen({ umgebung: u, zeitlimit: 500 })).laden()).toEqual(LEER);
     // und die Demo für sich
     expect(await S.resteLoeschen({ demo: true, umgebung: u, zeitlimit: 500 })).toBe(true);
-    expect(u.localStorage.schluessel()).toEqual(["gabi.demo.v1", "gabi.gespraeche.v1", "gabi.zugang"]);
+    // („gabi.brain.ablage“ stammt vom Start des echten Brains zwei Zeilen weiter oben – die Demo-Marke ist mit der Demo weg)
+    expect(u.localStorage.schluessel()).toEqual(["gabi.brain.ablage", "gabi.demo.v1", "gabi.gespraeche.v1", "gabi.zugang"]);
     expect(u.sessionStorage.schluessel()).toEqual(["gabi.gespraeche.notfall"]);
     for (const s of S.STORES) expect(u.indexedDB.inhalt("gabi-brain-demo", s), s).toEqual([]);
   });
