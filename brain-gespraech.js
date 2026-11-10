@@ -85,9 +85,26 @@
     // ==========================================================
     // 2 Ereignisse aus dem Antwort-Strom
     // ==========================================================
+    /**
+     * Dem Brain die Kürzel der Test-Patienten nennen – aus der Patientenliste, die das Gespräch schon geladen hat (nur die
+     * Kürzel, keine Notizen). So erkennt es Fragen und Vorschläge zu einem bestimmten Test-Patienten auch dann, wenn die
+     * Brain-Ansicht nie geöffnet war. false = die Liste ist (noch) nicht da.
+     */
+    function kuerzelMelden() {
+      const b = brain();
+      if (!b || !Array.isArray(chat.patienten)) return false;
+      b.kuerzelSetzen(chat.patienten.map((p) => p && p.kuerzel));
+      return true;
+    }
+    // Ein Vorschlag mit Patientenbezug wird keine Karte: Stattdessen steht dieser Satz da (je Antwort gemerkt) – und der
+    // Begleittext zum Vorschlag („Passt das so? …“) entfällt, solange der Satz dasteht.
+    const absage = new WeakMap();
+    const patientText = (kuerzel) => `Das gehört in eine Notiz, nicht ins Brain: Es geht um **${kuerzel}**. Ins Brain kommt nur, was für die ganze Praxis gilt – nichts über einzelne Test-Patienten.`;
+
     /** quellen (mit Knoten), luecke, brain_vorschlag. true = verarbeitet (die Nachricht wird neu gezeichnet). */
     function ereignis(gabi, e, g) {
       const b = brain();
+      if (e.t === "text" && absage.has(gabi) && gabi.text === absage.get(gabi)) return true;
       if (e.t === "quellen" && Array.isArray(e.knoten)) {
         if (!b) return true;
         const da = new Set((gabi.brainQuellen || []).map((q) => q.id));
@@ -109,18 +126,25 @@
       if (e.t === "luecke") {
         const frage = String(e.frage || "").replace(/\s+/g, " ").trim().slice(0, 200);
         if (!b || !frage || gabi.luecke) return true;
+        audit("praxisfragen");
+        // Fragen zu einem Test-Patienten gehören nicht ins Brain – dann auch kein Hinweis. Dafür braucht das Brain die Kürzel:
+        // die Patientenliste des Gesprächs (lädt notfalls nach – nur sie, keine Notizen). Ohne Liste lieber keine Lücke.
+        const bekannt = kuerzelMelden();
+        if (bekannt && b.nenntPatienten(frage)) return true;
         gabi.luecke = { frage };
-        b.lueckeMelden(frage).then((l) => {
-          // Fragen zu Patienten gehören nicht ins Brain – dann auch kein Hinweis
+        (bekannt ? Promise.resolve(true) : app.patienten().then(kuerzelMelden, () => false)).then((ok) => (ok ? b.lueckeMelden(frage) : null)).then((l) => {
           if (!l) delete gabi.luecke; else gabi.luecke.id = l.id;
           app.nachrichtNeuZeichnen(gabi);
           app.gespraechMerken(g);
         });
-        audit("praxisfragen");
         return true;
       }
       if (e.t === "brain_vorschlag" && e.vorschlag && typeof e.vorschlag === "object") {
         const v = e.vorschlag;
+        // Was einen bestimmten Test-Patienten betrifft, gehört in eine Notiz: Daraus wird keine Karte – Gabi sagt es stattdessen.
+        kuerzelMelden();
+        const patient = b ? b.nenntPatienten(`${v.titel || ""}\n${v.inhalt || ""}`) : "";
+        if (patient) { gabi.text = patientText(patient); gabi.wartet = false; absage.set(gabi, gabi.text); return true; }
         const typ = v.typ === "aendern" ? "aendern" : "neu";
         const alt = typ === "aendern" && b ? b.hol(String(v.id || "")) : null;
         if (typ === "aendern" && (!alt || alt.geschuetzt)) return true; // Ziel gibt es nicht (mehr) oder ist geschützt: kein Vorschlag
@@ -298,6 +322,7 @@
       if (aktion === "brain-luecke-eintragen") {
         if (!b || !n.luecke || n.luecke.eingetragen) return;
         knopf.disabled = true;
+        kuerzelMelden(); // auch eine früher gemerkte Frage zu einem Test-Patienten wird kein Eintrag
         let l = n.luecke.id ? b.luecken({ alle: true }).find((x) => x.id === n.luecke.id) : null;
         if (!l) l = await b.lueckeMelden(n.luecke.frage);
         const r = l ? await b.lueckeEintragen(l.id) : { fehler: { allgemein: "Diese Frage lässt sich nicht eintragen." } };

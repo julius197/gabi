@@ -9,7 +9,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   return {
-    "version": "e85a6799240b",
+    "version": "14c0f74ee3f6",
     "knoten": [
       {
         "id": "s-praxis",
@@ -952,7 +952,8 @@
         "status": "entwurf",
         "daten": [
           "Einträge aus dem Brain (Praxiswissen, keine Patientendaten)",
-          "deine Nachricht im Gespräch"
+          "deine Nachricht im Gespräch",
+          "Kürzel der Test-Patienten (nur zum Abgleich: nichts über einzelne Test-Patienten kommt ins Brain)"
         ],
         "voraussetzungen": [
           "Brain-Schalter"
@@ -976,7 +977,8 @@
         "status": "entwurf",
         "daten": [
           "Einträge aus dem Brain (Praxiswissen, keine Patientendaten)",
-          "deine Nachricht im Gespräch"
+          "deine Nachricht im Gespräch",
+          "Kürzel der Test-Patienten (nur zum Abgleich: nichts über einzelne Test-Patienten kommt ins Brain)"
         ],
         "voraussetzungen": [
           "Brain-Schalter"
@@ -1000,7 +1002,8 @@
         "status": "entwurf",
         "daten": [
           "Einträge aus dem Brain (Praxiswissen, keine Patientendaten)",
-          "deine Antworten im Gespräch"
+          "deine Antworten im Gespräch",
+          "Kürzel der Test-Patienten (nur zum Abgleich: nichts über einzelne Test-Patienten kommt ins Brain)"
         ],
         "voraussetzungen": [
           "Brain-Schalter",

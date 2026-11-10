@@ -6,7 +6,7 @@ import { MAX_ROHTEXT, istLeer, kuerzelPruefen, normalisieren, pseudonymPruefen, 
 import { SpeicherFehler, istUuid } from "./speicher.js";
 import { StrukturFehler } from "./strukturierung.js";
 import { ChatFehler, MAX_NACHRICHTEN, MAX_ZEICHEN_NACHRICHT, MAX_ZEICHEN_VERLAUF, erstelleWerkzeuge, kiFehler } from "./chat.js";
-import { BrainFehler, brainAktionPruefen, brainKontextPruefen, brainVorschlagInhalt } from "./brain.js";
+import { BrainFehler, brainAktionPruefen, brainKontextPruefen, brainPatientenBezug, brainPatientenHinweis, brainVorschlagInhalt } from "./brain.js";
 import { BRAIN_ROUTEN, MAX_JSON_STAPEL, brainRoute, istBrainPfad } from "./brain_abruf.js";
 
 export const VERSION = "2.1.0-brain";
@@ -325,6 +325,11 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
         if (!brainVorschlagen) throw new HttpFehler(503, "Vorschläge fürs Brain sind auf dem Server noch nicht eingerichtet (KI-Schlüssel fehlt).");
         const { knoten, antwort } = anfrage.aktion;
         return ndjsonAntwort(async (senden) => {
+          // Nichts über einzelne Test-Patienten ins Brain: Nennt die Antwort (oder der Vorschlag daraus) ein Kürzel aus der
+          // Patientenliste, entsteht keine Karte – und die Antwort geht gar nicht erst an die Vorschlags-KI.
+          const kuerzel = (await speicher.patienten()).map((p) => p.kuerzel);
+          const patient = brainPatientenBezug(antwort, kuerzel);
+          if (patient) { senden({ t: "text", d: brainPatientenHinweis(patient) }); return; }
           if (!teuerErlaubt()) throw new StrukturFehler("Gerade zu viele KI-Anfragen. Bitte kurz warten und noch einmal versuchen.");
           senden({ t: "status", text: "Formuliere den Eintrag …" });
           const inhalt = brainVorschlagInhalt(await brainVorschlagen({ knoten, antwort }));
@@ -332,6 +337,8 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
             senden({ t: "text", d: "Daraus kann ich noch keinen Eintrag machen. Sag es mir bitte etwas genauer – oder tipp auf „Überspringen“." });
             return;
           }
+          const imVorschlag = brainPatientenBezug(inhalt, kuerzel);
+          if (imVorschlag) { senden({ t: "text", d: brainPatientenHinweis(imVorschlag) }); return; }
           senden({ t: "brain_vorschlag", vorschlag: { typ: "aendern", id: knoten.id, titel: knoten.titel, inhalt, grund: "interview" } });
           senden({ t: "text", d: "So würde ich es ins Brain schreiben. Passt das? Dann tipp auf „Übernehmen“." });
         });

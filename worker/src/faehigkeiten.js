@@ -29,6 +29,8 @@ export const PHASEN = [
 
 const TESTDATEN = "Behandlungsnotizen (nur Testdaten, Patienten nur als Kürzel)";
 const BRAIN_DATEN = "Einträge aus dem Brain (Praxiswissen, keine Patientendaten)";
+// Brain-Vorschläge werden mit den Kürzeln der Patientenliste abgeglichen: Was einen bestimmten Test-Patienten betrifft, gehört in eine Notiz.
+const KUERZEL_ABGLEICH = "Kürzel der Test-Patienten (nur zum Abgleich: nichts über einzelne Test-Patienten kommt ins Brain)";
 const KONTEN = "Benutzerkonten und Rollen statt gemeinsamem Zugangscode (Admin = Praxisinhaber)";
 const AV = "AV-Verträge und Prüfung der Verarbeitungsorte, bevor echte Patientendaten verarbeitet werden";
 const PROTOKOLL = "Änderungsprotokoll: wer hat wann was bestätigt";
@@ -139,7 +141,7 @@ export const FAEHIGKEITEN = [
     darf: "Gabi formuliert den Eintrag als Karte. Ins Brain kommt er erst mit „Übernehmen“.",
     stufe: "vorschlagen",
     status: "entwurf",
-    daten: [BRAIN_DATEN, "deine Nachricht im Gespräch"],
+    daten: [BRAIN_DATEN, "deine Nachricht im Gespräch", KUERZEL_ABGLEICH],
     voraussetzungen: ["Brain-Schalter"],
     werkzeuge: ["brain_eintrag_vorschlagen"],
     aktionen: [],
@@ -154,7 +156,7 @@ export const FAEHIGKEITEN = [
     darf: "Gabi schlägt die Änderung vor. Geändert wird erst mit „Übernehmen“; der alte Stand bleibt im Verlauf.",
     stufe: "vorschlagen",
     status: "entwurf",
-    daten: [BRAIN_DATEN, "deine Nachricht im Gespräch"],
+    daten: [BRAIN_DATEN, "deine Nachricht im Gespräch", KUERZEL_ABGLEICH],
     voraussetzungen: ["Brain-Schalter"],
     werkzeuge: ["brain_aenderung_vorschlagen"],
     aktionen: [],
@@ -169,7 +171,7 @@ export const FAEHIGKEITEN = [
     darf: "Gabi fragt und formuliert. Ins Brain kommt jeder Punkt erst mit „Übernehmen“; „Überspringen“ und „Später“ gehen immer.",
     stufe: "vorschlagen",
     status: "entwurf",
-    daten: [BRAIN_DATEN, "deine Antworten im Gespräch"],
+    daten: [BRAIN_DATEN, "deine Antworten im Gespräch", KUERZEL_ABGLEICH],
     voraussetzungen: ["Brain-Schalter", "KI-Schlüssel auf dem Server (ohne ihn: einfache Formulierung ohne KI)"],
     werkzeuge: [],
     aktionen: ["brain_antwort"],

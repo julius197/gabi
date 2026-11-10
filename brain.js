@@ -72,28 +72,81 @@
   /** Enthält der Text HTML, Skripte oder gefährliche Adressen? */
   const hatHtml = (text) => HTML.test(String(text == null ? "" : text));
 
+  // Unsichtbare Zeichen: Steuerzeichen (außer Tab und Zeilenumbruch), Formatzeichen (Nullbreite, Richtungswechsel, weiches
+  // Trennzeichen), alles, was Unicode „standardmäßig unsichtbar“ nennt (Variantenselektoren, Tag-Zeichen U+E0000–E0FFF,
+  // Hangul-Füller …), Zeilen-/Absatztrenner und drei Zeichen, die der Browser leer oder gar nicht zeichnet (Braille-
+  // Leerzeichen, Objekt-Platzhalter, leerer Notenkopf). In ihnen ließe sich Text verstecken, den in Vorschau und Editor
+  // niemand sieht – der aber als Kontext an die KI ginge. Privatzeichen bleiben stehen: Der Browser zeigt sie als
+  // Kästchen oder Symbol, darin versteckt sich nichts. Damit Emojis ganz bleiben, darf genau dreierlei stehen: EIN
+  // Variantenselektor direkt hinter einem Bildzeichen, der Verbinder (ZWJ) zwischen zwei Bildzeichen und die Tastenkappe
+  // (Ziffer, Selektor, Rahmen). Tag-Zeichen bleiben nie – die Flaggen von England, Schottland und Wales werden zur
+  // schwarzen Flagge. Als Codepunkte notiert: Im Quelltext steht kein unsichtbares Zeichen. Dasselbe Muster hat der
+  // Worker (worker/src/brain.js); ein Test hält beide gleich.
+  const codepunkt = (n) => `${String.fromCharCode(92)}u{${n.toString(16)}}`;
+  const BILDZEICHEN = `\\p{Extended_Pictographic}[${codepunkt(0xfe0e)}${codepunkt(0xfe0f)}]?\\p{Emoji_Modifier}?`;
+  const UNSICHTBAR = new RegExp(
+    `(${BILDZEICHEN}(?:${codepunkt(0x200d)}${BILDZEICHEN})*|[0-9#*]${codepunkt(0xfe0f)}${codepunkt(0x20e3)})|[`
+    + [[0x00, 0x08], [0x0b, 0x1f], [0x7f, 0x9f], [0x2028, 0x2029], [0x2800, 0x2800], [0xfffc, 0xfffc], [0x1d159, 0x1d159]].map(([von, bis]) => `${codepunkt(von)}-${codepunkt(bis)}`).join("")
+    + "\\p{Cf}\\p{Default_Ignorable_Code_Point}]", "gu");
+  /** Unsichtbare Zeichen entfernen – Tab und Zeilenumbruch bleiben, Emojis bleiben ganz. */
+  const ohneUnsichtbares = (text) => String(text == null ? "" : text).replace(UNSICHTBAR, "$1");
+
+  // Blöcke, die samt Inhalt wegfallen: vom Anfang („<script“) bis zum nächsten Ende desselben Namens
+  const BLOCK_NAMEN = ["script", "style", "iframe", "object", "embed", "noscript", "template", "svg", "math"];
+  const BLOCK_ANFANG = new RegExp(`<(${BLOCK_NAMEN.join("|")})\\b`, "gi");
+  const BLOCK_ENDE = Object.fromEntries(BLOCK_NAMEN.map((name) => [name, new RegExp(`</${name}\\s*>`, "gi")]));
   /**
-   * Text säubern (für Importe und alles, was von außen kommt): Steuerzeichen, Skript- und Stil-Blöcke samt Inhalt,
-   * HTML-Tags, Kommentare und gefährliche Adress-Anfänge raus. Der lesbare Text bleibt.
+   * Skript-, Stil- und ähnliche Blöcke samt Inhalt entfernen – in EINEM Zug von links nach rechts. Fehlt zu einem Namen
+   * das Ende, steht das nach einer Suche fest. (Als ein Muster mit Rückbezug suchte jeder weitere Anfang wieder bis zum
+   * Textende: bei „<script “ × 25 000 quadratisch.)
+   */
+  function ohneBloecke(t) {
+    const ohneEnde = new Set();
+    let aus = "";
+    let stand = 0;
+    BLOCK_ANFANG.lastIndex = 0;
+    for (let m = BLOCK_ANFANG.exec(t); m; m = BLOCK_ANFANG.exec(t)) {
+      const name = m[1].toLowerCase();
+      if (ohneEnde.has(name)) continue;
+      const ende = BLOCK_ENDE[name];
+      ende.lastIndex = BLOCK_ANFANG.lastIndex;
+      if (!ende.exec(t)) { ohneEnde.add(name); continue; }
+      aus += t.slice(stand, m.index);
+      stand = ende.lastIndex;
+      BLOCK_ANFANG.lastIndex = stand;
+    }
+    return stand ? aus + t.slice(stand) : t;
+  }
+
+  const SCHICHTEN = 8; // so viele Schichten verschachtelter Tag-Reste schält bereinigen() höchstens ab
+  /**
+   * Text säubern (für Importe und alles, was von außen kommt): Steuerzeichen und unsichtbare Zeichen, Skript- und
+   * Stil-Blöcke samt Inhalt, HTML-Tags, Kommentare und gefährliche Adress-Anfänge raus. Der lesbare Text bleibt.
+   * Die Laufzeit wächst nur mit der Länge des Texts – auch bei Dateien, die es auf das Gegenteil anlegen.
    */
   function bereinigen(text) {
-    let t = String(text == null ? "" : text).replace(/\r\n?/g, "\n").replace(/\t/g, " ");
-    // eslint-disable-next-line no-control-regex
-    t = t.replace(/[\u0000-\u0009\u000B-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/g, "");
+    let t = ohneUnsichtbares(String(text == null ? "" : text).replace(/\r\n?/g, "\n").replace(/\t/g, " "));
+    // Schicht für Schicht: „<scr<b>ipt>“ wird erst ohne das innere Tag zum Skript-Block. Aber nicht endlos – jede Schicht
+    // liest den ganzen Text, und mit beliebig vielen Schichten fröre eine präparierte Datei den Import ein.
     let vorher;
+    let schicht = 0;
     do {
       vorher = t;
-      t = t
-        .replace(/<(script|style|iframe|object|embed|noscript|template|svg|math)\b[\s\S]*?<\/\1\s*>/gi, "")
+      t = ohneBloecke(t)
         .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
         .replace(/<\?[\s\S]*?(?:\?>|$)/g, "")
         .replace(/<\/?[a-zA-Z][^<>\n]*>/g, "")
         .replace(/\b(?:javascript|vbscript)\s*:/gi, "")
         .replace(/\bdata\s*:\s*text\/html[^\s)]*/gi, "");
-    } while (t !== vorher);
+      schicht += 1;
+    } while (t !== vorher && schicht < SCHICHTEN);
+    // Danach noch nicht fertig (so tief schachtelt nur, wer es darauf anlegt): den Rest nicht weiter schälen, sondern
+    // entschärfen – jede spitze Klammer und der Doppelpunkt hinter einem Adress-Anfang werden zu harmlosen Zeichen.
+    if (t !== vorher) t = t.replace(/</g, "‹").replace(/\b(javascript|vbscript)(\s*):/gi, "$1$2∶").replace(/\b(data\s*):(?=\s*text\/html)/gi, "$1∶");
     // was jetzt noch wie ein Tag-Anfang aussieht (ohne Ende), wird entschärft statt gelöscht – der Text dahinter bleibt
     t = t.replace(/<(?=[a-zA-Z/!?])/g, "‹");
-    return t.split("\n").map((z) => z.replace(/\s+$/, "")).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    // Leerraum am Zeilenende mit trimEnd(): Das Muster /\s+$/ braucht für eine lange Zeile aus Leerzeichen quadratisch viel Zeit.
+    return t.split("\n").map((z) => z.trimEnd()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
   const einzeilig = (text) => bereinigen(text).replace(/\s+/g, " ").trim();
 
@@ -114,8 +167,10 @@
     if (!STATUS_IDS.includes(status)) fehler.status = "Unbekannter Status.";
 
     const titelRoh = String(e.titel == null ? "" : e.titel);
-    const titel = titelRoh.replace(/\s+/g, " ").trim();
-    if (hatHtml(titelRoh) || /[\u0000-\u001F\u007F]/.test(titelRoh.replace(/[\n\t]/g, ""))) fehler.titel = "Im Titel ist nur Text erlaubt.";
+    // Unsichtbare Zeichen (aus Webseiten mitkopiert oder absichtlich versteckt) fallen still weg – geprüft wird, was bleibt.
+    const titelSauber = ohneUnsichtbares(titelRoh);
+    const titel = titelSauber.replace(/\s+/g, " ").trim();
+    if (hatHtml(titelSauber) || /[\u0000-\u001F\u007F]/.test(titelRoh.replace(/[\n\t]/g, ""))) fehler.titel = "Im Titel ist nur Text erlaubt.";
     else if (titel.length < GRENZEN.titelMin) fehler.titel = "Bitte gib einen Titel ein (mindestens 2 Zeichen).";
     else if (titel.length > GRENZEN.titelMax) fehler.titel = `Der Titel ist zu lang (höchstens ${GRENZEN.titelMax} Zeichen).`;
     else if (/[[\]|]/.test(titel)) fehler.titel = "Im Titel sind [ ] und | nicht erlaubt.";
@@ -126,9 +181,10 @@
     }
 
     const inhaltRoh = String(e.inhalt == null ? "" : e.inhalt).replace(/\r\n?/g, "\n");
-    const inhalt = inhaltRoh.split("\n").map((z) => z.replace(/\s+$/, "")).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    const inhaltSauber = ohneUnsichtbares(inhaltRoh);
+    const inhalt = inhaltSauber.split("\n").map((z) => z.trimEnd()).join("\n").replace(/\n{3,}/g, "\n\n").trim(); // trimEnd statt /\s+$/: siehe bereinigen()
     // eslint-disable-next-line no-control-regex
-    if (hatHtml(inhaltRoh) || /[\u0000-\u0008\u000B-\u001F\u007F]/.test(inhaltRoh)) fehler.inhalt = "HTML und Skripte sind im Brain nicht erlaubt – bitte nur Text.";
+    if (hatHtml(inhaltSauber) || /[\u0000-\u0008\u000B-\u001F\u007F]/.test(inhaltRoh)) fehler.inhalt = "HTML und Skripte sind im Brain nicht erlaubt – bitte nur Text.";
     else if (inhalt.length > GRENZEN.inhaltMax) fehler.inhalt = `Der Inhalt ist zu lang (höchstens ${GRENZEN.inhaltMax.toLocaleString("de-DE")} Zeichen).`;
     else if (!inhalt && status === "bestaetigt") fehler.inhalt = "Ein bestätigter Eintrag braucht einen Inhalt.";
 
@@ -137,7 +193,7 @@
     if (tags.length > GRENZEN.tagsMax) fehler.tags = `Höchstens ${GRENZEN.tagsMax} Tags.`;
     else if (tags.some((t) => !TAG_MUSTER.test(t))) fehler.tags = "Tags: nur Buchstaben, Ziffern und Bindestrich, höchstens 30 Zeichen.";
 
-    const quelleRoh = String(e.quelle == null ? "" : e.quelle);
+    const quelleRoh = ohneUnsichtbares(e.quelle);
     const quelle = quelleRoh.replace(/\s+/g, " ").trim();
     if (hatHtml(quelleRoh)) fehler.quelle = "In der Quelle ist nur Text erlaubt.";
     else if (quelle.length > GRENZEN.quelleMax) fehler.quelle = `Die Quelle ist zu lang (höchstens ${GRENZEN.quelleMax} Zeichen).`;
@@ -348,6 +404,8 @@
       if (gesamt > GRENZEN.importGesamt) { fehler.push({ datei: name, text: "Zu viel auf einmal – höchstens 2 MB je Import." }); break; }
       for (const stueck of text.replace(/\r\n?/g, "\n").split(`\n${TRENNER}\n`)) {
         if (!stueck.trim()) continue;
+        // die Größengrenze gilt je Eintrag – auch hinter einer Trenner-Zeile (die Datei als ganze darf dann größer sein)
+        if (stueck.length > GRENZEN.importDatei) { fehler.push({ datei: name, text: "Ein Eintrag in dieser Datei ist zu groß – er wurde ausgelassen." }); continue; }
         if (knoten.length >= GRENZEN.importKnoten) { fehler.push({ datei: name, text: `Höchstens ${GRENZEN.importKnoten} Einträge je Import – der Rest wurde ausgelassen.` }); break; }
         const { kopf, rest } = frontmatterLesen(stueck.replace(/^\n+/, ""));
         let inhalt = bereinigen(rest);
@@ -1016,15 +1074,34 @@
     }
 
     // ---- Wissenslücken ----
-    const KUERZEL = /\b[A-Za-zÄÖÜäöü]{1,4}-\d{1,4}\b|\b[A-ZÄÖÜ]{2,4}\d{1,4}\b/;
-    /** Frage, die Gabi nicht aus dem Brain beantworten konnte. Fragen mit Patienten-Kürzel gehören nicht ins Brain. */
-    /** Nennt der Text das Kürzel eines vorhandenen Test-Patienten – auch klein, ohne Bindestrich oder ohne führende Null („tp 1“, „kn7“)? */
+    // Sieht aus wie das Kürzel eines Test-Patienten: „TP-01“, „tp-2“, „KN7“ – und die lange Form, wie der Server sie vergibt
+    // (GROSS, Bindestrich, Ziffer: „SCHULTER-3“, „LWS-2B“). Schreibweisen wie „7B“, „tp1“ oder „tp 1“ sehen aus wie normaler
+    // Text („5G“, „ab 1“): Die erkennt nur der Abgleich mit den vorhandenen Kürzeln (nenntPatienten).
+    const KUERZEL = /\b[A-Za-zÄÖÜäöü]{1,4}-\d{1,4}\b|\b[A-ZÄÖÜ]{2,4}\d{1,4}\b|\b[A-Z]{2,10}-\d[A-Z0-9]{0,8}\b/;
+    // Kürzel der Test-Patienten, die das Gespräch schon kennt (dort ist die Patientenliste geladen). Über abgeleitetSetzen
+    // lernt das Brain sie erst, wenn seine Ansicht geöffnet wird. Nur die Kürzel, keine Notizen – der Graph bleibt, wie er ist.
+    let kuerzelBekannt = [];
+    const kuerzelForm = (t) => schluessel(t).replace(/(^|\D)0+(?=\d)/g, "$1");
+    /**
+     * Nennt der Text einen vorhandenen Test-Patienten – auch klein, ohne Bindestrich, mit Leerzeichen oder ohne führende
+     * Null („tp 1“, „kn7“, „Patient 12“)? Ergebnis: sein Kürzel, sonst "". Die EINE Prüfung für Lücken und Vorschläge: Was
+     * einen bestimmten Test-Patienten betrifft, gehört in eine Notiz, nicht ins Brain. Das Wort „Patienten“ allein zählt nicht.
+     */
     function nenntPatienten(text) {
-      const form = (t) => schluessel(t).replace(/(^|\D)0+(?=\d)/g, "$1");
-      const kuerzel = new Set((quellen.patienten || []).map((p) => form(p && p.kuerzel).replace(/ /g, "")).filter(Boolean));
-      if (!kuerzel.size) return false;
-      const w = form(text).split(" ");
-      return w.some((_, i) => [1, 2, 3].some((n) => kuerzel.has(w.slice(i, i + n).join(""))));
+      const bekannt = new Map(); // Vergleichsform → Kürzel
+      for (const k of [...(quellen.patienten || []).map((p) => p && p.kuerzel), ...kuerzelBekannt]) {
+        const form = kuerzelForm(k).replace(/ /g, "");
+        if (form) bekannt.set(form, String(k));
+      }
+      if (!bekannt.size) return "";
+      const w = kuerzelForm(text).split(" ");
+      for (let i = 0; i < w.length; i++) {
+        for (let n = 1; n <= 3; n++) {
+          const k = bekannt.get(w.slice(i, i + n).join(""));
+          if (k) return k;
+        }
+      }
+      return "";
     }
     /**
      * Eine eingetragene Lücke, deren Eintrag es nicht mehr gibt (gelöscht, rückgängig gemacht, Papierkorb geleert), ist
@@ -1035,6 +1112,7 @@
       const k = l.knoten ? z.knoten.get(l.knoten) : null;
       return k && !k.geloescht ? l : { ...l, status: "offen", knoten: "" };
     }
+    /** Frage, die Gabi nicht aus dem Brain beantworten konnte. Fragen mit Patienten-Kürzel gehören nicht ins Brain. */
     async function lueckeMelden(frage) {
       const text = einzeilig(frage).slice(0, 200);
       const s = schluessel(text);
@@ -1061,6 +1139,9 @@
     async function lueckeEintragen(id) {
       const l = z.luecken.get(id);
       if (!l) return { fehler: { allgemein: "Diese Lücke gibt es nicht mehr." } };
+      // eine früher gemerkte Frage zu einem Test-Patienten (als das Brain die Kürzel noch nicht kannte) wird kein Eintrag
+      const patient = nenntPatienten(l.frage);
+      if (patient) return { fehler: { allgemein: `Die Frage nennt ${patient} – das gehört in eine Notiz, nicht ins Brain.` } };
       const vorhanden = eigeneListe().find((k) => !k.geloescht && schluessel(k.titel) === schluessel(l.frage));
       const r = vorhanden ? { ok: true, knoten: vorhanden } : await anlegen({ art: "frage", titel: l.frage.replace(/[[\]|]/g, " ").replace(/\s+/g, " ").trim().slice(0, GRENZEN.titelMax), inhalt: "", tags: ["luecke"], status: "zu_klaeren", quelle: "Gespräch" }, { grund: "luecke" });
       if (!r.ok) return r;
@@ -1248,6 +1329,9 @@
       get kannRueckgaengig() { return undo.length > 0; },
       get kannWiederholen() { return redo.length > 0; },
       luecken, lueckeMelden, lueckeEintragen, lueckeVerwerfen,
+      /** Kürzel der Test-Patienten bekannt machen – nur die Kürzel, für den Abgleich bei Lücken und Vorschlägen (der Graph bleibt). */
+      kuerzelSetzen(liste) { kuerzelBekannt = (Array.isArray(liste) ? liste : []).map((k) => String(k == null ? "" : k).trim()).filter(Boolean); },
+      nenntPatienten,
       nutzungZaehlen, nutzung, nutzungAlle: () => z.nutzung,
       audit, auditSchreiben, auditLeeren,
       gesundheit: gesund, kontextFuer, suchen, personaText, regelTexte,

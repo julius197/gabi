@@ -328,9 +328,12 @@ export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = 
       AUSFUEHREN[name] = async (e, k) => {
         vorschlaege++;
         if (vorschlaege > MAX_BRAIN_VORSCHLAEGE) throw new WerkzeugFehler(`Pro Nachricht gehen höchstens ${MAX_BRAIN_VORSCHLAEGE} Vorschläge fürs Brain.`);
+        // Nichts über einzelne Test-Patienten ins Brain: Der Vorschlag wird mit den Kürzeln der Patientenliste abgeglichen
+        // (nur gelesen). Ist die Liste nicht lesbar, gibt es keinen Vorschlag – der Fehler geht als technischer Fehler zurück.
+        const kuerzel = (await speicher.patienten()).map((p) => p.kuerzel);
         let vorschlag;
         try {
-          vorschlag = brainVorschlagAus(name, e, brain);
+          vorschlag = brainVorschlagAus(name, e, brain, { kuerzel });
         } catch (err) {
           if (err instanceof BrainFehler) throw new WerkzeugFehler(err.message);
           throw err;

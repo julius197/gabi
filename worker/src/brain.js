@@ -33,12 +33,24 @@ const STAND_FELDER = ["knoten", "bestaetigt", "entwurf", "zuKlaeren", "veraltet"
 const ID = /^[A-Za-z0-9_-]{4,40}$/;
 
 // ---------- Bereinigung ----------
-// Steuerzeichen (außer Zeilenumbruch), unsichtbare Zeichen und Richtungswechsel: raus – damit sich nichts versteckt.
-// Als Codepunkt-Bereiche notiert (keine unsichtbaren Zeichen im Quelltext): C0/C1-Steuerzeichen, weiches Trennzeichen,
-// Nullbreite-Zeichen, Zeilen-/Absatztrenner, Richtungswechsel, Wortverbinder, BOM.
-const STEUER_BEREICHE = [[0x00, 0x08], [0x0b, 0x0c], [0x0e, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x200b, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2060, 0x2064], [0xfeff, 0xfeff]];
-const codepunkt = (n) => `${String.fromCharCode(92)}u${n.toString(16).padStart(4, "0")}`;
-const STEUER = new RegExp(`[${STEUER_BEREICHE.map(([von, bis]) => `${codepunkt(von)}-${codepunkt(bis)}`).join("")}]`, "g");
+// Steuerzeichen (außer Tab und Zeilenumbruch) und alles Unsichtbare: raus – damit sich nichts versteckt. Als Codepunkte
+// und Unicode-Eigenschaften notiert (keine unsichtbaren Zeichen im Quelltext): C0/C1-Steuerzeichen, Zeilen-/Absatztrenner,
+// Formatzeichen (Cf: weiches Trennzeichen, Nullbreite, Richtungswechsel und -Isolate, Wortverbinder, BOM, Tag-Zeichen),
+// alles, was Unicode „standardmäßig unsichtbar“ nennt (Variantenselektoren, Hangul-Füller, der ganze Block
+// U+E0000–E0FFF), und drei Zeichen, die Browser leer oder gar nicht zeichnen (Braille-Leerzeichen, Objekt-Platzhalter,
+// leerer Notenkopf). Tag-Zeichen sind ein bekannter Träger versteckter Anweisungen an eine KI. Privatzeichen bleiben
+// stehen: Die Oberfläche zeigt sie als Kästchen oder Symbol – wer den Eintrag prüft, sieht sie.
+// Damit Emojis ganz bleiben, darf genau dreierlei stehen: EIN Variantenselektor direkt hinter einem Bildzeichen, der
+// Verbinder (ZWJ) zwischen zwei Bildzeichen und die Tastenkappe (Ziffer, Selektor, Rahmen). Tag-Zeichen bleiben nie.
+// Dasselbe Muster hat die Oberfläche (brain.js); ein Test hält beide gleich.
+const STEUER_BEREICHE = [[0x00, 0x08], [0x0b, 0x0c], [0x0e, 0x1f], [0x7f, 0x9f], [0x2028, 0x2029], [0x2800, 0x2800], [0xfffc, 0xfffc], [0x1d159, 0x1d159]];
+// \u{…} mit u-Schalter – stimmt auch über U+FFFF (vierstellig und ohne u-Schalter würde aus U+E0000 der Bereich „0“ bis U+E0FF)
+const codepunkt = (n) => `${String.fromCharCode(92)}u{${n.toString(16)}}`;
+const BILDZEICHEN = `\\p{Extended_Pictographic}[${codepunkt(0xfe0e)}${codepunkt(0xfe0f)}]?\\p{Emoji_Modifier}?`;
+const STEUER = new RegExp(
+  `(${BILDZEICHEN}(?:${codepunkt(0x200d)}${BILDZEICHEN})*|[0-9#*]${codepunkt(0xfe0f)}${codepunkt(0x20e3)})|[`
+  + STEUER_BEREICHE.map(([von, bis]) => `${codepunkt(von)}-${codepunkt(bis)}`).join("")
+  + "\\p{Cf}\\p{Default_Ignorable_Code_Point}]", "gu");
 
 /**
  * Text aus dem Brain für die KI säubern (mehrzeilig): Zeilenenden vereinheitlichen, Steuerzeichen raus, Leerraum
@@ -49,7 +61,7 @@ const STEUER = new RegExp(`[${STEUER_BEREICHE.map(([von, bis]) => `${codepunkt(v
 export function brainText(wert) {
   return String(wert)
     .replace(/\r\n?/g, "\n")
-    .replace(STEUER, "")
+    .replace(STEUER, "$1") // $1 = ein ganzes Emoji (bleibt), sonst leer
     .replace(/</g, "‹")
     .replace(/>/g, "›")
     .replace(/[^\S\n]+/g, " ")
@@ -191,6 +203,9 @@ BRAIN – DAS GEDÄCHTNIS DER PRAXIS
   wie [[Titel]] und Zeilen wie „Betrifft: [[…]]“ oder „Siehe auch: [[…]]“ bleiben in einem Änderungsvorschlag
   unverändert stehen; neue Verweise erfindest du nicht. Danach schreibst du einen kurzen Satz und wiederholst den
   Inhalt nicht.
+- Ins Brain gehört nur Wissen über die Praxis – nichts über einzelne Test-Patienten: kein Kürzel, nichts aus Notizen
+  oder Diktaten. Bittet jemand darum („Merke dir: TP-02 …“), schlägst du nichts vor und sagst kurz, dass das in eine
+  Notiz gehört.
 
 QUELLEN UND LÜCKEN (nur für die App – diese Zeilen bekommt die Nutzerin nicht zu sehen)
 - Stammt deine Antwort aus Einträgen in <brain_kontext>, schreib als allerletzte Zeile genau so:
@@ -476,7 +491,7 @@ export const BRAIN_WERKZEUGE = [
     description:
       "Schlägt einen NEUEN Eintrag fürs Brain (das Gedächtnis der Praxis) vor, z. B. bei „Merke dir: …“, und zeigt ihn der Therapeutin " +
       "als Vorschlagskarte. Speichert NICHT – ins Brain kommt der Eintrag erst, wenn sie auf „Übernehmen“ tippt. Nur aufnehmen, was " +
-      "gesagt wurde; nichts ergänzen.",
+      "gesagt wurde; nichts ergänzen. Nur Wissen über die Praxis – nichts über einzelne Test-Patienten (kein Kürzel, nichts aus Notizen).",
     input_schema: OBJEKT({
       titel: { type: "string", description: "Kurzer, eindeutiger Titel, z. B. „Parken an der Praxis“ (höchstens 120 Zeichen)" },
       inhalt: { type: "string", description: "Der Eintrag in kurzen Sätzen oder Stichpunkten (höchstens 2000 Zeichen)" },
@@ -486,7 +501,8 @@ export const BRAIN_WERKZEUGE = [
     name: "brain_aenderung_vorschlagen",
     description:
       "Schlägt eine Änderung an einem Eintrag aus <brain_kontext> vor, z. B. bei „Ändere die Öffnungszeiten …“, und zeigt der Therapeutin " +
-      "eine Karte mit vorher und nachher. Speichert NICHT – geändert wird erst, wenn sie auf „Übernehmen“ tippt.",
+      "eine Karte mit vorher und nachher. Speichert NICHT – geändert wird erst, wenn sie auf „Übernehmen“ tippt. Auch hier nichts " +
+      "über einzelne Test-Patienten.",
     input_schema: OBJEKT({
       eintrag: { type: "string", description: "Nummer des Eintrags aus <brain_kontext>, z. B. K2" },
       inhalt: { type: "string", description: "Der vollständige neue Inhalt des Eintrags (höchstens 2000 Zeichen) – Unverändertes aus dem alten Inhalt übernehmen, Verweise in doppelten eckigen Klammern ([[…]]) unverändert lassen" },
@@ -494,11 +510,44 @@ export const BRAIN_WERKZEUGE = [
   },
 ];
 
+// ---------- Kein Patientenbezug im Brain ----------
+/** Vergleichsform für den Kürzel-Abgleich: klein, nur Buchstaben und Ziffern (alles andere trennt), Zahlen ohne führende Null. */
+const kuerzelForm = (text) => String(text == null ? "" : text).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").replace(/(^|\D)0+(?=\d)/g, "$1").trim();
+
+/**
+ * Nennt der Text einen Test-Patienten aus der Liste – auch klein, ohne Bindestrich, mit Leerzeichen oder ohne führende
+ * Null („tp 2“, „TP2“, „Patient 12“)? Ergebnis: das Kürzel, sonst "". Das Wort „Patienten“ allein zählt nicht – nur der
+ * Bezug auf einen bestimmten. Dieselbe Regel hat die Oberfläche (brain.js: nenntPatienten).
+ */
+export function brainPatientenBezug(text, kuerzelListe) {
+  const bekannt = new Map(); // Vergleichsform → Kürzel
+  for (const k of Array.isArray(kuerzelListe) ? kuerzelListe : []) {
+    const form = kuerzelForm(k).replace(/ /g, "");
+    if (form) bekannt.set(form, String(k));
+  }
+  if (!bekannt.size) return "";
+  const w = kuerzelForm(text).split(" ");
+  for (let i = 0; i < w.length; i++) {
+    for (let n = 1; n <= 3; n++) {
+      const k = bekannt.get(w.slice(i, i + n).join(""));
+      if (k) return k;
+    }
+  }
+  return "";
+}
+/** Was Gabi sagt, wenn etwas über einen bestimmten Test-Patienten ins Brain soll. */
+export const brainPatientenHinweis = (kuerzel) => `Das gehört in eine Notiz, nicht ins Brain: Es geht um **${kuerzel}**. Ins Brain kommt nur, was für die ganze Praxis gilt – nichts über einzelne Test-Patienten.`;
+
 /**
  * Eingabe eines Brain-Werkzeugs prüfen und den Vorschlag für die Oberfläche bauen (wirft BrainFehler mit einem Satz,
  * den Claude als Werkzeug-Fehler zurückbekommt). Ergebnis: { typ: "neu" | "aendern", id?, titel, inhalt, grund }.
+ * kuerzel = die Kürzel aus der Patientenliste: Ein Vorschlag, der einen davon nennt, wird abgelehnt.
  */
-export function brainVorschlagAus(name, eingabe, brain) {
+export function brainVorschlagAus(name, eingabe, brain, { kuerzel = [] } = {}) {
+  const ohnePatienten = (text) => {
+    const k = brainPatientenBezug(text, kuerzel);
+    if (k) throw new BrainFehler(400, `Das betrifft ${k} aus der Patientenliste. Ins Brain gehört nur Wissen über die Praxis, nichts über einzelne Test-Patienten – so etwas gehört in eine Notiz. Mach daraus keinen Vorschlag und sag das kurz.`);
+  };
   const e = istObjekt(eingabe) ? eingabe : {};
   if (typeof e.inhalt !== "string") throw new BrainFehler(400, "Ungültige Angabe: inhalt.");
   const inhalt = brainText(e.inhalt);
@@ -509,6 +558,7 @@ export function brainVorschlagAus(name, eingabe, brain) {
     const titel = brainZeile(e.titel).replace(/[[\]|]/g, " ").replace(/\s+/g, " ").trim(); // [ ] | sind in Brain-Titeln nicht erlaubt
     if (titel.length < 2) throw new BrainFehler(400, "Der Titel des Vorschlags fehlt.");
     if (titel.length > BRAIN_GRENZEN.titel) throw new BrainFehler(413, `Der Titel ist zu lang (höchstens ${BRAIN_GRENZEN.titel} Zeichen).`);
+    ohnePatienten(`${titel}\n${inhalt}`);
     return { typ: "neu", titel, inhalt, grund: "gespraech" };
   }
   if (name === "brain_aenderung_vorschlagen") {
@@ -519,6 +569,7 @@ export function brainVorschlagAus(name, eingabe, brain) {
       throw new BrainFehler(400, `Diesen Eintrag gibt es im Kontext nicht. Vorhanden: ${knoten.map((x) => x.nr).join(", ") || "keiner"}. Passt keiner, schlag einen neuen Eintrag vor.`);
     }
     if (inhalt === k.inhalt) throw new BrainFehler(400, "Der neue Inhalt ist gleich dem alten – es gibt nichts zu ändern.");
+    ohnePatienten(inhalt);
     return { typ: "aendern", id: k.id, titel: k.titel, inhalt, grund: "gespraech" };
   }
   throw new BrainFehler(400, "Unbekanntes Brain-Werkzeug.");
