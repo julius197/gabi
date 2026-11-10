@@ -146,7 +146,8 @@ cd worker && npm run brain     # http://localhost:8790 · Zugangscode: test · D
 **Wo liegt das Brain?** Nur auf diesem Gerät: IndexedDB `gabi-brain` (Demo getrennt: `gabi-brain-demo`), sonst
 localStorage, zur Not nur im Tab (mit Hinweis). Zwei offene Tabs überschreiben sich nicht (jede Änderung prüft den
 Stand; bei Konflikt fragt die Bearbeitung nach, die andere Fassung bleibt im Verlauf). Eine ungespeicherte Bearbeitung
-übersteht ein Neuladen (Notfall-Kopie im Tab). In der Adresse steht nur `#/brain/<id>`, nie Inhalt. Abmelden fragt eigens
+übersteht ein Neuladen (Notfall-Kopie im Tab). In der Adresse steht nur der Reiter (`#/brain/liste`) oder die ID
+(`#/brain/<id>`), nie Inhalt. Abmelden fragt eigens
 „Brain-Wissen auf diesem Gerät auch löschen“ – **nicht vorbelegt**.
 
 **Wissensdatei und Seed:** `knowledge/physioworks.md` bleibt die Quelle des Seeds (und der Rückfall, wenn das Brain aus
@@ -324,6 +325,11 @@ npx wrangler deploy --dry-run -c wrangler.brain.toml   # Staging-Worker baut (oh
 ```
 Die bisherigen Ende-zu-Ende-Tests (`tests/v2.mjs`) laufen gegen einen Server **ohne** Brain-Schalter (`npm run lokal`).
 
+**Schutz vor dem falschen Ziel (`tests/ziel.mjs`):** Die Browser-Tests probieren Zugangscodes aus. Vor dem Start lesen
+sie deshalb die ausgelieferte `/config.js` und brechen ab, wenn die Oberfläche unter der Adresse mit einem echten Worker
+spricht – also bei der Live-Seite und bei `npm run vorschau` (gleicher Standard-Port 8788 wie `npm run lokal`). Der
+bewusste Live-Lauf bleibt `GABI_LIVE=1` (ohne Code-Tests).
+
 ## Einrichtung (einmalig)
 
 ### 1 Supabase (Datenbank, Region EU/Frankfurt)
@@ -410,3 +416,10 @@ Hell/Dunkel; Handy und Laptop; Demo-Modus mit komplettem Assistenten.
 gemeinsamem Zugangscode, Rollen/Protokoll, EU-only-Verarbeitung für KI und Spracherkennung, Offline-Betrieb,
 Aufbewahrungsfristen, Gesprächsverlauf über Geräte hinweg (bräuchte eigene Konten – mit einem gemeinsamen Code nicht
 vertretbar).
+
+**Brain-Prototyp (Branch `gabi-brain`, hinter Schalter, Standard AUS – nicht live):** Wissensgraph mit Liste, Detail,
+Versionen, Papierkorb, Rückgängig, Import/Export, Gesundheit, Wissenslücken und Fähigkeiten-Register; Gabi beantwortet
+Praxisfragen nur aus dem Brain, mit Quellen-Chips, Lücken-Hinweis, Interview „Brain füllen“ und den Befehlen „Merke
+dir“, „Ändere“, „Was weißt du über“. Läuft komplett im Demo-Modus und lokal (Speicher im Browser). **Fehlt:** der Lauf
+mit dem echten Modell (Staging-Worker, nur nach Freigabe), das gemeinsame Brain in Supabase (braucht Benutzerkonten und
+Rollen; SQL liegt als Entwurf bereit, nicht ausgeführt), alles ab Phase 3 der `ASSISTENT-ROADMAP.md`.
