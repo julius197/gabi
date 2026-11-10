@@ -16,15 +16,15 @@ Verträge zwischen den Bausteinen: `BRAIN-BAUPLAN.md`.
 |---|---|
 | 0 Vorab: main geprüft, Branch, Arbeitskopie | ✅ |
 | 1 Bauplan und Log | ✅ `c1ae874` |
-| 2 Modell `brain.js`, Suche `brain-suche.js`, Interview-Hilfen `brain-interview.js` | ✅ gebaut (`d39f887`), Unit-Tests dazu in Arbeit (Fork E) |
+| 2 Modell `brain.js`, Suche `brain-suche.js`, Interview-Hilfen `brain-interview.js` | ✅ gebaut (`d39f887`), Unit-Tests dazu in Arbeit (Fork E, Dateien `worker/test/brain*.test.js` noch nicht committet) |
 | 3 Speicher `brain-speicher.js` | ✅ `98fb09f` (112 Tests) |
 | 4 Seed (Zerlegung, Generator, `brain-seed.js`) | ✅ `e4185de` (35 Tests) |
-| 5 Graph `brain-graph.js` | ⏳ Fork A arbeitet noch (Datei da, läuft schon in der Ansicht) |
+| 5 Graph `brain-graph.js` | ✅ `805c38d` (41 Tests) |
 | 6 Worker (Kontext, Quellen/Lücken, Register, Staging, Supabase-Entwurf) | ✅ `072ecdf` (104 neue Tests, Probe-Build sauber) |
 | 7 Ansicht `brain-ansicht.js`, `brain.css`, Einbau in `index.html`/`app.js` | ✅ gebaut (`d39f887`) |
 | 8 Interview, Chat-Befehle, Fähigkeiten-Ansicht, Demo-Assistent (`brain-gespraech.js`, `demo.js`) | ✅ gebaut (`d39f887`) |
 | 9 Doku (README, Roadmap, Vorlage) | ✅ README ergänzt; Roadmap und Vorlage `e4185de` |
-| 10 Tests: `tests/brain.mjs` (Browser), `tests/brain-leistung.mjs`, Unit, Gegenprobe | ⏳ Browser-Tests laufen in Chromium und WebKit durch; voller Lauf, Leistung und `tests/v2.mjs` (ohne Schalter) stehen aus |
+| 10 Tests: `tests/brain.mjs` (Browser), `tests/brain-leistung.mjs`, Unit, Gegenprobe | ⏳ Unit: 618 grün (16:01). Browser-Tests liefen in Chromium und WebKit durch; voller Lauf mit Screenshots, Leistung und `tests/v2.mjs` (ohne Schalter, gegen 8792) stehen aus |
 | 11 Prüfrunden (höchstens zwei), Korrekturen | ⏳ |
 | 12 Screenshots, Abschlusslauf, Kurzbericht | ⏳ |
 
@@ -69,6 +69,28 @@ Tests: `cd ~/Desktop/gabi-brain/worker && npm test`. Lokaler Brain-Server: `npm 
    Gesprächen): Das Brain ist mühsam gepflegtes Wissen und liegt im lokalen Modus nur auf diesem Gerät.
 10. **Wissensdatei hat 7 „TODO prüfen“-Punkte** (der Auftrag nennt 6; der siebte ist „Parken und Barrierefreiheit“).
     Jeder wird ein eigener Zu-klären-Knoten.
+
+## Vorkommnisse
+
+**Fehlalarm „Anfrage an den Live-Worker“ (10.11., ca. 15:50) – nachgeprüft, nichts passiert.**
+Beim ersten Lauf der bisherigen Browser-Tests (`tests/v2.mjs`) gegen den Branch sah es in der Prozessliste so aus,
+als sei das leere erste Argument verloren gegangen und der Lauf deshalb auf die Standard-Adresse `localhost:8788`
+gegangen – das ist Julius' Vorschau, die mit dem **Live-Worker** spricht. Der Test probiert pro Demo-Ablauf einen
+falschen Zugangscode aus; das wäre eine Verletzung der festen Grenze gewesen. Lauf sofort gestoppt, dann geprüft:
+
+- Startbefehl laut Verlauf: `node tests/v2.mjs "" <bilder-ordner> http://localhost:8792` – die Adresse war gesetzt.
+- Die 50 Screenshots des Laufs liegen im angegebenen Ordner → die Argumente wurden richtig zugeordnet
+  (bei verschobenen Argumenten wäre ein Ordner `http:/localhost:8792` entstanden; es gibt keinen).
+- Das Protokoll des **lokalen** Servers 8792 zeigt genau die vier absichtlichen Fehlversuche
+  (`GET /api/pruefen -> 401`, je einer pro Demo-Ablauf) und sonst nur `/api/status`.
+
+Ergebnis: **Keine Anfrage hat den Live-Worker oder Port 8788 erreicht.** Die Falle dahinter ist aber echt: Die
+Standard-Adresse der bisherigen Tests (8788) ist derselbe Port wie die Vorschau gegen den Live-Worker. Deshalb neu:
+`tests/ziel.mjs` – alle Browser-Tests (`v2`, `eingabefelder`, `brain`, `brain-leistung`) lesen vor dem Start die
+ausgelieferte `/config.js` und brechen ab, wenn dort ein echter Worker steht oder kein Gabi-Server antwortet
+(`2bed5ff`, 7 Unit-Tests, dazu Probelauf gegen eine Attrappe: alle vier Skripte enden mit Code 2, bevor ein Browser
+startet). `GABI_LIVE=1` bleibt der bewusste Live-Lauf ohne Code-Tests. Regel für mich: Adresse immer ausdrücklich
+angeben, nie auf die Standard-Adresse verlassen.
 
 ## Nicht getan (bewusst)
 
