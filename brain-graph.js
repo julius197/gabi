@@ -1033,10 +1033,11 @@
    *   workerUrl        Adresse dieser Datei für den Web Worker (null = Layout im Hauptfaden, höchstens 6 ms je Bild)
    *   positionen       { lesen() → { id: [x, y, fest] }, schreiben(obj) } – nach dem Beruhigen und nach dem Ziehen
    *   beiAuswahl(id | null, { quelle: "zeiger" | "tastatur" }) · beiOeffnen(id) · beiHover(id | null) · ansage(text)
+   *   beiFixiert(id, true) nach dem Ziehen eines Knotens (er bleibt liegen, bis fixieren(id, false) oder neuAnordnen({ auchFeste }))
    *   ziehen           "ruhig" (Standard): nur der Knoten wandert, seine Blätter kommen starr mit, der Rest steht still ·
    *                    "lebendig": die Nachbarn federn über das Layout mit
    *   layout           eigene Layout-Werte (siehe LAYOUT_STANDARD) · drossel: false = Pixeldichte nie senken
-   * Über den Bauplan hinaus: verdeckt(ränder), lageImBild(id), neuAnordnen({ auchFeste }), messen() mit ruht/worker/zoom.
+   * Über den Bauplan hinaus: verdeckt(ränder), lageImBild(id), istFest(id), neuAnordnen({ auchFeste }), messen() mit ruht/worker/zoom/fest.
    */
   function erstelle(behaelter, optionen) {
     const opt = optionen || {};
@@ -2011,6 +2012,7 @@
       treiber.los(K[i].id, true, Boolean(ruhig));
       lagenSpeichernBald();
       anfordern();
+      if (typeof opt.beiFixiert === "function") opt.beiFixiert(K[i].id, true);
     }
     function zeigerBewegt(e) {
       const p = punkt(e);
@@ -2315,6 +2317,11 @@
         lagenSpeichernBald();
         anfordern();
       },
+      /** Ist der Knoten festgesetzt (von Hand gezogen oder über fixieren)? */
+      istFest(id) {
+        const i = nIndex.has(id) ? nIndex.get(id) : -1;
+        return i >= 0 && Boolean(K[i].fest);
+      },
       /**
        * Das ganze Bild neu anordnen (frisch gerechnet, mit Bewegung). Fixierte Knoten bleiben, wo sie sind –
        * mit auchFeste werden auch sie gelöst.
@@ -2356,7 +2363,7 @@
         const lauf = bildZeiten.length - anfang;
         const spanne = lauf > 1 ? bildZeiten[bildZeiten.length - 1] - bildZeiten[anfang] : 0;
         return {
-          knoten: K.length, kanten: kanten.length, bilder, zeichnenP50: q(0.5), zeichnenP95: q(0.95),
+          knoten: K.length, kanten: kanten.length, fest: K.reduce((n, k) => n + (k.fest ? 1 : 0), 0), bilder, zeichnenP50: q(0.5), zeichnenP95: q(0.95),
           fps: lauf >= 8 && spanne > 0 ? Math.round((lauf - 1) / spanne * 10000) / 10 : null,
           layoutMs, ticks: layoutTicks, ruht: !layoutLaeuft, worker: Boolean(treiber && treiber.art === "worker"),
           zoom: Math.round(kam.zoom * 1000) / 1000, pixel: Math.round(dpr * 100) / 100, breite: cssB, hoehe: cssH, labels: [...labelDeck.values()].filter((l) => l.ziel === 1).length,

@@ -76,12 +76,13 @@ Tests: `cd ~/Desktop/gabi-brain/worker && npm test`. Lokaler Brain-Server: `npm 
     `worker/src/brain_abruf.js`) ist nur Code hinter zwei Schaltern (`BRAIN_SPEICHER`, `BRAIN_QUELLE`, beide AUS);
     die Rollen-Vorlage (RLS) steht auskommentiert am Ende der SQL-Datei. Reihenfolge der Umstellung: README
     „Brain in Supabase (Entwurf)“.
-12. **Ziehen im Graph = „ruhig“:** Beim Ziehen eines Knotens wandern nur seine direkten Nachbarn weich mit; das übrige
-    Bild bleibt stehen (kein „Wackelpudding“ über den ganzen Graphen). Losgelassene Knoten sind fixiert (Nadel im
-    Detail löst sie wieder). Kanten haben keine Pfeilspitzen (ruhigeres Bild; die Richtung steht im Detail unter
-    „Verweise“ und „Rückverweise“).
+12. **Ziehen im Graph = „ruhig“:** Beim Ziehen wandert nur der Knoten selbst, seine Blätter (Knoten, die nur an ihm
+    hängen) kommen starr mit; das übrige Bild bleibt stehen (kein „Wackelpudding“ über den ganzen Graphen). Ein
+    losgelassener Knoten ist festgesetzt (kleiner Punkt, auch nach dem Neuladen). Lösen: Knopf „Lösen“ im Detail oder
+    „Neu anordnen“ in der Werkzeugleiste (löst alle und rechnet frisch). Kanten haben keine Pfeilspitzen (ruhigeres
+    Bild; die Richtung steht im Detail unter „Verweise“ und „Rückverweise“).
 13. **Eigene Adressen je Reiter** (`#/brain/graph`, `/liste`, `/luecken`, `/faehigkeiten`); `#/brain` öffnet die
-    zuletzt genutzte Hauptansicht (am Handy beim ersten Mal die Liste). So funktionieren Zurück-Taste und Links.
+    zuletzt genutzte Hauptansicht (beim ersten Mal den Graphen). So funktionieren Zurück-Taste und Links.
 14. **Brain-Server lokal auf Port 8790** (`npm run brain`), getrennt von `npm run lokal`/`vorschau` (8788) – so kann
     Julius' Vorschau der Live-Version weiterlaufen, während er das Brain ansieht.
 

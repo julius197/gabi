@@ -278,6 +278,36 @@ async function teil2(browser, motor, { geraet, schema, wenigBewegung = false, bi
     await warte(900);
     const gemerkt = await page.evaluate((id) => { const p = JSON.parse(localStorage.getItem("gabi.demo.brain.positionen") || "{}"); return p[id] || null; }, kontaktId);
     pruefe(Array.isArray(gemerkt) && Boolean(gemerkt[2]), `${name}: Lage und Fixierung liegen lokal (gabi.demo.brain.positionen), nichts davon in der Adresse`);
+
+    // festgesetzt ist kein Dauerzustand: im Detail „Lösen“, in der Werkzeugleiste „Neu anordnen“ (löst alle)
+    await page.mouse.click(b.x, b.y);
+    await detailOffen(page, "Kontakt und Zeiten");
+    const festVor = (await messen(page)).fest;
+    const loesen = page.locator('#brain-detail [data-brain="loesen"]');
+    const knopfDa = await loesen.count();
+    if (knopfDa) await loesen.click();
+    await warte(250);
+    const festNach = (await messen(page)).fest;
+    pruefe(festVor === 1 && knopfDa === 1 && festNach === 0 && (await loesen.count()) === 0 && /wieder frei/.test(await page.textContent("#brain-ansage")),
+      `${name}: festgesetzter Knoten zeigt im Detail „Lösen“ – danach ist er wieder frei, der Knopf verschwindet, es wird angesagt (fest ${festVor} → ${festNach})`);
+    await page.click('[data-brain="detail-zu"]');
+    await graphRuht(page);
+    const c = await ort(page, kontaktId);
+    await page.mouse.move(c.x, c.y);
+    await page.mouse.down();
+    await page.mouse.move(c.x - 60, c.y + 40, { steps: 6 });
+    await page.mouse.up();
+    await graphRuht(page);
+    const festWieder = (await messen(page)).fest;
+    await page.click('[data-brain="anordnen"]');
+    await warte(300);
+    await graphRuht(page);
+    await warte(900);
+    const danach = await page.evaluate((id) => { const p = JSON.parse(localStorage.getItem("gabi.demo.brain.positionen") || "{}"); return p[id] || null; }, kontaktId);
+    pruefe(festWieder === 1 && (await messen(page)).fest === 0 && Array.isArray(danach) && !danach[2],
+      `${name}: „Neu anordnen“ löst alle festgesetzten Knoten und ordnet frisch an (fest ${festWieder} → ${(await messen(page)).fest}, auch lokal gemerkt)`);
+    await tippen('[data-brain="einpassen"]');
+    await warte(wenigBewegung ? 150 : 500);
   }
 
   // --- Tastatur im Graphen ---
@@ -590,17 +620,21 @@ async function teil2(browser, motor, { geraet, schema, wenigBewegung = false, bi
   await warte(900);
   const idsFuerLage = [praxisId, leistungen, "s-telefonzeiten"];
   const lagen1 = await page.evaluate((ids) => ids.map((i) => window.GabiBrainAnsicht.aktuell.ort(i)), idsFuerLage);
+  const zoom1 = (await messen(page)).zoom;
   await page.reload();
   await page.waitForFunction(BEREIT, null, { timeout: 20000 });
   await page.waitForFunction(() => { const m = window.GabiBrainAnsicht.aktuell.messen(); return m && m.knoten >= 53; }, null, { timeout: 15000 });
   await graphRuht(page);
   await warte(400);
   const lagen2 = await page.evaluate((ids) => ids.map((i) => window.GabiBrainAnsicht.aktuell.ort(i)), idsFuerLage);
-  const abstand = (l) => [Math.hypot(l[0].x - l[1].x, l[0].y - l[1].y), Math.hypot(l[1].x - l[2].x, l[1].y - l[2].y)];
-  const d1 = abstand(lagen1);
-  const d2 = abstand(lagen2);
+  const zoom2 = (await messen(page)).zoom;
+  // verglichen wird die Anordnung selbst (Abstände im Bild geteilt durch den Zoom): gemerkt wird die Lage der Knoten,
+  // nicht der Ausschnitt – nach dem Neuladen zeigt der Graph wieder alles
+  const abstand = (l, zoom) => [Math.hypot(l[0].x - l[1].x, l[0].y - l[1].y) / zoom, Math.hypot(l[1].x - l[2].x, l[1].y - l[2].y) / zoom];
+  const d1 = abstand(lagen1, zoom1);
+  const d2 = abstand(lagen2, zoom2);
   pruefe((await knotenMitTitel(page, "Wickeltisch")) !== null && (await knotenMitTitel(page, "Neue Regel")) !== null, `${name}: nach dem Neuladen ist alles noch da (nur auf diesem Gerät gespeichert)`);
-  pruefe(Math.abs(d1[0] / d2[0] - 1) < 0.2 && Math.abs(d1[1] / d2[1] - 1) < 0.2, `${name}: der Graph liegt nach dem Neuladen wie vorher (Abstände ${d1.map(Math.round).join("/")} → ${d2.map(Math.round).join("/")})`);
+  pruefe(Math.abs(d1[0] / d2[0] - 1) < 0.05 && Math.abs(d1[1] / d2[1] - 1) < 0.05, `${name}: der Graph liegt nach dem Neuladen wie vorher (Abstände in der Anordnung ${d1.map(Math.round).join("/")} → ${d2.map(Math.round).join("/")}, Zoom ${zoom1} → ${zoom2})`);
 
   // --- Flackern: 10 schnelle Runden, gezählt ---
   const runde = async () => {

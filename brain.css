@@ -203,6 +203,8 @@
 .brain-zeichen.entwurf { border: 1.5px dashed var(--text-3); }
 .brain-zeichen.schloss { border-radius: 0; color: var(--text-3); }
 .brain-zeichen.schloss .symbol { width: 14px; height: 14px; }
+.brain-zeichen.fest { position: relative; background: var(--brain-praxiswissen); }
+.brain-zeichen.fest::after { content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--brain-g-text-leise, var(--text-3)); box-shadow: 0 0 0 1.5px var(--brain-g-platte, var(--flaeche)); }
 
 /* 5 Liste, Lücken, Fähigkeiten ------------------------------------------------ */
 .brain-liste, .brain-luecken, .brain-faehigkeiten { display: grid; gap: 16px; align-content: start; }

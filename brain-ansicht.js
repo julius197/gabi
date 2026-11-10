@@ -16,6 +16,7 @@
     <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
     <symbol id="i-rahmen" viewBox="0 0 24 24"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/></symbol>
+    <symbol id="i-anordnen" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.2-4.4L4 8.5M4 4v4.5h4.5M4 13a8 8 0 0 0 14.2 4.4L20 15.5M20 20v-4.5h-4.5"/></symbol>
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
     <symbol id="i-hoch" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></symbol>
     <symbol id="i-frage" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17v.2"/></symbol>
@@ -197,6 +198,7 @@
                 <button class="rund-knopf" type="button" data-brain="zoom" data-wert="rein" aria-label="Vergrößern" title="Vergrößern (+)">${symbol("plus")}</button>
                 <button class="rund-knopf" type="button" data-brain="zoom" data-wert="raus" aria-label="Verkleinern" title="Verkleinern (−)">${symbol("minus")}</button>
                 <button class="rund-knopf" type="button" data-brain="einpassen" aria-label="Alles zeigen" title="Alles zeigen (0)">${symbol("rahmen")}</button>
+                <button class="rund-knopf" type="button" data-brain="anordnen" aria-label="Neu anordnen – löst auch festgesetzte Knoten" title="Neu anordnen (löst auch festgesetzte Knoten)">${symbol("anordnen")}</button>
               </div>
               <div class="brain-fokus" id="brain-fokus" hidden></div>
               <details class="brain-legende" id="brain-legende"><summary>Legende</summary>
@@ -205,6 +207,7 @@
                   <li><span class="brain-zeichen klaeren">?</span>Zu klären</li>
                   <li><span class="brain-zeichen entwurf"></span>Entwurf (gestrichelt)</li>
                   <li><span class="brain-zeichen schloss">${symbol("schloss", "klein")}</span>Geschützt (nur lesen)</li>
+                  <li><span class="brain-zeichen fest"></span>Von dir festgesetzt (gezogen)</li>
                 </ul>
               </details>
               <p class="unsichtbar" id="brain-ansage" aria-live="polite"></p>
@@ -369,6 +372,14 @@
       return app.laptop.matches ? { rechts: Math.max(0, b.right - r.left) } : { unten: Math.max(0, b.bottom - r.top) };
     }
 
+    /** Das ganze Bild frisch anordnen – löst auch alle von Hand festgesetzten Knoten. */
+    function neuAnordnen() {
+      if (!z.graph || z.reiter !== "graph") return;
+      z.graph.neuAnordnen({ auchFeste: true });
+      ansage("Graph neu angeordnet. Festgesetzte Knoten sind wieder frei.");
+      if (z.auswahl && !z.bearbeitung && !$("#brain-detail").hidden) detailZeichnen();
+    }
+
     function graphZeichnen() {
       const rahmen = $("#brain-graph-rahmen");
       if (!z.graph) {
@@ -383,6 +394,8 @@
           },
           beiOeffnen: (id) => { if (id) oeffnen(id, { fokus: true }); },
           beiHover: () => {},
+          // gezogen = festgesetzt: das offene Detail bekommt den Knopf „Lösen“ (nur wenn gerade nicht bearbeitet wird)
+          beiFixiert: (id) => { if (id === z.auswahl && !z.bearbeitung && !$("#brain-detail").hidden) detailZeichnen(); },
           ansage,
         });
         z.graphSignatur = "";
@@ -603,6 +616,7 @@
             ${k.geschuetzt ? "" : `<button class="knopf sekundaer klein" type="button" data-brain="bearbeiten">${symbol("stift")}Bearbeiten</button>`}
             <button class="knopf sekundaer klein" type="button" data-brain="fokus-an">${symbol("fokus")}Fokus</button>
             ${z.reiter === "liste" ? `<button class="knopf sekundaer klein" type="button" data-brain="im-graph">${symbol("graph")}Im Graph zeigen</button>` : ""}
+            ${z.reiter === "graph" && z.graph && z.graph.istFest(k.id) ? `<button class="knopf sekundaer klein" type="button" data-brain="loesen" title="Im Graph festgesetzt – wieder frei anordnen lassen">${symbol("pin")}Lösen</button>` : ""}
             ${k.geschuetzt ? "" : `<button class="knopf leise klein brain-loeschen" type="button" data-brain="loeschen">${symbol("muell")}Löschen</button>`}
           </div>`;
         const inhalt = String(k.inhalt || "").trim()
@@ -979,6 +993,8 @@
         }
         case "zoom": if (z.graph) z.graph.zoomen(wert === "rein" ? 1.3 : 1 / 1.3); break;
         case "einpassen": if (z.graph) z.graph.einpassen({ verdeckt: verdeckt() }); break;
+        case "anordnen": neuAnordnen(); break;
+        case "loesen": if (z.graph && k) { z.graph.fixieren(k.id, false); ansage(`${k.titel} ist wieder frei.`); detailZeichnen(); const f = $("#brain-detail [data-brain='fokus-an']"); if (f) f.focus(); } break;
         case "fokus-an": if (k) { z.fokus = { id: k.id, tiefe: (z.fokus && z.fokus.id === k.id ? z.fokus.tiefe : 1) }; hauptSetzen("graph"); zeichnen(); } break;
         case "fokus-tiefe": if (z.fokus) { z.fokus.tiefe = Number(wert) || 1; zeichnen(); } break;
         case "fokus-aus": z.fokus = null; zeichnen(); if (z.graph) z.graph.einpassen({ verdeckt: verdeckt() }); break;
@@ -1079,6 +1095,7 @@
         { name: "Neuer Eintrag", sym: "plus", tun: () => bearbeitenStarten(null) },
         { name: "Ansicht: Graph", sym: "graph", tun: () => { location.hash = "#/brain/graph"; } },
         { name: "Ansicht: Liste", sym: "liste", tun: () => { location.hash = "#/brain/liste"; } },
+        { name: "Graph neu anordnen", sym: "anordnen", tun: () => { if (z.reiter !== "graph") location.hash = "#/brain/graph"; setTimeout(neuAnordnen, 0); } },
         { name: "Ansicht: Wissenslücken", sym: "frage", tun: () => { location.hash = "#/brain/luecken"; } },
         { name: "Ansicht: Fähigkeiten", sym: "funke", tun: () => { location.hash = "#/brain/faehigkeiten"; } },
         { name: "Zu klären anzeigen", sym: "warn", tun: () => { z.filter = { arten: [], status: [], tag: "", zuKlaeren: true, veraltet: false, nieVerwendet: false, verwendet: false }; z.filterOffen = true; if (location.hash === "#/brain/liste") { z.auswahl = ""; zeichnenBald(); } else location.hash = "#/brain/liste"; } },
