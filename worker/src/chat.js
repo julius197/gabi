@@ -6,6 +6,7 @@ import { ABSCHNITTE, MAX_ROHTEXT, UNKLAR, istLeer, kuerzelPruefen, normalisieren
 import { istUuid } from "./speicher.js";
 import { StrukturFehler, jsonAusText, kiFehlerLoggen } from "./strukturierung.js";
 import { WISSEN } from "./wissen.js";
+import { BRAIN_WERKZEUGE, BrainFehler, MAX_BRAIN_VORSCHLAEGE, brainNachricht, brainPromptAus, brainSystem, brainVorschlagAus, markerFilter } from "./brain.js";
 
 export const MAX_NACHRICHTEN = 40;
 export const MAX_ZEICHEN_NACHRICHT = 20_000;
@@ -104,6 +105,13 @@ PRAXISWISSEN (von der Website physio-works.de)
 ${WISSEN}
 </praxiswissen>`;
 
+/**
+ * Systemprompt im Brain-Modus (die Oberfläche schickt brainKontext mit): derselbe Text, nur Regel 2, Regel 9 und der
+ * Block PRAXISWISSEN sind ersetzt – das eingebaute Praxiswissen steht dann NICHT im Prompt, Praxisfragen beantwortet
+ * Gabi nur aus dem mitgeschickten Kontext (siehe brain.js). CHAT_PROMPT oben bleibt unverändert der Prompt ohne Brain.
+ */
+export const BRAIN_PROMPT = brainPromptAus(CHAT_PROMPT);
+
 // ---------- Werkzeuge (Beschreibung für Claude) ----------
 const OBJEKT = (properties = {}, required = []) => ({ type: "object", properties, required, additionalProperties: false });
 // Beschreibungen ohne Geschlecht („zu einem Kürzel“) – sonst übernimmt Claude es in Antworten
@@ -158,6 +166,9 @@ export const WERKZEUGE = [
   },
 ];
 
+/** Werkzeugliste im Brain-Modus: die sechs bisherigen plus zwei Vorschlags-Werkzeuge (immer dieselbe Liste – Cache). */
+export const WERKZEUGE_MIT_BRAIN = [...WERKZEUGE, ...BRAIN_WERKZEUGE];
+
 const STATUS = {
   patienten_auflisten: "Schaue in die Patientenliste …",
   notizen_suchen: "Durchsuche die Notizen …",
@@ -165,6 +176,8 @@ const STATUS = {
   heute_ueberblick: "Schaue, was heute anliegt …",
   notiz_entwurf_erstellen: "Strukturiere das Diktat …",
   bericht_erstellen: "Schreibe den Bericht …",
+  brain_eintrag_vorschlagen: "Bereite einen Vorschlag fürs Brain vor …",
+  brain_aenderung_vorschlagen: "Bereite eine Änderung fürs Brain vor …",
 };
 
 const ALLE_ABSCHNITTE = [...ABSCHNITTE.map(([key]) => key), UNKLAR];
@@ -180,8 +193,9 @@ function textEingabe(wert, name, max) {
  * Werkzeuge für den Assistenten. Sie lesen nur (Notizen, Patienten) oder bereiten etwas zur Anzeige vor
  * (Entwurf, Bericht) und melden es über kontext.senden an die Oberfläche.
  */
-export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = () => new Date(), teuerErlaubt = () => true }) {
+export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = () => new Date(), teuerErlaubt = () => true, brain = null }) {
   let teure = 0;
+  let vorschlaege = 0;
   function teuer() {
     teure++;
     if (teure > MAX_TEURE_WERKZEUGE) throw new WerkzeugFehler(`Pro Nachricht gehen höchstens ${MAX_TEURE_WERKZEUGE} Entwürfe oder Berichte.`);
@@ -308,8 +322,33 @@ export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = 
     },
   };
 
+  // Nur im Brain-Modus (die Oberfläche hat brainKontext mitgeschickt): Vorschläge fürs Brain – als Karte, nie gespeichert
+  if (brain) {
+    for (const { name } of BRAIN_WERKZEUGE) {
+      AUSFUEHREN[name] = async (e, k) => {
+        vorschlaege++;
+        if (vorschlaege > MAX_BRAIN_VORSCHLAEGE) throw new WerkzeugFehler(`Pro Nachricht gehen höchstens ${MAX_BRAIN_VORSCHLAEGE} Vorschläge fürs Brain.`);
+        let vorschlag;
+        try {
+          vorschlag = brainVorschlagAus(name, e, brain);
+        } catch (err) {
+          if (err instanceof BrainFehler) throw new WerkzeugFehler(err.message);
+          throw err;
+        }
+        k.senden?.({ t: "brain_vorschlag", vorschlag });
+        return {
+          angezeigt: true,
+          gespeichert: false,
+          art: vorschlag.typ === "neu" ? "neuer Eintrag" : "Änderung",
+          titel: vorschlag.titel,
+          hinweis: "Der Vorschlag wird als Karte angezeigt. Ins Brain kommt er erst, wenn die Therapeutin auf „Übernehmen“ tippt.",
+        };
+      };
+    }
+  }
+
   return {
-    definitionen: WERKZEUGE,
+    definitionen: brain ? WERKZEUGE_MIT_BRAIN : WERKZEUGE,
     /** Führt ein Werkzeug aus. Ergebnis für Claude: { inhalt (JSON-Text), fehler, ergebnis | meldung }. */
     async ausfuehren(name, eingabe, kontext = {}) {
       const f = Object.hasOwn(AUSFUEHREN, name) ? AUSFUEHREN[name] : null;
@@ -482,17 +521,29 @@ export function claudeChat(env) {
   const modell = env.ANTHROPIC_MODELL || "claude-opus-5-5";
   const effort = env.ANTHROPIC_EFFORT || "low";
 
-  return async function chatten({ verlauf, werkzeuge, kontext = {}, senden, signal, jetzt = new Date() }) {
+  return async function chatten({ verlauf, werkzeuge, kontext = {}, senden, signal, jetzt = new Date(), brain = null }) {
     // Pro Anfrage fest: so bleibt der Anfang jeder Runde gleich (Cache, und Denkblöcke bleiben gültig)
-    const system = [
-      { type: "text", text: CHAT_PROMPT, cache_control: { type: "ephemeral" } },
-      { type: "text", text: `Jetzt ist ${heuteText(jetzt)} Uhr (deutsche Zeit).` },
-    ];
+    // Brain-Modus (brain = geprüfter brainKontext): eigener Prompt ohne eingebautes Praxiswissen, Wünsche der Praxis
+    // als eigener Block danach; die Brain-Einträge stehen als Datenblock vor der letzten Nutzernachricht.
+    const system = brain
+      ? brainSystem(brain, { prompt: BRAIN_PROMPT, zeit: `Jetzt ist ${heuteText(jetzt)} Uhr (deutsche Zeit).` })
+      : [
+        { type: "text", text: CHAT_PROMPT, cache_control: { type: "ephemeral" } },
+        { type: "text", text: `Jetzt ist ${heuteText(jetzt)} Uhr (deutsche Zeit).` },
+      ];
     const messages = verlauf.map((n) => ({ role: n.role, content: n.content }));
+    const letzte = messages[messages.length - 1];
+    if (brain && letzte && letzte.role === "user" && typeof letzte.content === "string") {
+      const frage = letzte.content;
+      letzte.content = brainNachricht(brain, frage);
+      if (!kontext.letzte) kontext = { ...kontext, letzte: frage };
+    }
     let schonText = false;
-    let karte = false; // Entwurf oder Bericht angezeigt – dann kein „nichts gespeichert“ darunter
-    const weiter = senden;
-    senden = (e) => { if (e.t === "entwurf" || e.t === "bericht") karte = true; weiter(e); };
+    let karte = false; // Entwurf, Bericht oder Brain-Vorschlag angezeigt – dann kein „nichts gespeichert“ darunter
+    // Brain-Modus: Markerzeilen („Quellen: K1“, „Lücke: …“) aus dem Text filtern, am Ende als Ereignisse melden
+    const filter = brain ? markerFilter(senden, { brain, frage: kontext.letzte || "" }) : null;
+    const weiter = filter ? filter.senden : senden;
+    senden = (e) => { if (e.t === "entwurf" || e.t === "bericht" || e.t === "brain_vorschlag") karte = true; weiter(e); };
 
     for (let runde = 0; runde < MAX_RUNDEN; runde++) {
       let textInRunde = false;
@@ -530,8 +581,12 @@ export function claudeChat(env) {
       const inhalt = fuerVerlauf(antwort.content);
       const aufrufe = inhalt.filter((b) => b.type === "tool_use");
       if (antwort.stop_reason !== "tool_use" || !aufrufe.length) {
-        if (antwort.stop_reason === "max_tokens") senden({ t: "text", d: " …\n\n(Die Antwort war zu lang und wurde gekürzt.)" });
-        else if (!schonText && !karte) senden({ t: "text", d: "Dazu habe ich nichts gespeichert." });
+        if (antwort.stop_reason === "max_tokens") {
+          if (filter) filter.auswerten(); // eine Markerzeile am abgeschnittenen Ende nicht mit dem Hinweis verkleben
+          senden({ t: "text", d: " …\n\n(Die Antwort war zu lang und wurde gekürzt.)" });
+        } else if (!filter && !schonText && !karte) senden({ t: "text", d: "Dazu habe ich nichts gespeichert." });
+        // Brain-Modus: Zurückgehaltenes auswerten, Quellen und Lücke melden; kam gar nichts Sichtbares, der Ersatzsatz
+        if (filter) filter.ende({ ersatz: karte ? "" : "Dazu habe ich nichts gespeichert." });
         return;
       }
       messages.push({ role: "assistant", content: inhalt });
@@ -544,5 +599,6 @@ export function claudeChat(env) {
       messages.push({ role: "user", content: ergebnisse });
     }
     senden({ t: "text", d: `${schonText ? "\n\n" : ""}Das war mir gerade zu verschachtelt. Frag mich bitte noch einmal etwas genauer.` });
+    if (filter) filter.ende();
   };
 }

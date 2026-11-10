@@ -143,3 +143,16 @@ export function arbeitsspeicher() {
     },
   };
 }
+
+/**
+ * Arbeitsspeicher mit den drei erfundenen Test-Patienten (wie in demo.js und supabase/seed_test.sql) – für den
+ * Staging-Worker ohne Datenbank (wrangler.brain.toml: GABI_SPEICHER = "arbeitsspeicher"). Die Daten leben nur in der
+ * Worker-Instanz und sind nach deren Ende weg; die echte Datenbank wird dabei nie berührt.
+ */
+export function arbeitsspeicherMitTestdaten() {
+  const speicher = arbeitsspeicher();
+  for (const [kuerzel, pseudonym] of [["TP-01", "Testfall Knie rechts (fiktiv)"], ["TP-02", "Testfall Schulter links (fiktiv)"], ["TP-03", "Testfall LWS (fiktiv)"]]) {
+    speicher.neuerPatient({ kuerzel, pseudonym }).catch(() => {}); // legt sofort an (kein Warten nötig)
+  }
+  return speicher;
+}

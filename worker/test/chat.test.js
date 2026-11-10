@@ -373,8 +373,8 @@ describe("Route /api/chat", () => {
   it("Status meldet Version 2 und die neuen Funktionen", async () => {
     const { rufe } = neueApp();
     const d = await (await rufe("/api/status", { code: null })).json();
-    expect(d.version).toBe("2.0.1");
-    expect(d.funktionen).toEqual(["notizen", "chat", "bericht"]);
+    expect(d.version).toBe("2.1.0-brain"); // Brain-Prototyp (Worker 2.0.1 + Brain-Kontext, siehe brain-worker.test.js)
+    expect(d.funktionen).toEqual(["notizen", "chat", "bericht", "brain"]);
   });
 });
 

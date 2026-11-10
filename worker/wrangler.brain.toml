@@ -1,0 +1,33 @@
+# Gabi-API – STAGING für den Brain-Prototyp („Echten Claude-Weg testen“, siehe README).
+# ⚠️ NICHT deployen ohne ausdrückliche Freigabe von Julius. Der Live-Worker „gabi-api“ (wrangler.toml) bleibt unberührt.
+#
+# Was hier anders ist als live:
+#   - eigener Worker-Name (gabi-api-brain) → eigene Adresse, eigene Secrets, eigener Zugangscode
+#   - CORS nur für den lokalen Brain-Server (Port 8790) – gabi.automatilabs.de darf diesen Worker NICHT ansprechen
+#   - keine Datenbank: drei Test-Patienten im Arbeitsspeicher der Worker-Instanz (GABI_SPEICHER) – die echte
+#     Supabase-Datenbank wird nie gelesen oder beschrieben; SUPABASE_URL/SUPABASE_SECRET_KEY hier NICHT setzen
+#   - das Brain liegt weiter nur im Browser; der Worker bekommt je Frage höchstens 8 Einträge als Kontext
+#
+# Secrets NICHT hier eintragen – nur per `npx wrangler secret put NAME -c wrangler.brain.toml`:
+#   ANTHROPIC_API_KEY   (Claude)
+#   GABI_ZUGANGSCODE    (ein NEUER Code nur fürs Staging – nicht der Live-Code)
+name = "gabi-api-brain"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Spracherkennung (Whisper) über Workers AI – kein eigener Schlüssel nötig
+[ai]
+binding = "AI"
+
+[vars]
+ERLAUBTE_ORIGINS = "http://localhost:8790,http://127.0.0.1:8790"
+ANTHROPIC_MODELL = "claude-opus-5-5"
+ANTHROPIC_EFFORT = "low"
+GABI_SPEICHER = "arbeitsspeicher"
+# Brain in Supabase bleibt AUS (Entwurf, siehe src/brain_abruf.js und supabase/migrations/brain.sql):
+# BRAIN_SPEICHER = "supabase"   → Routen /api/brain… (braucht die Migration und Benutzerkonten)
+# BRAIN_QUELLE = "supabase"     → Gabi holt den Kontext selbst aus der Datenbank
+
+[observability]
+enabled = false

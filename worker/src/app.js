@@ -6,8 +6,10 @@ import { MAX_ROHTEXT, istLeer, kuerzelPruefen, normalisieren, pseudonymPruefen, 
 import { SpeicherFehler, istUuid } from "./speicher.js";
 import { StrukturFehler } from "./strukturierung.js";
 import { ChatFehler, MAX_NACHRICHTEN, MAX_ZEICHEN_NACHRICHT, MAX_ZEICHEN_VERLAUF, erstelleWerkzeuge, kiFehler } from "./chat.js";
+import { BrainFehler, brainAktionPruefen, brainKontextPruefen, brainVorschlagInhalt } from "./brain.js";
+import { BRAIN_ROUTEN, MAX_JSON_STAPEL, brainRoute, istBrainPfad } from "./brain_abruf.js";
 
-export const VERSION = "2.0.1";
+export const VERSION = "2.1.0-brain";
 export const MAX_AUDIO_BASE64 = 14_000_000; // ≈ 10 MB WAV ≈ 5 Minuten bei 16 kHz mono
 const MIN_AUDIO_BASE64 = 200;
 const MAX_JSON = 300_000;
@@ -46,7 +48,8 @@ function corsHeaders(origin, env) {
   const h = { Vary: "Origin" };
   if (origin && erlaubteOrigins(env).includes(origin)) {
     h["Access-Control-Allow-Origin"] = origin;
-    h["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS";
+    // PUT brauchen nur die Brain-Routen (Entwurf, Schalter BRAIN_SPEICHER) – ohne Schalter bleibt die Kopfzeile wie bisher
+    h["Access-Control-Allow-Methods"] = env.BRAIN_SPEICHER === "supabase" ? "GET, POST, PUT, PATCH, DELETE, OPTIONS" : "GET, POST, PATCH, DELETE, OPTIONS";
     h["Access-Control-Allow-Headers"] = "Content-Type, X-Gabi-Zugang";
     h["Access-Control-Max-Age"] = "86400";
   }
@@ -85,11 +88,11 @@ function typPruefen(request, erwartet, meldung) {
   if (!typ.startsWith(erwartet)) throw new HttpFehler(415, meldung);
 }
 
-async function jsonLesen(request) {
+async function jsonLesen(request, max = MAX_JSON) {
   typPruefen(request, "application/json", "Bitte als JSON senden.");
-  laengePruefen(request, MAX_JSON, "Anfrage zu groß.");
+  laengePruefen(request, max, "Anfrage zu groß.");
   const text = await request.text();
-  if (text.length > MAX_JSON) throw new HttpFehler(413, "Anfrage zu groß.");
+  if (text.length > max) throw new HttpFehler(413, "Anfrage zu groß.");
   try {
     const daten = JSON.parse(text || "{}");
     if (!daten || typeof daten !== "object" || Array.isArray(daten)) throw new Error();
@@ -117,9 +120,21 @@ function rohtextPruefen(roh) {
   return t;
 }
 
+/** Prüfung aus brain.js ausführen – ihre Fehler werden zu HTTP-Fehlern (400/413 mit deutschem Satz). */
+function brainGeprueft(pruefung) {
+  try {
+    return pruefung();
+  } catch (e) {
+    if (e instanceof BrainFehler) throw new HttpFehler(e.status, e.message);
+    throw e;
+  }
+}
+
 /**
- * Gesprächsanfrage prüfen: { nachrichten: [{ rolle: "nutzer" | "gabi", text }], aktion?: { typ, patient_id, art } }.
- * Ergebnis: Verlauf im Format der Anthropic-API (abwechselnd, beginnt und endet mit der Nutzerin).
+ * Gesprächsanfrage prüfen: { nachrichten: [{ rolle: "nutzer" | "gabi", text }], aktion?: { typ, patient_id, art },
+ * brainKontext?: { … } }.
+ * Ergebnis: Verlauf im Format der Anthropic-API (abwechselnd, beginnt und endet mit der Nutzerin); brain = geprüfter
+ * Brain-Kontext (nur bei freien Fragen, sonst null); Aktion „brain_antwort“ (Brain-Interview) kommt ohne Test-Patient.
  */
 export function chatAnfrage(daten) {
   const liste = daten.nachrichten;
@@ -144,7 +159,10 @@ export function chatAnfrage(daten) {
   if (gesamt > MAX_ZEICHEN_VERLAUF) throw new HttpFehler(413, "Das Gespräch ist zu lang. Bitte ein neues Gespräch beginnen.");
   if (!verlauf.length || verlauf[verlauf.length - 1].role !== "user") throw new HttpFehler(400, "Die letzte Nachricht fehlt.");
   let aktion = null;
-  if (daten.aktion !== undefined && daten.aktion !== null) {
+  const brainAntwort = Boolean(daten.aktion) && typeof daten.aktion === "object" && !Array.isArray(daten.aktion) && daten.aktion.typ === "brain_antwort";
+  if (brainAntwort) {
+    aktion = brainGeprueft(() => brainAktionPruefen(daten.aktion));
+  } else if (daten.aktion !== undefined && daten.aktion !== null) {
     const a = daten.aktion;
     if (typeof a !== "object" || Array.isArray(a) || !["diktat", "bericht"].includes(a.typ)) throw new HttpFehler(400, "Ungültige Aktion.");
     if (!istUuid(a.patient_id)) throw new HttpFehler(400, "Bitte einen Test-Patienten wählen.");
@@ -154,7 +172,9 @@ export function chatAnfrage(daten) {
     if (text.length > MAX_ROHTEXT) throw new HttpFehler(413, "Diktat zu lang.");
     aktion = { typ: a.typ, patient_id: a.patient_id, art: a.art, text };
   }
-  return { verlauf, letzte: letzteNachricht || verlauf[verlauf.length - 1].content, aktion };
+  // Brain-Kontext nur bei freien Fragen – feste Abläufe (Diktat, Bericht, Interview) brauchen ihn nicht
+  const brain = !aktion && daten.brainKontext !== undefined && daten.brainKontext !== null ? brainGeprueft(() => brainKontextPruefen(daten.brainKontext)) : null;
+  return { verlauf, letzte: letzteNachricht || verlauf[verlauf.length - 1].content, aktion, brain };
 }
 
 /** Antwort als NDJSON-Strom: jede Zeile ein Ereignis ({ t: "text" | "status" | … }). Endet mit „fertig“ oder „fehler“. */
@@ -205,7 +225,10 @@ function audioPruefen(b64) {
   if (kopf.slice(0, 4) !== "RIFF" || kopf.slice(8, 12) !== "WAVE") throw new HttpFehler(400, "Keine gültige Aufnahme (WAV erwartet).");
 }
 
-export function erstelleApp({ speicher, transkribieren, strukturieren, chatten = null, berichten = null, jetzt = () => new Date(), begrenzer = erstelleBegrenzer(), grenzen = GRENZEN }) {
+// Brain (alles optional): brainVorschlagen = Vorschlag aus einer Interview-Antwort ({ knoten, antwort }) → { inhalt };
+// brainAbruf = serverseitiger Abruf (frage) → geprüfter Kontext (Schalter BRAIN_QUELLE); brainSpeicher = Ablage in
+// Supabase für die Routen /api/brain… (Schalter BRAIN_SPEICHER). Ohne sie verhält sich die API wie bisher.
+export function erstelleApp({ speicher, transkribieren, strukturieren, chatten = null, berichten = null, brainVorschlagen = null, brainAbruf = null, brainSpeicher = null, jetzt = () => new Date(), begrenzer = erstelleBegrenzer(), grenzen = GRENZEN }) {
   function begrenzen(schluessel, grenze) {
     const r = begrenzer.treffer(schluessel, grenze);
     if (!r.erlaubt) throw zuViele(r.warteS);
@@ -237,7 +260,9 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
         version: VERSION,
         // bereit = Zugangscode und Datenbank eingerichtet; sonst lokal Demo-Modus, auf der echten Adresse eine Hinweisseite
         bereit: Boolean(env.GABI_ZUGANGSCODE) && datenbank,
-        funktionen: ["notizen", "chat", "bericht"],
+        // „brain“: dieser Server versteht brainKontext in /api/chat (Quellen, Lücken, Vorschläge)
+        funktionen: ["notizen", "chat", "bericht", "brain"],
+        brain: { speicher: env.BRAIN_SPEICHER === "supabase" ? "supabase" : "geraet", abruf: brainAbruf ? "server" : "oberflaeche" },
         eingerichtet: {
           zugang: Boolean(env.GABI_ZUGANGSCODE),
           anthropic: Boolean(env.ANTHROPIC_API_KEY),
@@ -247,7 +272,9 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
       });
     }
     if (!pfad.startsWith("/api/")) throw new HttpFehler(404, "Nicht gefunden.");
-    const bekannt = ROUTEN.find(([muster]) => muster.test(pfad));
+    // Brain in Supabase (Entwurf): Routen nur mit Schalter – sonst 404 wie jeder unbekannte Pfad (vor der Zugangsprüfung)
+    const brainAn = env.BRAIN_SPEICHER === "supabase" && Boolean(brainSpeicher);
+    const bekannt = ROUTEN.find(([muster]) => muster.test(pfad)) || (brainAn ? BRAIN_ROUTEN.find(([muster]) => muster.test(pfad)) : null);
     if (!bekannt) throw new HttpFehler(404, "Nicht gefunden.");
     if (!bekannt[1].split(", ").includes(m)) throw new HttpFehler(405, "Methode nicht erlaubt.", { Allow: bekannt[1] });
 
@@ -255,6 +282,13 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
     begrenzen(`api:${ip}`, grenzen.api);
 
     if (pfad === "/api/pruefen") return json({ ok: true });
+
+    if (istBrainPfad(pfad)) {
+      const stapel = pfad === "/api/brain/stapel";
+      const daten = m === "GET" || (m === "DELETE" && pfad.startsWith("/api/brain/knoten/")) ? {} : await jsonLesen(request, stapel ? MAX_JSON_STAPEL : MAX_JSON);
+      const r = await brainRoute(brainSpeicher, { pfad, methode: m, daten });
+      return r.status === 204 ? new Response(null, { status: 204 }) : json(r.daten, r.status);
+    }
 
     if (pfad === "/api/transkribieren") {
       typPruefen(request, "text/plain", "Aufnahme bitte als Text (Base64) senden.");
@@ -285,7 +319,27 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
       begrenzen(`chat:${ip}`, grenzen.chat);
       // Teure KI-Werkzeuge (Entwurf, Bericht) zählen im selben Limit wie /api/strukturieren
       const teuerErlaubt = () => begrenzer.treffer(`strukturieren:${ip}`, grenzen.strukturieren).erlaubt;
-      const werkzeuge = erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt, teuerErlaubt });
+      if (anfrage.aktion && anfrage.aktion.typ === "brain_antwort") {
+        // Brain-Interview: aus der Antwort einen Vorschlag für den Eintrag formulieren – als Karte, gespeichert wird nur
+        // in der Oberfläche nach „Übernehmen“. Zählt wie ein Entwurf im KI-Limit.
+        if (!brainVorschlagen) throw new HttpFehler(503, "Vorschläge fürs Brain sind auf dem Server noch nicht eingerichtet (KI-Schlüssel fehlt).");
+        const { knoten, antwort } = anfrage.aktion;
+        return ndjsonAntwort(async (senden) => {
+          if (!teuerErlaubt()) throw new StrukturFehler("Gerade zu viele KI-Anfragen. Bitte kurz warten und noch einmal versuchen.");
+          senden({ t: "status", text: "Formuliere den Eintrag …" });
+          const inhalt = brainVorschlagInhalt(await brainVorschlagen({ knoten, antwort }));
+          if (!inhalt) {
+            senden({ t: "text", d: "Daraus kann ich noch keinen Eintrag machen. Sag es mir bitte etwas genauer – oder tipp auf „Überspringen“." });
+            return;
+          }
+          senden({ t: "brain_vorschlag", vorschlag: { typ: "aendern", id: knoten.id, titel: knoten.titel, inhalt, grund: "interview" } });
+          senden({ t: "text", d: "So würde ich es ins Brain schreiben. Passt das? Dann tipp auf „Übernehmen“." });
+        });
+      }
+      // Brain: Kontext aus der Oberfläche – oder (Schalter BRAIN_QUELLE) vom Server selbst aus der Datenbank geholt
+      // (Fehler dabei – Datenbank nicht erreichbar o. Ä. – gehen als BrainFehler mit deutschem Satz an die Oberfläche)
+      const brain = !anfrage.aktion && brainAbruf ? await brainAbruf(anfrage.letzte) : anfrage.brain;
+      const werkzeuge = erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt, teuerErlaubt, brain });
       const kontext = { letzte: anfrage.letzte };
       if (anfrage.aktion) {
         // Feste Abläufe aus den Schnellaktionen: ohne Umweg über das Gespräch, schnell und vorhersehbar
@@ -308,7 +362,7 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
         });
       }
       if (!chatten) throw new HttpFehler(503, "Gabi ist auf dem Server noch nicht eingerichtet (KI-Schlüssel fehlt).");
-      return ndjsonAntwort((senden, signal) => chatten({ verlauf: anfrage.verlauf, werkzeuge, kontext, senden, signal, jetzt: jetzt() }));
+      return ndjsonAntwort((senden, signal) => chatten({ verlauf: anfrage.verlauf, werkzeuge, kontext, senden, signal, jetzt: jetzt(), brain }));
     }
 
     if (pfad === "/api/patienten" && m === "GET") return json({ patienten: await speicher.patienten() });
@@ -394,7 +448,7 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
       } catch (e) {
         if (e instanceof HttpFehler) {
           antwort = json({ fehler: e.message }, e.status, e.headers);
-        } else if (e instanceof SpeicherFehler) {
+        } else if (e instanceof SpeicherFehler || e instanceof BrainFehler) {
           antwort = json({ fehler: e.message }, e.status);
         } else if (e instanceof StrukturFehler || e instanceof ChatFehler) {
           antwort = json({ fehler: e.message }, 502);

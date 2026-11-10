@@ -4,6 +4,7 @@
 //   ANTHROPIC_API_KEY=…               → echte Strukturierung und echtes Gespräch mit Claude (sonst Demo-Assistent ohne KI)
 //   GABI_WHISPER_CMD="python3 dev/whisper_lokal.py"  → echte Spracherkennung lokal (sonst Demo-Text)
 //   GABI_AUDIO_ABLAGE=/pfad           → letzte Aufnahme dort als WAV ablegen (zum Prüfen)
+//   GABI_BRAIN=1                      → Brain-Prototyp AN (config.js meldet brain: true) – so startet `npm run brain` (Port 8790)
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
@@ -15,12 +16,29 @@ import { erstelleApp } from "../src/app.js";
 import { arbeitsspeicher } from "../src/speicher.js";
 import { claudeStrukturierung } from "../src/strukturierung.js";
 import { claudeBericht, claudeChat } from "../src/chat.js";
+import { claudeBrainVorschlag } from "../src/brain_vorschlag.js";
 import { WHISPER_PROMPT, bereinigen } from "../src/transkription.js";
 import { normalisieren } from "../src/notiz.js";
 
 const WURZEL = resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const DEMO = createRequire(import.meta.url)("../../demo.js"); // Demo-Assistent für den Betrieb ohne KI-Schlüssel
+const require = createRequire(import.meta.url);
+const DEMO = require("../../demo.js"); // Demo-Assistent für den Betrieb ohne KI-Schlüssel
 const PORT = Number(process.env.PORT || 8788);
+const BRAIN = process.env.GABI_BRAIN === "1"; // Brain-Prototyp: die Oberfläche lädt die Brain-Dateien und schickt brainKontext mit
+
+/** Brain-Bausteine aus dem Wurzelordner erst beim ersten Gebrauch laden – mit verständlicher Meldung, falls einer fehlt. */
+const brainDatei = {};
+function brainBaustein(datei) {
+  if (!brainDatei[datei]) {
+    try {
+      brainDatei[datei] = require(`../../${datei}`);
+    } catch (e) {
+      console.log(`Brain: ${datei} fehlt oder lässt sich nicht laden (${e?.code || e?.name || "Fehler"}).`);
+      throw new Error("Das Brain ist in dieser lokalen Fassung nicht vollständig – bitte den Stand prüfen.");
+    }
+  }
+  return brainDatei[datei];
+}
 const ENV = {
   GABI_ZUGANGSCODE: process.env.GABI_ZUGANGSCODE || "test",
   ERLAUBTE_ORIGINS: `http://localhost:${PORT},http://127.0.0.1:${PORT}`,
@@ -70,9 +88,15 @@ const app = erstelleApp({
   speicher,
   transkribieren,
   strukturieren: ENV.ANTHROPIC_API_KEY ? claudeStrukturierung(ENV) : demoStrukturieren,
-  // Ohne Schlüssel: Demo-Assistent (einfache Absichten), aber mit den echten Werkzeugen und dem echten NDJSON-Strom
-  chatten: ENV.ANTHROPIC_API_KEY ? claudeChat(ENV) : ({ kontext, werkzeuge, senden }) => DEMO.demoGespraech({ letzte: kontext.letzte, werkzeuge, senden, warte: pause }),
+  // Ohne Schlüssel: Demo-Assistent (einfache Absichten), aber mit den echten Werkzeugen und dem echten NDJSON-Strom.
+  // Schickt die Oberfläche brainKontext mit (Brain AN), antwortet er bei Praxisfragen nur aus diesen Einträgen.
+  chatten: ENV.ANTHROPIC_API_KEY ? claudeChat(ENV) : ({ kontext, werkzeuge, senden, brain }) => DEMO.demoGespraech({
+    letzte: kontext.letzte, werkzeuge, senden, warte: pause,
+    ...(brain ? { brain, brainAntwort: brainBaustein("brain-suche.js").antwortAusKontext } : {}),
+  }),
   berichten: ENV.ANTHROPIC_API_KEY ? claudeBericht(ENV) : async ({ notizen, art }) => DEMO.demoBerichtInhalt({ notizen, art }),
+  // Brain-Interview: mit Schlüssel formuliert Claude den Vorschlag, ohne Schlüssel die einfache Fassung ohne KI
+  brainVorschlagen: ENV.ANTHROPIC_API_KEY ? claudeBrainVorschlag(ENV) : async ({ knoten, antwort }) => brainBaustein("brain-interview.js").vorschlagOhneKi({ knoten, antwort }),
 });
 
 const TYPEN = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".txt": "text/plain; charset=utf-8", ".woff2": "font/woff2", ".md": "text/plain; charset=utf-8" };
@@ -103,7 +127,7 @@ createServer(async (req, res) => {
     }
     if (url.pathname === "/config.js") {
       res.writeHead(200, { "Content-Type": TYPEN[".js"], "Cache-Control": "no-store" });
-      res.end('window.GABI_CONFIG = { apiUrl: "" }; // lokaler Modus\n');
+      res.end(`window.GABI_CONFIG = { apiUrl: ""${BRAIN ? ", brain: true" : ""} }; // lokaler Modus${BRAIN ? ", Brain AN" : ""}\n`);
       return;
     }
     const pfad = normalize(join(WURZEL, url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname)));
@@ -119,4 +143,5 @@ createServer(async (req, res) => {
 }).listen(PORT, "127.0.0.1", () => {
   console.log(`Gabi lokal: http://localhost:${PORT}  (Zugangscode: ${ENV.GABI_ZUGANGSCODE === "test" ? "test" : "aus GABI_ZUGANGSCODE"})`);
   console.log(`Spracherkennung: ${process.env.GABI_WHISPER_CMD ? "lokal (Whisper)" : "Demo-Text"} · Strukturierung und Gespräch: ${ENV.ANTHROPIC_API_KEY ? `Claude (${ENV.ANTHROPIC_MODELL})` : "Demo-Assistent ohne KI"}`);
+  if (BRAIN) console.log(`Brain: AN · Demo mit Brain: http://localhost:${PORT}/?demo=1#/brain`);
 });
