@@ -114,8 +114,15 @@
 .brain.fehler .skelett::after { content: none; }
 
 /* 3 Leiste und Filter -------------------------------------------------------- */
-.brain-leiste { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
-.brain-reiter { grid-column: 1 / -1; display: flex; gap: 2px; padding: 3px; border-radius: var(--rund); background: var(--fuell); }
+/* Reiter, Suche, Werkzeuge. Am Handy stehen die Reiter in einer eigenen Zeile; ab 640 px alles in einer Zeile – aber
+   nur, wenn neben Reitern und Werkzeugen noch die Grundbreite der Suche (220 px) bleibt. Sonst brechen die Reiter in
+   eine eigene Zeile darüber um. Entschieden wird nach dem Platz, nicht nach der Fensterbreite (Seitenleiste ab 1024 px
+   und der Lücken-Zähler am Reiter ändern ihn). Damit die Reiter umbrechen und nicht die Werkzeuge, wird die Zeile von
+   hinten gefüllt (row-reverse, wrap-reverse); „order“ stellt die Reihenfolge fürs Auge wieder her – sie ist dieselbe
+   wie im Dokument, die Tab-Folge bleibt also: Reiter, Suche, Werkzeuge. */
+.brain-leiste { display: flex; flex-flow: row-reverse wrap-reverse; align-items: center; gap: 10px; }
+.brain-reiter { order: 3; flex: 1 1 100%; min-width: 0; display: flex; gap: 2px; padding: 3px; border-radius: var(--rund); background: var(--fuell); }
+.brain-leiste .brain-suche { order: 2; flex: 1 1 0; min-width: 0; }
 .brain-reiter-knopf {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; height: 38px; padding: 0 8px;
   border: 0; border-radius: var(--rund); background: transparent; color: var(--text-2); font-size: 13.5px; font-weight: 500; white-space: nowrap;
@@ -135,7 +142,7 @@
 .brain .suche input::placeholder, .brain .eingabefeld::placeholder, dialog.brain-palette .suche input::placeholder, .brain-karte .eingabefeld::placeholder { color: var(--text-3); opacity: 1; }
 .brain-suche .rund-knopf { top: 4px; }
 .brain-suche.aus { opacity: 0.45; }
-.brain-werkzeuge { display: flex; align-items: center; gap: 6px; }
+.brain-werkzeuge { order: 1; flex: none; display: flex; align-items: center; gap: 6px; }
 .brain-werkzeuge .knopf span { display: none; }
 .brain-werkzeuge .knopf.klein { min-height: 44px; padding: 0 13px; }
 .brain-werkzeuge .rund-knopf { width: 44px; height: 44px; }
@@ -461,8 +468,10 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border-radius: 6
 }
 @media (min-width: 640px) {
   .brain-titel p { display: block; }
-  .brain-leiste { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .brain-reiter { grid-column: auto; }
+  /* Reiter so breit wie ihr Inhalt, die Suche bekommt den Rest (9999 : 1). Stehen die Reiter allein in ihrer Zeile
+     (kein Platz für 220 px Suche daneben), füllen sie sie wie am Handy. */
+  .brain-reiter { flex: 1 1 auto; }
+  .brain-leiste .brain-suche { flex: 9999 1 220px; }
   .brain-reiter-knopf { padding: 0 14px; }
   .brain-werkzeuge .knopf span { display: inline; }
   .brain-karten.zwei { grid-template-columns: repeat(2, minmax(0, 1fr)); }
