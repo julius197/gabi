@@ -72,6 +72,16 @@ describe("Brain-Befehle im Gespräch erkennen", () => {
     expect(art("Brain")).toBeNull();
   });
 
+  // Prüfrunde 1: „Was ist noch offen?“ lief als Praxisfrage und lieferte einen zufälligen Treffer zum Wort „offen“
+  it("„Was ist noch offen?“ (offene Punkte) – aber nicht die Öffnungszeiten und nichts mit Notiz-Bezug", () => {
+    for (const t of ["Was ist noch offen?", "Was ist offen", "Gabi, was ist denn noch alles offen?", "Welche Fragen sind noch offen?", "Welche Punkte sind offen?", "Offene Punkte", "offene Fragen?", "Zeig mir die offenen Fragen im Brain", "Was ist noch zu klären?"]) {
+      expect(IV.befehlErkennen(t), t).toEqual({ art: "offen", text: "" });
+    }
+    for (const t of ["Habt ihr offen?", "Wann habt ihr offen?", "Ist die Praxis offen?", "Was ist bei TP-01 noch offen?", "offene Fragen zur Akupunktur", "Was ist noch offen bei der Abrechnung von Frau Muster?"]) {
+      expect(IV.befehlErkennen(t), t).toBeNull();
+    }
+  });
+
   it("alles mit Notiz-Bezug ist KEIN Brain-Befehl: Kürzel, „Notiz“, „Diktat“, „Bericht“, „Patient“", () => {
     for (const t of [
       "Ändere die Notiz von TP-01", "Korrigiere TP-01", "Merke dir: TP-02 kommt immer zu spät", "Merke dir: tp-03 hat Knieschmerzen", "Aktualisiere die Notiz von gestern",

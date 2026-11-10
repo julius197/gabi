@@ -1028,7 +1028,7 @@
       .map((k) => SUCHE.kuerzen(`${k.titel}: ${SUCHE.ohneVerweise(k.inhalt).replace(/\s+/g, " ")}`, 400));
     const gesund = () => gesundheit({ knoten: rechnen().eigene, luecken: [...z.luecken.values()].map(lueckeStand), nutzung: z.nutzung, jetzt: jetzt() });
     /** Was Gabi für eine Frage mitbekommt (Form: Bauplan §5.1). Nie Patienten, Notizen, Berichte. */
-    function kontextFuer(frage) {
+    function kontextFuer(frage, { dazu = [] } = {}) {
       const c = rechnen();
       if (!c.kontextIndex) {
         c.kontextKandidaten = c.eigene.filter((k) => SUCHE.KONTEXT_ARTEN.includes(k.art));
@@ -1037,7 +1037,7 @@
       const g = gesund();
       const kontext = {
         v: 1,
-        knoten: SUCHE.kontextWaehlen({ frage, knoten: c.kontextKandidaten, kanten: c.kanten, index: c.kontextIndex }),
+        knoten: SUCHE.kontextWaehlen({ frage, knoten: c.kontextKandidaten, kanten: c.kanten, index: c.kontextIndex, dazu }),
         stand: { knoten: g.knoten, bestaetigt: g.bestaetigt, entwurf: g.entwurf, zuKlaeren: g.zuKlaeren, veraltet: g.veraltet, nieVerwendet: g.nieVerwendet, luecken: g.luecken },
       };
       const persona = personaText();

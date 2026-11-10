@@ -1768,7 +1768,7 @@
     let netz = false;
     try {
       if (BRAIN && brainFrage) {
-        const brainKontext = await BRAIN.gespraech.kontext(brainFrage);
+        const brainKontext = await BRAIN.gespraech.kontext(brainFrage, g);
         if (brainKontext) { body = { ...body, brainKontext }; gabi.body = body; }
       }
       await chatStrom(body, (e) => ereignis(gabi, e, g), abbruch.signal);

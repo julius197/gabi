@@ -337,6 +337,28 @@ describe("Fragenkatalog der Prüfrunde – 262 Fragen, festgeschriebener Stand",
   });
 });
 
+describe("Folgefragen: Kontext mit den Quellen der vorigen Antwort (Prüfrunde 1, Weg mit KI)", () => {
+  it("kontextFuer(frage, { dazu }) nimmt die genannten Einträge mit – innerhalb der Grenzen des Workers", () => {
+    const ohne = brain.kontextFuer("Und am Samstag?").knoten.map((k) => k.id);
+    const mit = brain.kontextFuer("Und am Samstag?", { dazu: ["s-telefonzeiten"] }).knoten.map((k) => k.id);
+    expect(ohne).not.toContain("s-telefonzeiten");
+    expect(mit).toContain("s-telefonzeiten");
+    // die vorige Frage sucht mit: „Was kostet Osteopathie?“ + „Und Akupunktur?“ → Akupunktur UND der offene Punkt zu den Preisen
+    const folge = brain.kontextFuer("Was kostet Osteopathie? Und Akupunktur?", { dazu: ["s-leistung-osteopathie"] });
+    const titelListe = folge.knoten.map((k) => k.titel);
+    expect(titelListe).toEqual(expect.arrayContaining(["Akupunktur", "Osteopathie", PREISE]));
+    expect(brain.kontextFuer("Und Akupunktur?").knoten.map((k) => k.titel)).not.toContain(PREISE); // allein fehlte er
+    // Grenzen des Workers: höchstens 8 Einträge, 8 000 Zeichen (sonst lehnt er die ganze Anfrage ab)
+    expect(folge.knoten.length).toBeLessThanOrEqual(8);
+    expect(folge.knoten.reduce((n, k) => n + k.titel.length + k.inhalt.length, 0)).toBeLessThanOrEqual(8000);
+    // Patienten, Notizen und Unbekanntes kommen auch über „dazu“ nicht hinein
+    const fremd = brain.kontextFuer("Und am Samstag?", { dazu: ["kernregeln", "gibt-es-nicht", ...brain.knoten().filter((k) => k.art === "patient").map((k) => k.id)] });
+    expect(brain.knoten().filter((k) => k.art === "patient").length).toBeGreaterThan(0); // es gibt Test-Patienten im Graphen – im Kontext nie
+    expect(fremd.knoten.every((k) => S.KONTEXT_ARTEN.includes(k.art))).toBe(true);
+    expect(fremd.knoten.map((k) => k.id)).toEqual(ohne);
+  });
+});
+
 describe("Suche – Bausteine der Antwortlogik", () => {
   it("tippAbstand: fehlender, überzähliger, falscher Buchstabe und Dreher zählen je 1", () => {
     expect(S.tippAbstand("oefnungszeit", "oeffnungszeit", 2)).toBe(1);

@@ -31,10 +31,13 @@
      * Kontext für eine Nachricht. Bei „Ändere X: Y“ steht der Eintrag, der zu X passt, vorn – und ist sicher dabei, auch
      * wenn der neue Inhalt Y nach etwas anderem klingt („… samstags geschlossen“ ↔ Öffnungszeiten).
      */
-    function kontextMitZiel(b, text) {
-      const k = b.kontextFuer(text);
+    function kontextMitZiel(b, text, g = null) {
       const befehl = IV.befehlErkennen(text);
-      if (!befehl || befehl.art !== "aendern") return k;
+      if (!befehl || befehl.art !== "aendern") {
+        const vor = befehl ? null : vorfrage(g, text);
+        return vor ? b.kontextFuer(`${vor.frage} ${text}`, { dazu: vor.quellen }) : b.kontextFuer(text);
+      }
+      const k = b.kontextFuer(text);
       const ziel = b.kontextFuer(IV.aendernZiel(befehl.text)).knoten[0];
       if (!ziel) return k;
       const knoten = [ziel, ...k.knoten.filter((n) => n.id !== ziel.id)].slice(0, 8);
@@ -43,15 +46,37 @@
       return { ...k, knoten };
     }
 
+    /**
+     * Folgefrage? Eine Nachricht mit höchstens einem Inhaltswort („Und am Samstag?“, „Was kostet das?“, „Und Akupunktur?“)
+     * steht nicht für sich: Dann sucht die vorige Frage mit, und die Einträge der vorigen Antwort gehen noch einmal mit –
+     * sonst bekäme Gabi (mit KI) einen leeren oder unpassenden Kontext und hielte das für „steht nicht im Brain“.
+     * Ergebnis: { frage, quellen } oder null.
+     */
+    function vorfrage(g, text) {
+      const liste = g && Array.isArray(g.nachrichten) ? g.nachrichten : [];
+      const SU = W.GabiBrainSuche;
+      if (!SU || liste.length < 3 || SU.frageWoerter(text).such.length > 1) return null;
+      // von hinten: [… vorige Frage, vorige Antwort, diese Frage, (Platz für die Antwort)]
+      let i = liste.length - 1;
+      while (i >= 0 && !(liste[i].rolle === "nutzer" && String(liste[i].text || "").trim() === String(text).trim())) i -= 1;
+      const antwort = i > 0 ? liste[i - 1] : null;
+      const frage = i > 1 ? liste[i - 2] : null;
+      if (!antwort || antwort.rolle !== "gabi" || !frage || frage.rolle !== "nutzer") return null;
+      const quellen = (antwort.brainQuellen || []).map((q) => q.id).slice(0, 3);
+      // nur nach einer Antwort aus dem Brain (oder einer gemerkten Lücke): Notiz-Fragen und Befehle ziehen nichts nach
+      if (!quellen.length && !antwort.luecke) return null;
+      return { frage: String(frage.text || "").replace(/\s+/g, " ").trim().slice(0, 300), quellen };
+    }
+
     /** Was Gabi für diese Frage aus dem Brain mitbekommt – oder null (Brain nicht bereit, Server kennt es nicht). */
-    async function kontext(text) {
+    async function kontext(text, g = chat.gespraech) {
       if (!app.serverKannBrain()) {
         if (!alterServerGesagt) { alterServerGesagt = true; toast("Dieser Server kennt das Brain noch nicht – Gabi antwortet aus dem eingebauten Wissen.", { art: "warn", dauer: 7000 }); }
         return null;
       }
       try { await ansicht.bereit(); } catch { return null; }
       const b = brain();
-      const k = b ? kontextMitZiel(b, text) : null;
+      const k = b ? kontextMitZiel(b, text, g) : null;
       gesehen.clear();
       for (const n of (k && k.knoten) || []) gesehen.set(n.id, String(n.inhalt || "").trim());
       return k;
@@ -108,6 +133,8 @@
           rev: alt ? alt.rev : undefined, // der Stand, auf dem der Vorschlag aufbaut
           grund: String(v.grund || "vorschlag").slice(0, 30), ohneKi: Boolean(v.ohneKi),
           interview: Boolean(m && alt && m.reihe[m.index] === alt.id),
+          // die Antwort auf einen offenen Punkt – auch außerhalb des Interviews („Ändere die Öffnungszeiten: …“)
+          klaert: Boolean(alt && alt.status === "zu_klaeren"),
         });
         gabi.wartet = true;
         return true;
@@ -189,7 +216,7 @@
             ${neu ? "" : `<div><span class="augenbraue">Vorher</span><div class="brain-diff-alt">${esc((k.vorher && k.vorher.inhalt) || "") || "(noch kein Inhalt)"}</div></div>`}
             <div><span class="augenbraue">${neu ? "Inhalt" : "Nachher"}</span><div class="brain-diff-neu">${esc(inhalt) || "(leer)"}</div></div>
           </div>`;
-      const hinweis = `${k.standNeu ? '<p class="karte-meta brain-stand-neu" role="status">Der Eintrag wurde inzwischen geändert – „Vorher“ zeigt den aktuellen Stand. Bitte prüfe den Vorschlag, bevor du ihn übernimmst.</p>' : ""}${k.ohneKi ? '<p class="karte-meta">Ohne KI formuliert – bitte vor dem Übernehmen anpassen.</p>' : k.interview ? '<p class="karte-meta">Mit „Übernehmen“ gilt der Punkt als geklärt.</p>' : ""}`;
+      const hinweis = `${k.standNeu ? '<p class="karte-meta brain-stand-neu" role="status">Der Eintrag wurde inzwischen geändert – „Vorher“ zeigt den aktuellen Stand. Bitte prüfe den Vorschlag, bevor du ihn übernimmst.</p>' : ""}${k.ohneKi ? '<p class="karte-meta">Ohne KI formuliert – bitte vor dem Übernehmen anpassen.</p>' : ""}${k.interview || k.klaert ? '<p class="karte-meta brain-klaert">Mit „Übernehmen“ gilt der Punkt als geklärt.</p>' : ""}`;
       const knoepfe = k.bearbeiten
         ? `<button class="knopf primaer klein" type="button" data-aktion="brain-uebernehmen"${gesperrt}>${symbol("haken")}Übernehmen</button><button class="knopf leise klein" type="button" data-aktion="brain-abbrechen"${gesperrt}>Abbrechen</button>`
         : `<button class="knopf primaer klein" type="button" data-aktion="brain-uebernehmen"${gesperrt}>${k.speichert ? '<span class="drehen"></span>Speichere …' : `${symbol("haken")}Übernehmen`}</button>
@@ -230,8 +257,10 @@
         if (k.art === "neu") r = await b.anlegen({ art: "praxiswissen", titel, inhalt, tags: [], status: "bestaetigt", quelle: "Gespräch" }, { grund: "vorschlag" });
         else {
           const alt = b.hol(k.knoten);
-          // Interview: der Punkt ist damit geklärt – aus der Frage wird bestätigtes Praxiswissen
-          const felder = k.interview ? { inhalt, status: "bestaetigt", art: alt && alt.art === "frage" ? "praxiswissen" : alt ? alt.art : "praxiswissen", quelle: "Interview" } : { inhalt };
+          // Interview oder Änderung an einem offenen Punkt: er ist damit geklärt – aus der Frage wird bestätigtes
+          // Praxiswissen (sonst antwortete Gabi weiter „das ist im Brain noch offen“, obwohl die Antwort jetzt dasteht)
+          const klaert = k.interview || (k.klaert && alt && alt.status === "zu_klaeren");
+          const felder = klaert ? { inhalt, status: "bestaetigt", art: alt && alt.art === "frage" ? "praxiswissen" : alt ? alt.art : "praxiswissen", quelle: k.interview ? "Interview" : "Gespräch" } : { inhalt };
           // nur auf dem Stand, den der Vorschlag kannte: wurde der Eintrag inzwischen geändert (im Brain, in einem anderen
           // Fenster), überschreibt ein alter Vorschlag das nicht stillschweigend
           r = await b.aendern(k.knoten, felder, { grund: k.interview ? "interview" : "vorschlag", ...(Number.isInteger(k.rev) ? { erwartet: k.rev } : {}) });
@@ -400,6 +429,18 @@
         const s = b.gesundheit();
         app.nutzerNachricht(text, art);
         app.lokaleAntwort(IV.gesundheitText(s), [{ typ: "brain-gesundheit", id: app.neueId(), stand: s }], chat.gespraech, { brain: true });
+        audit("brain-gesundheit");
+        return true;
+      }
+      if (befehl.art === "offen") {
+        const offen = IV.reihenfolge(b.eigene());
+        app.nutzerNachricht(text, art);
+        if (!offen.length) app.lokaleAntwort("Im Brain ist gerade nichts offen – alle Punkte sind geklärt.", [], chat.gespraech, { brain: true });
+        else {
+          const mehr = offen.length > 8 ? ` Hier die ersten acht – alle findest du im Brain unter „Zu klären“.` : "";
+          app.lokaleAntwort(`Im Brain ${offen.length === 1 ? "ist noch **ein Punkt** offen" : `sind noch **${offen.length} Punkte** offen`}.${mehr} Sag „Brain füllen“, dann frage ich sie der Reihe nach ab.`,
+            [{ typ: "brain-treffer", id: app.neueId(), treffer: offen.slice(0, 8).map((id) => ({ id })) }], chat.gespraech, { brain: true });
+        }
         audit("brain-gesundheit");
         return true;
       }

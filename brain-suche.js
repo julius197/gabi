@@ -505,15 +505,18 @@
    * Die besten Knoten für eine Praxisfrage: Rangfolge über Titel/Tags/Inhalt, dazu Nachbarn über Verweise (ein Sprung),
    * höchstens maxKnoten und rund maxZeichen. Nur Praxiswissen, Fragen und Vorlagen – nie Patienten, Notizen, Berichte,
    * nie der Papierkorb. Der Status geht mit (Entwürfe und „zu klären“ kennzeichnet Gabi in der Antwort).
+   * dazu: Kennungen von Einträgen, die ausdrücklich dazugehören – die Quellen der vorigen Antwort bei einer Folgefrage
+   * („Und am Samstag?“). Sie kommen gleich nach den Treffern (höchstens drei), auch wenn die Frage selbst nichts findet.
    */
-  function kontextWaehlen({ frage, knoten, kanten = [], maxKnoten = 8, maxZeichen = 6000, proKnoten = 1500, index = null } = {}) {
+  function kontextWaehlen({ frage, knoten, kanten = [], maxKnoten = 8, maxZeichen = 6000, proKnoten = 1500, index = null, dazu = [] } = {}) {
     const kandidaten = (Array.isArray(knoten) ? knoten : []).filter((k) => k && k.id && !k.geloescht && !k.abgeleitet && KONTEXT_ARTEN.includes(k.art));
     if (!kandidaten.length || !String(frage || "").trim()) return [];
     const nachId = new Map(kandidaten.map((k) => [k.id, k]));
+    const vorab = [...new Set((Array.isArray(dazu) ? dazu : []).filter((id) => nachId.has(id)))].slice(0, 3);
     const alle = suchenMitWoertern(index || erstelleIndex(kandidaten), frage, { limit: 60, praefix: false });
     const treffer = alle.treffer.filter((t) => nachId.has(t.id));
-    if (!treffer.length) return [];
-    const bester = treffer[0].punkte;
+    if (!treffer.length && !vorab.length) return [];
+    const bester = treffer.length ? treffer[0].punkte : 0;
     // (1) Je Suchwort die zwei Knoten, die es am besten tragen (wörtlich vor Wortfeld). So fehlt der Eintrag zum Thema nicht,
     //     nur weil ein anderer Knoten zufällig zwei Wörter der Frage enthält („Was kostet die Trainingstherapie?“).
     const gewaehlt = new Set();
@@ -524,13 +527,14 @@
     // (2) Dazu, was insgesamt wirklich zur Frage gehört: ein Suchwort steht da und der Abstand zum besten ist nicht zu groß
     for (const t of treffer) if (t.stark && t.punkte >= bester * 0.25) gewaehlt.add(t.id);
     const direkt = treffer.filter((t) => gewaehlt.has(t.id) && t.stark).slice(0, Math.max(1, maxKnoten - 2));
-    if (!direkt.length) return [];
+    if (!direkt.length && !vorab.length) return [];
     const reihe = direkt.map((t) => t.id);
     const drin = new Set(reihe);
+    for (const id of vorab) if (reihe.length < maxKnoten && !drin.has(id)) { drin.add(id); reihe.push(id); }
     // (3) Nachbarn der zwei besten: ausdrückliche Verweise immer, „gehört zu“ nur, wenn der Nachbar selbst zur Frage passt
     const punkteVon = new Map(treffer.map((t) => [t.id, t.punkte]));
     const nachbarn = [];
-    for (const id of reihe.slice(0, 2)) {
+    for (const id of direkt.slice(0, 2).map((t) => t.id)) {
       for (const kante of Array.isArray(kanten) ? kanten : []) {
         if (!kante || (kante.von !== id && kante.nach !== id)) continue;
         const anderer = kante.von === id ? kante.nach : kante.von;

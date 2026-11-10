@@ -43,16 +43,19 @@
   const AENDERN = /^\s*(?:gabi[,:]?\s+)?(?:bitte\s+)?(?:änder(?:e|n)?|aender(?:e|n)?|korrigier(?:e|en)?|aktualisier(?:e|en)?|berichtig(?:e|en)?)\s+(\S[\s\S]{2,})$/i;
   const WISSEN = /^\s*(?:gabi[,:]?\s+)?was\s+wei(?:ß|ss)t\s+du\s+(?:über|ueber|zum|zur|zu|von|vom)\s+(\S[\s\S]*?)\s*\??\s*$/i;
   const GESUNDHEIT = /wie\s+(?:vollständig|vollstaendig|gut|aktuell|gesund|voll)\s+ist\s+(?:mein|das|unser|dein)\s+brain|brain[- ]?(?:stand|status|gesundheit)\b|was\s+fehlt\s+(?:noch\s+)?im\s+brain|wie\s+steht\s+es\s+um\s+(?:mein|das|unser)\s+brain/i;
+  // „Was ist noch offen?“ · „Welche Fragen sind noch offen?“ · „Offene Punkte“ – die Liste der „Zu klären“-Einträge
+  const OFFEN = /^\s*(?:gabi[,:]?\s+)?(?:was\s+ist\s+(?:denn\s+)?(?:noch\s+)?(?:alles\s+)?(?:offen|zu\s+kl(?:ä|ae)ren|ungekl(?:ä|ae)rt)|welche\s+(?:fragen|punkte)\s+sind\s+(?:denn\s+)?(?:noch\s+)?(?:offen|zu\s+kl(?:ä|ae)ren)|(?:zeig(?:e)?\s+(?:mir\s+)?)?(?:die\s+)?offenen?\s+(?:fragen|punkte))(?:\s+im\s+brain)?\s*[?.!]?\s*$/i;
   const INTERVIEW = /^\s*(?:gabi[,:]?\s+)?(?:brain\s+f(?:ü|ue)llen|interview\s+(?:starten|beginnen)|frag\s+mich\s+(?:die\s+)?(?:offenen\s+)?(?:fragen|punkte)(?:\s+ab)?|stell\s+mir\s+die\s+offenen\s+fragen)\s*[.!]?\s*$/i;
 
   /**
-   * Erkennt Brain-Befehle im Gespräch. Ergebnis: { art: "merken" | "aendern" | "wissen" | "gesundheit" | "interview", text }
+   * Erkennt Brain-Befehle im Gespräch. Ergebnis: { art: "merken" | "aendern" | "wissen" | "gesundheit" | "offen" | "interview", text }
    * oder null (normale Frage). Alles mit Notiz-Bezug (Kürzel, „Notiz“) ist kein Brain-Befehl.
    */
   function befehlErkennen(text) {
     const t = String(text || "").trim();
     if (!t || t.length > 4000) return null;
     if (INTERVIEW.test(t)) return { art: "interview", text: "" };
+    if (OFFEN.test(t)) return { art: "offen", text: "" };
     if (GESUNDHEIT.test(t) && t.length <= 120) return { art: "gesundheit", text: "" };
     let m = MERKEN.exec(t) || MERKEN_FRAGE.exec(t) || MERKEN_BRAIN.exec(t);
     if (m && !NOTIZ_BEZUG.test(m[1])) {

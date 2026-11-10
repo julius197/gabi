@@ -698,6 +698,27 @@ describe("Antwort ohne KI: lieber eine Lücke als eine Antwort am Thema vorbei",
     expect(antwort("Wo gibt es Osteopathie?", eintraege).quellen).toEqual(["ost", "std"]); // „wo“ → Standorte
   });
 
+  // Prüfrunde 1 (Weg mit KI): Folgefragen bekamen einen leeren oder unpassenden Kontext
+  it("Kontext mit „dazu“: die Quellen der vorigen Antwort gehen bei einer Folgefrage noch einmal mit", () => {
+    const eintraege = [
+      k("tz", "Telefonzeiten", "Telefonisch erreichbar: Mo 7:30–17:00 Uhr."),
+      k("tr", "Trainingszeiten", "Sa 9:00–14:00 Uhr."),
+      k("o", "Osteopathie", "85 € pro Einheit."),
+      k("p", "Notiz-Knoten", "gehört nicht in den Kontext", { art: "notiz" }),
+    ];
+    // „Und am Samstag?“ allein findet nur die Trainingszeiten – mit „dazu“ auch die Telefonzeiten der vorigen Antwort
+    expect(ids(S.kontextWaehlen({ frage: "Und am Samstag?", knoten: eintraege }))).toEqual(["tr"]);
+    expect(ids(S.kontextWaehlen({ frage: "Und am Samstag?", knoten: eintraege, dazu: ["tz"] }))).toEqual(["tr", "tz"]);
+    // findet die Folgefrage selbst nichts, bleiben die Einträge der vorigen Antwort
+    expect(ids(S.kontextWaehlen({ frage: "Und wie lange?", knoten: eintraege }))).toEqual([]);
+    expect(ids(S.kontextWaehlen({ frage: "Und wie lange?", knoten: eintraege, dazu: ["tz"] }))).toEqual(["tz"]);
+    // höchstens drei, nur aus dem erlaubten Bestand (nie Notizen, Unbekanntes fällt weg), nichts doppelt, Grenze maxKnoten
+    expect(ids(S.kontextWaehlen({ frage: "Und wie lange?", knoten: eintraege, dazu: ["p", "gibt-es-nicht", "tz", "tz", "o", "tr"] }))).toEqual(["tz", "o", "tr"]);
+    expect(ids(S.kontextWaehlen({ frage: "Und am Samstag?", knoten: eintraege, dazu: ["tr", "tz", "o"], maxKnoten: 2 }))).toEqual(["tr", "tz"]);
+    expect(S.kontextWaehlen({ frage: "", knoten: eintraege, dazu: ["tz"] })).toEqual([]); // ohne Frage kein Kontext
+    for (const kaputt of [null, "tz", 7, {}]) expect(ids(S.kontextWaehlen({ frage: "Und am Samstag?", knoten: eintraege, dazu: kaputt }))).toEqual(["tr"]);
+  });
+
   it("zielFinden: der Eintrag muss das Gemeinte in Titel oder Tags tragen; ein Titel nur aus den genannten Wörtern gewinnt", () => {
     const eintraege = [k("kon", "Kontakt und Zeiten", "Telefon 123"), k("tz", "Telefonzeiten", "Mo 8–12"), k("o", "Osteopathie", "85 €", { tags: ["preis"] })];
     expect(S.zielFinden("die Telefonzeiten", eintraege).id).toBe("tz");
