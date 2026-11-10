@@ -140,12 +140,19 @@ cd worker && npm run brain     # http://localhost:8790 · Zugangscode: test · D
   Patienten oder Notizen) und schickt sie als `brainKontext` mit. Gabi antwortet auf Praxisfragen nur daraus, nennt die
   Quellen (Chips unter der Antwort, Klick springt in den Graphen) und meldet Lücken („Dazu steht noch nichts im
   Brain.“). **Chip „Brain füllen“**: Gabi stellt die offenen Fragen nacheinander, macht aus der Antwort einen Vorschlag
-  (Vorher/Nachher) und speichert erst nach „Übernehmen“. Befehle: „Merke dir: …“, „Ändere …“, „Was weißt du über …?“,
-  „Wie vollständig ist mein Brain?“.
+  (Vorher/Nachher) und speichert erst nach „Übernehmen“. Befehle: „Merke dir: …“, „Ändere …“ (bei einem offenen Punkt
+  gilt er mit „Übernehmen“ als geklärt), „Was weißt du über …?“, „Wie vollständig ist mein Brain?“, „Was ist noch
+  offen?“. Eine kurze Folgefrage („Und Akupunktur?“) nimmt die vorige Frage und deren Quellen mit.
 - **Ohne KI (Demo-Modus und `npm run brain`)** antwortet ein Assistent, der nur wörtlich aus den gefundenen Einträgen
   zitiert (`brain-suche.js`). Grundsatz: lieber eine Lücke als eine Antwort am Thema vorbei – die Regeln stehen im
-  `BRAIN-BAUPLAN.md` §4, ein Katalog von rund 80 Fragen in `worker/test/brain-fragen.test.js`. Er gleicht Tippfehler
-  aus („Öfnungszeiten“), kennt Wortfelder („anrufen“ ↔ „Telefon“) und lehnt medizinische Rat-Fragen ab.
+  `BRAIN-BAUPLAN.md` §4 und §5.4. Er gleicht Tippfehler aus („Öfnungszeiten“), kennt Wortfelder („anrufen“ ↔ „Telefon“),
+  Wochentags-Spannen („Mo–Do“), trennt Thema und Eigenschaft („Was kostet Atemtherapie?“ bekommt nicht den Preis der
+  Osteopathie) und hängt den passenden offenen Punkt an. **Kernregel vor Brain:** Bitten um medizinischen Rat lehnt er
+  ab, und Einträge, die selbst einen Rat enthalten (Medikament, Dosis, Diagnose), zitiert er nie – auch wenn so etwas
+  über „Merke dir“ oder einen Import ins Brain geraten ist. Festgeschrieben in `worker/test/brain-fragen.test.js`
+  (rund 90 Fragen über den echten Weg) und im Katalog der Prüfrunde mit 262 Fragen
+  (`worker/test/brain-fragenkatalog.json`; nach einer gewollten Änderung der Antwortlogik neu festschreiben mit
+  `GABI_KATALOG_SCHREIBEN=1 npx vitest run test/brain-fragen.test.js` und den Unterschied durchsehen).
 
 **Wo liegt das Brain?** Nur auf diesem Gerät: IndexedDB `gabi-brain` (Demo getrennt: `gabi-brain-demo`), sonst
 localStorage, zur Not nur im Tab (mit Hinweis). Zwei offene Tabs überschreiben sich nicht (jede Änderung prüft den
@@ -326,6 +333,8 @@ PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/eingabefelder.mjs [scr
 # Brain (npm run brain muss laufen, Port 8790; Chromium + WebKit, Handy/Laptop, Hell/Dunkel, reduzierte Bewegung):
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/brain.mjs [screenshots/brain] [http://localhost:8790]
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/brain-leistung.mjs [http://localhost:8790]   # 100/300/500 Knoten
+# Nachprüfungen zu Prüfrunde 1 – je Gebiet eine Datei, jeder Check gehört zu einem behobenen Fund:
+for t in tests/brain-r1-*.mjs; do PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node "$t" http://localhost:8790 || break; done
 node dev/brain_seed_erzeugen.mjs           # brain-seed.js neu schreiben (Wissensdatei, Kernregeln, Register, Roadmap geändert)
 npx wrangler deploy --dry-run -c wrangler.brain.toml   # Staging-Worker baut (ohne Deploy)
 ```

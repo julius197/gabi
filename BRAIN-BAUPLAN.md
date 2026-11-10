@@ -149,32 +149,54 @@ meldet Änderungen (`beiAenderung`) und rechnet Abgeleitetes (Auto-Kanten, Rück
 ## 4 `brain-suche.js`
 
 ```js
-GabiBrainSuche.normal(text)            // klein, ä→ae ö→oe ü→ue ß→ss, Akzente weg, Satzzeichen → Leerzeichen, „E-Mail(-Adresse)“ → ein Wort
-GabiBrainSuche.woerter(text)           // Wortstämme ohne Füllwörter (leichtes deutsches Stemming)
-GabiBrainSuche.inhaltsStaemme(text)    // dasselbe mit Wiederholungen – das, was ein Knoten inhaltlich „sagt“
-GabiBrainSuche.frageWoerter(frage, bestand?)   // → { such, zusatz, roh }: Inhaltswörter (Tippfehler am Bestand ausgeglichen),
-                                       //   eindeutige Wendungen („seit wann“ → Gründung); ohne Inhaltswort wird das Fragewort zur
-                                       //   Frage („Wo seid ihr?“ → Standort); zusatz = schwache Hinweise aus Fragewörtern
-GabiBrainSuche.passung(suchwort, wort) // 1 gleich · 0,7 Wortanfang/Endung · 0,45 Wortteil, Bestimmungswort, verwandt · 0 sonst
+GabiBrainSuche.normal(text)            // klein, ä→ae ö→oe ü→ue ß→ss, Akzente weg, Satzzeichen → Leerzeichen, „E-Mail(-Adresse)“ und
+                                       //   „10er-Karte“ → je ein Wort
+GabiBrainSuche.woerter(text)           // Wortstämme ohne Füllwörter (leichtes deutsches Stemming; auch gebeugte Füllwörter fallen weg)
+GabiBrainSuche.mitgemeint(text)        // nur für den Vergleich: „Mo–Do“ → mo di mi do · „Rücken- und Schulterschmerzen“ → auch
+                                       //   „Rückenschmerzen“ · „Kinesio-Tape“ → auch „Kinesiotape“
+GabiBrainSuche.inhaltsStaemme(text)    // Wortstämme mit Wiederholungen samt Mitgemeintem – das, was ein Knoten inhaltlich „sagt“
+GabiBrainSuche.frageWoerter(frage, bestand?)   // → { such, zusatz, roh, gross }: Inhaltswörter (Gruß und Anrede vorn abgetrennt,
+                                       //   Tippfehler am Bestand ausgeglichen), eindeutige Wendungen („seit wann“ → Gründung,
+                                       //   „Habt ihr … auf?“ → Öffnungszeit); ohne Inhaltswort wird das Fragewort zur Frage („Wo seid
+                                       //   ihr?“ → Standort); zusatz = schwache Hinweise aus Fragewörtern („wer“ → Team);
+                                       //   gross = mitten im Satz großgeschriebene Wörter (Hauptwörter, Namen)
+GabiBrainSuche.passung(suchwort, wort) // gerichtet: 1 gleich · 0,7 getippter Wortanfang, nur eine Endung mehr, das Gefragte ist das
+                                       //   Grundwort · 0,45 nur das Bestimmungswort („Bewegungsbad“ ↔ „Bewegung“), Wortteil, verwandt · 0
 GabiBrainSuche.erstelleIndex(knoten)   // BM25 über Titel (×3), Tags (×2), Inhalt (×1)
-GabiBrainSuche.suchen(index, anfrage, { limit = 20, praefix = true })   // → [{ id, punkte, woerter, deckung, stark, imTitel }]
+GabiBrainSuche.suchen(index, anfrage, { limit = 20, praefix = true })   // → [{ id, punkte, woerter, deckung, stark, imTitel, je }]
                                        //   Wortfeld-Treffer („anrufen“ ↔ „Telefon“) zählen schwächer, gelten aber als gefunden
 GabiBrainSuche.filtern(knoten, filter, { nutzung, jetzt })              // filter: { arten, status, tag, zuKlaeren, veraltet, nieVerwendet, verwendet }
-GabiBrainSuche.kontextWaehlen({ frage, knoten, kanten, maxKnoten = 8, maxZeichen = 6000 })
-   // → [{ id, art, status, titel, inhalt, tags }]  beste Treffer + Nachbarn (1 Sprung), nur praxiswissen/frage/vorlage,
-   //   nie Patienten/Notizen/Berichte, nie Papierkorb; Inhalte gekürzt (je Knoten höchstens 1500 Zeichen, [[Verweise]] bleiben)
+GabiBrainSuche.kontextWaehlen({ frage, knoten, kanten, maxKnoten = 8, maxZeichen = 6000, dazu = [] })
+   // → [{ id, art, status, titel, inhalt, tags }]  je Suchwort die zwei besten Träger, dazu was insgesamt passt, „dazu“ (höchstens
+   //   drei ausdrücklich genannte Einträge – die Quellen der vorigen Antwort bei einer Folgefrage), Nachbarn (1 Sprung), dann
+   //   freie Plätze mit weiteren wörtlichen Treffern; nur praxiswissen/frage/vorlage, nie Patienten/Notizen/Berichte, nie Papierkorb;
+   //   Inhalte gekürzt (je Knoten höchstens 1500 Zeichen, [[Verweise]] bleiben)
+GabiBrainSuche.zielFinden(text, knoten) // welchen Eintrag meint „die Telefonzeiten“? Er muss ein Wort in Titel oder Tags tragen – sonst null
 GabiBrainSuche.antwortAusKontext(frage, kontextKnoten, { nebensache = [] })
-   // Demo-Assistent, rein extraktiv → { text, quellen: [id], luecke: "" | "<Frage>" }
+   // Assistent ohne KI, rein extraktiv → { text, quellen: [id], luecke: "" | "<Frage>" }
 ```
 
-**Regeln der Antwort ohne KI** (`antwortAusKontext`, Fragenkatalog in `worker/test/brain-fragen.test.js`):
-1. Die Antwort muss die Frage ganz abdecken: Jedes Inhaltswort steht deutlich in einem der genannten Knoten – der beste
-   Knoten trägt, was in ihm steht, weitere nur, was sie in Titel oder Tags tragen. Sonst Lücke.
-2. Eine Eigenschaft (Preis, Zeiten, Adresse, Kontakt …) zählt nur beim gefragten Thema selbst oder als offener Punkt
-   („Was kostet Akupunktur?“ wird nicht mit dem Preis der Osteopathie beantwortet).
-3. Wörter für die Praxis selbst („Praxis“, über `nebensache` auch ihr Name) müssen nicht vorkommen.
-4. Fehlt etwas, steht aber ein offener Punkt genau zum Thema im Brain: „Das ist im Brain noch offen: …“ (keine Lücke).
-5. Entwürfe: „Laut Entwurf (noch nicht bestätigt) – …“. Höchstens drei Wissens-Einträge und zwei offene Punkte.
+**Regeln der Antwort ohne KI** (`antwortAusKontext`). Grundsatz: lieber eine Lücke als eine Antwort am Thema vorbei.
+Festgeschrieben in `worker/test/brain-fragen.test.js` (über den echten Weg durch `demo.js`), dazu der Katalog der
+Prüfrunde mit 262 Fragen (`worker/test/brain-fragenkatalog.json`) und Regel-Tests an erfundenen Einträgen
+(`worker/test/brain-suche.test.js`).
+1. **Worum es gehen muss:** die Inhaltswörter der Frage. Nicht nötig sind „Praxis“/„Patient“, der Name der Praxis
+   (`nebensache`), Zahlen und Allerweltsverben („behandelt“). Bleibt nur „Praxis“ übrig („Wie ist die Praxis?“), gibt es
+   keine geratene Antwort – außer die Frage nennt wörtlich ein Etikett („Für wen ist die Praxis?“ ↔ Zeile „Für wen: …“).
+2. **Thema und Eigenschaft:** Eine Eigenschaft (Preis, Zeiten, Wochentag, Adresse, Kontakt, Dauer …) zählt nur beim
+   gefragten Thema – im Eintrag zum Thema, in derselben Aufzählungs-Position („…, Osteopathie (85 €), …“ nennt keinen
+   Preis für die Atemtherapie) oder als offener Punkt. Ein Wissens-Eintrag kommt nur in die Antwort, wenn er das ganze
+   Thema trägt (bei mehreren Themenwörtern wörtlich, nicht über ein Wortfeld).
+3. **Unbekanntes:** Ein großgeschriebenes Wort, das nirgends im Brain steht („… mit Sauna?“), macht die Frage zur Lücke.
+4. **Offene Punkte:** Fehlt etwas, steht aber ein offener Punkt genau dazu im Brain: „Das ist im Brain noch offen: …“
+   bzw. nach dem Wissen „Noch offen im Brain: …“ (keine Lücke). Fehlt die gefragte Eigenschaft ganz, bleibt es bei dem
+   einen Eintrag zum Thema plus offenem Punkt – oder es ist eine Lücke.
+5. **Wenig Ballast:** höchstens drei Wissens-Einträge und zwei offene Punkte. Führt der beste Eintrag das Thema im Titel,
+   kommen keine dazu, die es nur im Text erwähnen (außer das Fragewort zeigt auf sie: „Wer macht …?“ → Team). Wer nach
+   einer Nummer fragt, bekommt den Eintrag mit der Nummer. „X und Y“ → je Thema ein Eintrag. Übersichts-Einträge
+   („Dazu gehören: A, B“) bringen bis zu drei genannte Einträge mit.
+6. **Kennzeichnung:** Entwürfe „Laut Entwurf (noch nicht bestätigt) – …“. Jede Zeile der Antwort steht wörtlich in einer
+   der genannten Quellen.
 
 **Kürzung und Änderungsvorschläge:** Der Kontext kürzt lange Einträge. Ein Änderungsvorschlag ersetzt den ganzen Inhalt –
 deshalb bietet `brain-gespraech.js` ihn nur an, wenn der Server den Eintrag ungekürzt gesehen hat, und übernimmt ihn nur
@@ -236,7 +258,25 @@ Alte Oberflächen ignorieren sie (`quellen` ohne `notizen`, unbekanntes `t`).
 
 ### 5.4 Demo und lokal ohne KI-Schlüssel
 `demo.js` bekommt `brain` (den Kontext) und `brainAntwort` (= `GabiBrainSuche.antwortAusKontext`) hereingereicht und
-antwortet bei Praxisfragen nur daraus – mit denselben Ereignissen `quellen` und `luecke`.
+antwortet bei Praxisfragen nur daraus – mit denselben Ereignissen `quellen` und `luecke`. Reihenfolge im Brain-Zweig
+(alles nur mit Brain-Kontext; ohne Schalter bleibt der Assistent, wie er war):
+1. „Merke dir: …“ → Vorschlag für einen neuen Eintrag. „Ändere X: Y“ → Vorschlag für den Eintrag, der X in Titel oder Tags
+   trägt (`zielFinden`); keiner → Hinweis statt Vorschlag; Kernregeln, Persona und Regeln werden im Gespräch nie geändert.
+   Bei einem offenen Punkt ersetzt Y den Platzhalter; mit „Übernehmen“ gilt er als geklärt.
+2. Gruß und Dank am Anfang abtrennen – der Rest ist die Frage.
+3. **Kernregel vor Brain, zwei Riegel:** (a) Die FRAGE bittet um medizinischen Rat (`istRatFrage`: Medikament immer;
+   Beschwerde zusammen mit einer Bitte um Rat; ohne Beschwerde nur, wenn es nicht um Angebot, Zeiten oder Abläufe geht)
+   → die Absage, keine Quelle, keine Lücke. (b) Ein EINTRAG enthält selbst einen Rat (`RAT_IN_ANTWORT`: Medikament,
+   Dosis, „Diagnose:“, Empfehlung zu einer Beschwerde) → er wird nicht zitiert; der Rest des Brains antwortet weiter;
+   träfe die Frage nur ihn, kommt die Absage.
+4. Fragen zur Bedienung des Brains → feste Antwort. Fragen nach Patienten ohne Kürzel („Wer hatte …?“) → Notiz-Suche.
+   Der eigene Tag („Was steht heute an?“, „Welche Termine habe ich heute?“) → Tagesüberblick.
+5. Alles andere, was nach der Praxis fragt (auch mit „Termin“ oder „heute“) → Antwort aus dem Kontext oder Lücke.
+   Bloße Stichwörter ohne Treffer suchen erst in den Notizen.
+
+**Folgefragen** (`brain-gespraech.js`): Hat eine Nachricht höchstens ein Inhaltswort („Und Akupunktur?“), sucht die vorige
+Frage mit, und die Quellen der vorigen Antwort gehen als `dazu` noch einmal mit. **„Was ist noch offen?“** beantwortet
+die Oberfläche selbst (Liste der offenen Punkte), ebenso „Wie vollständig ist mein Brain?“ und „Was weißt du über …?“.
 
 ## 6 `brain-graph.js`
 
