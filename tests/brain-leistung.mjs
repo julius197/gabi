@@ -27,6 +27,9 @@ function rate(zeiten, von, bis) {
 async function messung(browser, motor, knoten, { handy = false } = {}) {
   const ctx = await browser.newContext({ viewport: handy ? { width: 390, height: 844 } : { width: 1440, height: 900 }, isMobile: handy, hasTouch: handy, deviceScaleFactor: handy ? 3 : 2 });
   await ctx.addInitScript(() => {
+    // Test-Browser bleiben stumm: keine Sprachausgabe (macOS ignoriert dafür --mute-audio)
+    const attrappe = { speak() {}, cancel() {}, pause() {}, resume() {}, getVoices: () => [], speaking: false, pending: false, paused: false, addEventListener() {}, removeEventListener() {} };
+    try { Object.defineProperty(window, "speechSynthesis", { value: attrappe, configurable: true }); } catch { /* egal */ }
     window.__zeiten = [];
     const f = (t) => { window.__zeiten.push(t); requestAnimationFrame(f); };
     requestAnimationFrame(f);

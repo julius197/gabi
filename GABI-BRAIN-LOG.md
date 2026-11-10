@@ -69,6 +69,21 @@ Tests: `cd ~/Desktop/gabi-brain/worker && npm test`. Lokaler Brain-Server: `npm 
    Gesprächen): Das Brain ist mühsam gepflegtes Wissen und liegt im lokalen Modus nur auf diesem Gerät.
 10. **Wissensdatei hat 7 „TODO prüfen“-Punkte** (der Auftrag nennt 6; der siebte ist „Parken und Barrierefreiheit“).
     Jeder wird ein eigener Zu-klären-Knoten.
+11. **Gemeinsames Bearbeiten braucht zuerst Benutzerkonten und Rollen (Admin = Philipp).** Heute gibt es einen
+    einzigen gemeinsamen Zugangscode: Läge das Brain schon in Supabase, könnte jede Person mit dem Code das Wissen
+    der ganzen Praxis ändern oder löschen – und niemand sähe, wer es war. Deshalb bleibt das Brain im Prototyp auf dem
+    Gerät. Die Supabase-Variante (`supabase/migrations/brain.sql`, Routen `/api/brain…`, serverseitiger Abruf
+    `worker/src/brain_abruf.js`) ist nur Code hinter zwei Schaltern (`BRAIN_SPEICHER`, `BRAIN_QUELLE`, beide AUS);
+    die Rollen-Vorlage (RLS) steht auskommentiert am Ende der SQL-Datei. Reihenfolge der Umstellung: README
+    „Brain in Supabase (Entwurf)“.
+12. **Ziehen im Graph = „ruhig“:** Beim Ziehen eines Knotens wandern nur seine direkten Nachbarn weich mit; das übrige
+    Bild bleibt stehen (kein „Wackelpudding“ über den ganzen Graphen). Losgelassene Knoten sind fixiert (Nadel im
+    Detail löst sie wieder). Kanten haben keine Pfeilspitzen (ruhigeres Bild; die Richtung steht im Detail unter
+    „Verweise“ und „Rückverweise“).
+13. **Eigene Adressen je Reiter** (`#/brain/graph`, `/liste`, `/luecken`, `/faehigkeiten`); `#/brain` öffnet die
+    zuletzt genutzte Hauptansicht (am Handy beim ersten Mal die Liste). So funktionieren Zurück-Taste und Links.
+14. **Brain-Server lokal auf Port 8790** (`npm run brain`), getrennt von `npm run lokal`/`vorschau` (8788) – so kann
+    Julius' Vorschau der Live-Version weiterlaufen, während er das Brain ansieht.
 
 ## Vorkommnisse
 
@@ -102,3 +117,8 @@ angeben, nie auf die Standard-Adresse verlassen.
 ## Später / „kann“
 
 - Eingebaute Zitate der Anthropic-API statt Markerzeilen (satzgenaue Quellen) – erst mit Schlüssel im Staging erproben.
+- Nutzungs-Spur (`meta.audit`) bei zwei gleichzeitig schreibenden Tabs: der letzte gewinnt, einzelne Einträge der
+  Spur können fehlen (nur Anzeige „wann wurde welche Fähigkeit genutzt“, kein Wissen betroffen).
+- Supabase-Entwurf: Stapel (Seed/Import) und Verlauf laufen in Einzelschritten – für den echten Betrieb gehört der
+  Stapel in eine Postgres-Funktion (eine Transaktion).
+- Graph: Pfeilspitzen an den Kanten als Option; „Treffer hervorheben“ bewegt die Kamera bewusst nicht.
