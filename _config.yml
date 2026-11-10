@@ -4,6 +4,10 @@
 exclude:
   - README.md
   - GABI-V2-LOG.md
+  - GABI-BRAIN-LOG.md
+  - BRAIN-BAUPLAN.md
+  - ASSISTENT-ROADMAP.md
+  - FAEHIGKEIT-VORLAGE.md
   - MORGEN.md
   - NACHTLOG.md
   - knowledge
