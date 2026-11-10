@@ -248,6 +248,37 @@ keine Patienten/Notizen im Brain-Speicher, Kontext oder Export; Graph 60 Bilder/
 | H11 | sollte | Lade-Platzhalter nicht in Echt-Höhe: die Bühne springt um 134 px (Handy) bzw. 34 px (Laptop); Werkzeuge im Lade- und Fehlerzustand ohne Wirkung | bestätigt | in Arbeit |
 | H12 | kann | Kleinere Punkte für Hilfstechnik und Verständlichkeit (Sammelpunkt) | bestätigt | später („kann“) |
 
+### Antwortqualität – zweite Überarbeitung (`f214213`, `2b1b7d2`, `cae374e`)
+
+Der Prüfer hat 262 Praxisfragen gestellt und gewertet: 93 richtig, 49 richtig mit Ballast, **60 zu Unrecht eine
+Lücke**, 33 verfehlt, 20 zu Recht eine Lücke, 7 zu Unrecht beantwortet. Dazu das „muss“ (A1/S1): Rat-Fragen wurden nur
+bei sechs Frageformen abgelehnt, und ein Eintrag mit Medikamentenempfehlung wurde wörtlich zitiert.
+
+| Was | Vorher (`6dd9047`) | Jetzt |
+|---|---|---|
+| Bitte um medizinischen Rat (35 Formen, z. B. „Was tun bei Rückenschmerzen?“, „Hab ich einen Tumor?“) | 6 Muster abgelehnt, sonst Lücke oder Zitat | 35 von 35 abgelehnt; 31 ähnlich klingende Praxisfragen („Darf ich samstags trainieren?“) nicht |
+| Eintrag mit Medikament/Dosis/Diagnose im Brain | wurde wörtlich zitiert | wird nie zitiert; der Rest des Brains antwortet weiter; träfe die Frage nur ihn: Absage |
+| 60 zu Unrecht gemeldete Lücken (Wochentage, „In welchem …“, Gruß vor der Frage, „Rücken- und Schulterschmerzen“, „Wer sitzt im Büro?“ …) | Lücke – und als falsche Wissenslücke gemerkt | 57 Antworten, 3 passende offene Punkte |
+| 7 zu Unrecht beantwortete Fragen („Habt ihr ein Bewegungsbad?“ → „Bewegung“) | Antwort am Thema vorbei | 6 Lücken; 1 bewusst belassen („Wie viele Therapeuten habt ihr?“ → das Team beim Namen) |
+| Preis einer Leistung ohne Preis („Was kostet Atemtherapie?“) | der Preis der Osteopathie | der Eintrag zum Thema und „Noch offen im Brain: Was kosten die übrigen Leistungen …“ |
+| „Termin“, „heute“, Gruß, „Bericht“ in einer Praxisfrage | Tagesüberblick bzw. Begrüßung, das Brain wurde nie gefragt | Antwort aus dem Brain; der eigene Tag („Welche Termine habe ich heute?“) bleibt der Überblick |
+| „Ändere die Mittagspause: …“ (kein solcher Eintrag) | Vorschlag für irgendeinen Eintrag | Hinweis, kein Vorschlag; Kernregeln/Persona/Regeln im Gespräch nie |
+| „Ändere die Öffnungszeiten: …“ + „Übernehmen“ | Eintrag blieb „zu klären“, Antwort weiter „nicht angegeben“ | Platzhalter ersetzt, mit „Übernehmen“ bestätigtes Praxiswissen |
+| Folgefrage „Und Akupunktur?“ (Weg mit KI) | Kontext nur aus diesen zwei Wörtern | vorige Frage sucht mit, Quellen der vorigen Antwort gehen mit |
+| „Was ist noch offen?“ | ein zufälliger Treffer zum Wort „offen“ | Liste der offenen Punkte |
+| Quellen je Antwort (Ballast) | bis 3, oft unpassende dazu | im Schnitt 1,4; 156 von 233 Antworten mit genau einer Quelle |
+
+Tests: Der Fragenkatalog läuft jetzt über den echten Weg (Demo-API statt `antwortAusKontext` direkt – das hatte der
+Prüfer bemängelt). Die 262 Fragen stehen als festgeschriebener Stand in `worker/test/brain-fragenkatalog.json`.
+**Gegenproben:** `f214213` gegen `6dd9047`: 61 Unit-Tests rot · `2b1b7d2` gegen den Stand davor: 3 neue Unit-Tests rot,
+Browser-Checks `tests/brain-r1-antwort.mjs` gegen `6dd9047` 19 von 33 rot (am neuen Stand 66/66 in beiden Engines) ·
+`cae374e` gegen den Stand davor: 11 rot. Eigene Nachprüfung der neuen Rat-Riegel fand neun Praxisfragen, die fälschlich
+abgelehnt wurden – in `cae374e` behoben.
+
+Grenze, die bleibt: Der Assistent ohne KI versteht keine Bedeutung, nur Wörter, Wortfelder und Regeln. Die Riegel gegen
+medizinischen Rat sind Muster – sie decken die geprüften Formen ab, nicht jede denkbare. Im Weg mit Claude steht die
+Kernregel im Systemprompt des Workers (dort unverändert); mit dem echten Modell ist das nicht erprobt (kein Schlüssel).
+
 ## Vorkommnisse
 
 **Fehlalarm „Anfrage an den Live-Worker“ (10.11., ca. 15:50) – nachgeprüft, nichts passiert.**
@@ -292,3 +323,42 @@ angeben, nie auf die Standard-Adresse verlassen.
   nie eine Lücke · ein gescheitertes Rückgängig verwirft den Schritt.
 - Antwort ohne KI: Fragen, deren Antwort nur sinngemäß im Brain steht („Nehmt ihr Privatpatienten?“ ↔ „Privatpraxis“),
   werden eine Lücke – das kann erst das echte Modell.
+
+**Aus Prüfrunde 1 – alle 20 „kann“-Funde (gegengeprüft, bewusst nicht eingebaut):**
+- *Worker, Marker-Filter (A12, S7):* „Lücke: keine“ wird als Lücke „keine“ gemerkt; „Quellen: K1 (Titel), K2“ verliert
+  K1; die Listenform („- K1“) bleibt sichtbar; ein vom Modell zitierter Eintrag-Satz, der mit „Lücke:“ beginnt, gilt als
+  Marker. Erst mit dem echten Modell im Staging ansehen, ob es so schreibt (Vorschläge der Prüfer liegen vor; „Marker nur
+  am Ende“ widerspräche getestetem Verhalten).
+- *Worker (S6):* Brain-Titel stehen ungekapselt im Gesprächsverlauf (nach Interview-Antwort, nach Vorschlagskarte) –
+  entschärfen (Anführungszeichen und Klammern heraus, kürzen), nicht weglassen.
+- *Abmelden (S8):* Die Notfall-Kopie einer ungespeicherten Bearbeitung bleibt nach dem Abmelden ohne Häkchen im Tab
+  liegen, obwohl der Dialog „geht verloren“ sagt.
+- *Härtung (S9):* Drei Zahlenfelder aus der Ablage gehen ohne `esc()` ins HTML (nur über eine von Hand veränderte
+  Browser-Datenbank erreichbar, CSP sperrt Inline-Skripte).
+- *Datensparsamkeit (S10):* Die Brain-Ansicht lädt die ganze Notizliste mit Inhalten, braucht aber nur Datum und
+  Kürzel – braucht eine schlanke Liste vom Worker (Worker-Änderung, erst nach Freigabe).
+- *Tests (S11):* `tests/ziel.mjs` wertet den ersten Treffer `apiUrl:` – auch aus einem Kommentar in `config.js`.
+- *Regeln (S12):* Ab der siebten bestätigten Regel und über 400 Zeichen geht nichts mehr an Gabi – ohne Hinweis im
+  Eintrag.
+- *Modell (D7–D9):* Import → Rückgängig → Wiederholen lässt Einträge im Papierkorb, die der Import herausgeholt hatte ·
+  Seed nachziehen: ein importierter Knoten mit Seed-Kennung wird überschrieben, zwei Tabs gleichzeitig frieren einen
+  neuen Seed-Knoten ein, Entfallenes bleibt bestätigt · zwei Tabs können im selben Augenblick denselben Titel anlegen
+  (danach lässt sich keiner ändern, bis einer umbenannt ist).
+- *Papierkorb-Dialog (D10):* Rückmeldungen verschwinden sofort; nach „Papierkorb leeren“ im anderen Tab zeigt er
+  weiter die alten Zeilen.
+- *Supabase-Entwurf (D11):* Der serverseitige Abruf bildet keine Kanten aus `[[Verweisen]]` und kürzt Persona/Regeln
+  anders als der Browser (Entwurf hinter zwei Schaltern, beide AUS).
+- *Seed (D12):* Der Osteopathie-Preis steht in zwei Knoten (eigener Eintrag und Sammelpunkt) – nach einer
+  Preisänderung in einem der beiden nennt Gabi je nach Frage den alten. Die Doppelung ist im Zerlegungsplan Absicht
+  („jeder Punkt wörtlich“); der Umzug wäre eine bewusste Abkehr davon → Entscheidung für Julius/Philipp.
+- *Graph (G8–G12):* `zerstoeren()` lässt einen Auflösungs-Horcher hängen (rund 12 MB je Abmelden, bis zum Neuladen) ·
+  die Drossel der Pixeldichte kann im letzten Bild einer Bewegung die Fläche leer lassen · am Handy decken Labels
+  kleine Knoten zu, eine Zoomstufe weiter gibt es keine Labels · nach einer Größenänderung des Fensters wird nicht neu
+  eingepasst · das Aufleuchten der Gabi-Spur kann außerhalb des Ausschnitts liegen.
+- *Hilfstechnik, Sammelpunkt (H12):* Bereiche hinter den Reitern ohne `role=tabpanel` · Menü „Mehr“ bleibt bei Tab
+  offen · Optionen der Palette mit eigenem Tab-Stopp · `aria-controls` zeigt zugeklappt ins Leere · der Griff heißt
+  im Editor auch vergrößert „Vergrößern“ · die Status-Radiogruppe speichert bei jedem Pfeiltastendruck · der Kopf zählt
+  43 Einträge, die Liste 53 (mit Test-Patienten und Kernregeln) · im Filter stehen zwei Chips „Zu klären“ nebeneinander
+  · in Chromium leert Esc in der Befehlspalette erst nur das Feld.
+- *Antwort ohne KI, eigene Beobachtung:* „Was soll ich zum Training anziehen?“ bekommt die Absage – das alte Muster
+  „was soll ich“ aus v2.1 greift vor dem Brain-Zweig (ohne Schalter soll sich nichts ändern, deshalb belassen).
