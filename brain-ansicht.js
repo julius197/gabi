@@ -85,18 +85,53 @@
       z.notizInhalt.clear();
     }
 
+    const imPapierkorb = (id) => Boolean(z.brain && id) && z.brain.papierkorb().some((p) => p.knoten.id === id);
     let externUhr = null;
-    function vonAnderemTab() {
+    function vonAnderemTab(d) {
+      if (d && d.art === "geleert") { geleertAnderswo(); return; }
       clearTimeout(externUhr);
       externUhr = setTimeout(async () => {
         if (!z.brain) return;
         try { await z.brain.neuLaden(); } catch { /* beim nächsten Öffnen */ }
         const b = z.bearbeitung;
-        if (b && b.id) {
+        if (b && b.id && z.brain) {
           const k = z.brain.eigene().find((x) => x.id === b.id);
-          if (!k || k.rev !== b.rev) { b.extern = true; formHinweise(); }
+          // anderswo in den Papierkorb gelegt: eigener Hinweis mit Ausweg (wiederherstellen und speichern) – nicht „… geändert“
+          const imKorb = !k && imPapierkorb(b.id);
+          if (imKorb !== Boolean(b.imKorb) || !k || k.rev !== b.rev) { b.imKorb = imKorb ? "fenster" : false; b.extern = true; formHinweise(); }
         }
       }, 80);
+    }
+
+    /**
+     * In einem anderen Fenster wurde beim Abmelden das Brain-Wissen dieses Geräts gelöscht. Dieses Fenster arbeitete sonst
+     * ohne Erklärung auf der geleerten Datenbank weiter („0 Einträge“), und ein hier angelegter Eintrag stünde danach allein
+     * da. Deshalb: Bearbeitung beenden (samt Notfall-Kopie), offene Brain-Dialoge und Rückfragen schließen, das Brain
+     * schließen (mit ihm die Rückgängig-Liste) und sagen, was passiert ist. Geladen wird erst wieder auf Tipp – dann beginnt
+     * das Brain mit dem Ausgangsstand; bis dahin antwortet Gabi ohne Brain.
+     */
+    function geleertAnderswo() {
+      clearTimeout(externUhr);
+      if (!z.brain && !z.laedt) return; // hier ist kein Brain offen
+      const verworfen = ungespeichert();
+      bearbeitungEnde();
+      SP.notfall({ demo: Boolean(z.demo) }).loeschen(); // auch wenn das Brain hier noch lädt
+      for (const d of Object.values(dialoge)) if (d.open) d.close();
+      const rueckfrage = wurzel.hidden ? null : document.querySelector("#dialog-frage[open]");
+      if (rueckfrage) rueckfrage.close(); // eine offene Rückfrage aus dem Brain gilt als „Abbrechen“
+      schliessen();
+      z.gebaut = false;
+      wurzel.innerHTML = ""; // Reiter, Menü und Liste des gelöschten Brains nicht stehen lassen
+      const zu = Promise.reject(new Error("Brain anderswo gelöscht"));
+      zu.catch(() => {}); // bereit() liefert dieses „nicht geladen“, bis jemand auf „Neu laden“ tippt
+      Object.assign(z, {
+        laedt: zu, fehler: "Das Brain wurde in einem anderen Fenster gelöscht.",
+        fehlerText: "Beim Abmelden dort wurde das Brain-Wissen von diesem Gerät entfernt. Lädst du es neu, beginnt es wieder beim Ausgangsstand – ohne deine eigenen Einträge.",
+        fehlerKnopf: "Neu laden",
+      });
+      if (!wurzel.hidden) app.adresseSetzen(reiterHash(), { ersetzen: true });
+      toast(`Das Brain wurde in einem anderen Fenster gelöscht.${verworfen ? " Deine ungespeicherte Änderung ist damit verworfen." : ""}`, { art: "warn", dauer: 7000 });
+      zeichnen();
     }
 
     /** Brain für den laufenden Betrieb (Demo oder echt) bereitstellen – einmal je Betriebsart. */
@@ -289,7 +324,7 @@
     // ---------- Kopf: Gesundheit ----------
     function kopfZeichnen() {
       const ziel = $("#brain-gesundheit");
-      if (!z.brain) { ersetzen(ziel, '<div class="skelett brain-skelett-kopf"></div>'); return; }
+      if (!z.brain) { ersetzen(ziel, '<div class="skelett brain-skelett-kopf"></div>'); $("#brain-hinweis").hidden = true; return; }
       const g = z.brain.gesundheit();
       const umfang = 2 * Math.PI * 18;
       const voll = (umfang * g.prozent) / 100;
@@ -722,7 +757,7 @@
     // ---------- Bearbeiten ----------
     function bearbeitenStarten(k, vorgabe = null) {
       z.bearbeitung = {
-        id: k ? k.id : "", rev: k ? k.rev : 0, geaendert: Boolean(vorgabe && vorgabe.geaendert), fehler: {}, konflikt: false, extern: false, schluessel: `${k ? k.id : "neu"}-${Date.now()}`,
+        id: k ? k.id : "", rev: k ? k.rev : 0, geaendert: Boolean(vorgabe && vorgabe.geaendert), fehler: {}, konflikt: false, extern: false, imKorb: false, schluessel: `${k ? k.id : "neu"}-${Date.now()}`,
         felder: { art: "praxiswissen", titel: "", inhalt: "", tags: [], status: "entwurf", quelle: "", ...(k ? { art: k.art, titel: k.titel, inhalt: k.inhalt, tags: [...(k.tags || [])], status: k.status, quelle: k.quelle } : {}), ...((vorgabe && vorgabe.felder) || {}) },
       };
       z.vorschau = false;
@@ -800,8 +835,10 @@
         if (feld && feld.setAttribute) feld.setAttribute("aria-invalid", String(Boolean(text)));
       }
       const h = form.querySelector("#brain-form-hinweis");
-      h.hidden = !(b.konflikt || b.extern);
-      if (b.konflikt) h.innerHTML = `<div class="hinweis-box warn"><div class="hinweis-box-kopf">${symbol("warn")}<span>Dieser Eintrag wurde inzwischen in einem anderen Fenster geändert.</span></div><div class="knopf-reihe links"><button class="knopf sekundaer klein" type="button" data-brain="konflikt-meine">Meine Fassung speichern</button><button class="knopf leise klein" type="button" data-brain="konflikt-andere">Verwerfen und neu laden</button></div><p class="brain-klein">Die andere Fassung bleibt im Versionsverlauf erhalten.</p></div>`;
+      h.hidden = !(b.imKorb || b.konflikt || b.extern);
+      // Der Eintrag liegt inzwischen im Papierkorb: sagen, wo er ist, und den Ausweg anbieten – das Getippte bleibt stehen
+      if (b.imKorb) h.innerHTML = `<div class="hinweis-box warn"><div class="hinweis-box-kopf">${symbol("warn")}<span id="brain-korb-text">Dieser Eintrag wurde ${b.imKorb === "fenster" ? "in einem anderen Fenster" : "inzwischen"} gelöscht – er liegt im Papierkorb.</span></div><div class="knopf-reihe links"><button class="knopf sekundaer klein" type="button" data-brain="korb-meine" aria-describedby="brain-korb-text">Wiederherstellen und speichern</button></div><p class="brain-klein">Der Eintrag kommt aus dem Papierkorb zurück – mit deiner Fassung.</p></div>`;
+      else if (b.konflikt) h.innerHTML = `<div class="hinweis-box warn"><div class="hinweis-box-kopf">${symbol("warn")}<span>Dieser Eintrag wurde inzwischen in einem anderen Fenster geändert.</span></div><div class="knopf-reihe links"><button class="knopf sekundaer klein" type="button" data-brain="konflikt-meine">Meine Fassung speichern</button><button class="knopf leise klein" type="button" data-brain="konflikt-andere">Verwerfen und neu laden</button></div><p class="brain-klein">Die andere Fassung bleibt im Versionsverlauf erhalten.</p></div>`;
       else if (b.extern) h.innerHTML = `<div class="hinweis-box neutral"><div class="hinweis-box-kopf">${symbol("info")}<span>In einem anderen Fenster wurde dieser Eintrag gerade geändert. Beim Speichern fragt Gabi nach.</span></div></div>`;
     }
 
@@ -823,29 +860,68 @@
       z.wiederherstellbar = null;
       if (z.bearbeitung) return;
       const k = d.id ? z.brain.eigene().find((x) => x.id === d.id) : null;
-      if (d.id && !k) { z.notfall.loeschen(); return; }
-      bearbeitenStarten(k, { felder: d.felder, geaendert: true });
-      if (k && k.rev !== d.rev) { z.bearbeitung.extern = true; formHinweise(); }
+      // Liegt der Eintrag inzwischen im Papierkorb (in einem anderen Fenster gelöscht), geht die Kopie nicht verloren: Die
+      // Bearbeitung kommt mit dem Hinweis zurück, dass er dort liegt. Nur endgültig Gelöschtes hat keinen Eintrag mehr.
+      const imKorb = d.id && !k ? (z.brain.papierkorb().find((p) => p.knoten.id === d.id) || {}).knoten || null : null;
+      if (d.id && !k && !imKorb) { z.notfall.loeschen(); return; }
+      bearbeitenStarten(k || imKorb, { felder: d.felder, geaendert: true });
+      if (imKorb) { z.bearbeitung.imKorb = true; formHinweise(); } else if (k && k.rev !== d.rev) { z.bearbeitung.extern = true; formHinweise(); }
       toast("Deine ungespeicherte Änderung ist wieder da.", { dauer: 5000 });
     }
 
-    async function speichern({ erzwingen = false } = {}) {
+    async function speichern({ erzwingen = false, ausKorb = false } = {}) {
       const b = z.bearbeitung;
       if (!b || b.speichert) return;
+      // Der Eintrag liegt inzwischen im Papierkorb (anderes Fenster, Rückgängig): weder still zurückholen noch mit „gibt es
+      // nicht mehr“ in der Sackgasse enden – nachfragen (Knopf im Hinweis). Das Getippte bleibt stehen.
+      if (b.id && !ausKorb && imPapierkorb(b.id)) {
+        b.imKorb = b.imKorb || true;
+        b.konflikt = false;
+        formHinweise();
+        const ausweg = wurzel.querySelector('.brain-form [data-brain="korb-meine"]');
+        if (ausweg) ausweg.focus();
+        return;
+      }
+      if (!ausKorb) b.imKorb = false; // nicht (mehr) im Papierkorb, z. B. hier über „Wiederholen“ zurückgeholt: der Hinweis gilt nicht mehr
       b.speichert = true;
       const knopf = wurzel.querySelector('.brain-form button[type="submit"]');
       if (knopf) knopf.disabled = true;
       let r;
+      let zurueckgeholt = false;
       try {
-        if (b.id) {
-          const aktuell = z.brain.eigene().find((x) => x.id === b.id);
-          r = await z.brain.aendern(b.id, b.felder, { erwartet: erzwingen && aktuell ? aktuell.rev : b.rev });
-        } else r = await z.brain.anlegen(b.felder);
+        if (b.id && ausKorb) {
+          // „Wiederherstellen und speichern“: erst aus dem Papierkorb holen (ohne eigenen Rückgängig-Schritt – der Schritt ist
+          // die Änderung danach), dann die eigene Fassung auf den wiederhergestellten Stand speichern
+          const alt = (z.brain.papierkorb().find((p) => p.knoten.id === b.id) || {}).knoten || null;
+          const w = await z.brain.wiederherstellen(b.id, { mitUndo: false });
+          if (z.bearbeitung !== b || !z.brain) return; // inzwischen beendet (z. B. das Brain wurde anderswo gelöscht)
+          if (w.ok) {
+            zurueckgeholt = Boolean(alt);
+            b.rev = w.knoten.rev;
+            b.extern = false;
+            b.konflikt = false;
+            // Trägt inzwischen ein anderer Eintrag den Titel, kommt dieser mit Zusatz zurück („… (wiederhergestellt)“): Das
+            // Formular übernimmt ihn, wenn der Titel hier nicht geändert wurde – sonst scheiterte das Speichern am Titel
+            if (alt && w.knoten.titel !== alt.titel && B.schluessel(b.felder.titel) === B.schluessel(alt.titel)) {
+              b.felder.titel = w.knoten.titel;
+              const feld = wurzel.querySelector('.brain-form [name="titel"]');
+              if (feld) feld.value = w.knoten.titel;
+            }
+          } else r = w;
+          b.imKorb = imPapierkorb(b.id) ? b.imKorb || true : false;
+        }
+        if (!r) {
+          if (b.id) {
+            const aktuell = z.brain.eigene().find((x) => x.id === b.id);
+            r = await z.brain.aendern(b.id, b.felder, { erwartet: erzwingen && aktuell ? aktuell.rev : b.rev });
+          } else r = await z.brain.anlegen(b.felder);
+        }
       } finally {
         b.speichert = false;
         if (knopf) knopf.disabled = false;
       }
       if (z.bearbeitung !== b) return;
+      if (ausKorb) formHinweise(); // der Hinweis „liegt im Papierkorb“ passt jetzt nicht mehr (oder wieder)
       if (r.konflikt) {
         if (!r.aktuell) { bearbeitungEnde(); z.auswahl = ""; toast("Dieser Eintrag wurde in einem anderen Fenster gelöscht.", { art: "warn" }); app.adresseSetzen(reiterHash(), { ersetzen: true }); zeichnen(); return; }
         b.konflikt = true; formHinweise(); return;
@@ -864,7 +940,8 @@
       if (z.auswahl !== r.knoten.id) { z.auswahl = r.knoten.id; app.adresseSetzen(`#/brain/${r.knoten.id}`, { ersetzen: !neu }); }
       zeichnen();
       if (neu && z.graph && z.reiter === "graph") z.graph.zentrieren(r.knoten.id);
-      toast(r.unveraendert ? "Nichts geändert." : `Gespeichert${r.umbenannt ? ` – ${r.umbenannt === 1 ? "1 Verweis" : `${r.umbenannt} Verweise`} angepasst` : ""}.`, r.unveraendert ? {} : { art: "erfolg", aktion: { text: "Rückgängig", tun: rueckgaengig } });
+      if (zurueckgeholt) toast(r.unveraendert ? `„${r.knoten.titel}“ ist wieder da.` : "Wiederhergestellt und gespeichert.", r.unveraendert ? { art: "erfolg" } : { art: "erfolg", aktion: { text: "Rückgängig", tun: rueckgaengig } });
+      else toast(r.unveraendert ? "Nichts geändert." : `Gespeichert${r.umbenannt ? ` – ${r.umbenannt === 1 ? "1 Verweis" : `${r.umbenannt} Verweise`} angepasst` : ""}.`, r.unveraendert ? {} : { art: "erfolg", aktion: { text: "Rückgängig", tun: rueckgaengig } });
     }
 
     // ---------- [[Verweise]] beim Tippen vorschlagen ----------
@@ -977,7 +1054,7 @@
     async function klick(e) {
       const ziel = e.target.closest("[data-brain]");
       if (!ziel || !wurzel.contains(ziel) || !z.brain) {
-        if (ziel && ziel.dataset.brain === "neu-laden") { z.laedt = null; z.fehler = ""; z.fehlerText = ""; z.fehlerKnopf = ""; zeichnen(); bereit(); }
+        if (ziel && ziel.dataset.brain === "neu-laden") { z.laedt = null; z.fehler = ""; z.fehlerText = ""; z.fehlerKnopf = ""; zeichnen(); bereit().then(() => abgeleitetAuffrischen(true)).catch(() => {}); }
         return;
       }
       const aktion = ziel.dataset.brain;
@@ -1033,6 +1110,7 @@
         }
         case "vorschlag": { const feld = wurzel.querySelector("#brain-inhalt"); if (feld) vorschlagNehmen(feld, wert); break; }
         case "konflikt-meine": if (z.bearbeitung) { z.bearbeitung.konflikt = false; speichern({ erzwingen: true }); } break;
+        case "korb-meine": if (z.bearbeitung) speichern({ ausKorb: true }); break;
         case "konflikt-andere": bearbeitungEnde(); zeichnen(); break;
         case "status": if (k && wert !== k.status) { const r = await z.brain.statusSetzen(k.id, wert); if (!r.ok) toast(fehlerText(r), { art: "warn", dauer: 6000 }); else toast(`Status: ${statusName(wert)}.`, { art: "erfolg", dauer: 3000, aktion: { text: "Rückgängig", tun: rueckgaengig } }); } break;
         case "loeschen": {
@@ -1263,6 +1341,7 @@
             d.close();
             const alle = k.dataset.korb === "leeren";
             const ok = await frage(alle ? "Papierkorb leeren?" : "Endgültig löschen?", alle ? "Alle Einträge im Papierkorb werden endgültig gelöscht. Das lässt sich nicht rückgängig machen." : "Dieser Eintrag wird endgültig gelöscht. Das lässt sich nicht rückgängig machen.", { ja: "Endgültig löschen", gefahr: true });
+            if (!z.brain) return; // während der Rückfrage in einem anderen Fenster gelöscht: nichts mehr zu zeigen
             if (ok) { const r = alle ? await z.brain.papierkorbLeeren() : await z.brain.endgueltigLoeschen(id); if (!r.ok) toast(fehlerText(r), { art: "warn" }); }
             fuellen();
             d.showModal();
@@ -1425,9 +1504,12 @@
       wurzel.innerHTML = "";
       if (!loeschen) return true;
       const ergebnisse = await Promise.all([SP.resteLoeschen({ demo: false }), SP.resteLoeschen({ demo: true })].map((p) => p.catch(() => false)));
-      const kanal = SP.kanal(false, () => {});
-      kanal.senden({ art: "geleert" });
-      setTimeout(() => kanal.schliessen(), 500);
+      // offene Fenster beider Betriebsarten: gelöscht ist das echte Brain UND das Demo-Brain (siehe geleertAnderswo)
+      for (const demo of [false, true]) {
+        const kanal = SP.kanal(demo, () => {});
+        kanal.senden({ art: "geleert" });
+        setTimeout(() => kanal.schliessen(), 500);
+      }
       return ergebnisse.every(Boolean);
     }
     /** Demo: „Beispieldaten zurücksetzen“. */
