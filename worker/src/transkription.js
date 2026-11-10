@@ -2,11 +2,17 @@
 
 export const WHISPER_MODELL = "@cf/openai/whisper-large-v3-turbo";
 
-// Fachvokabular als Hinweis für Whisper (kurz halten: Whisper nutzt nur ~224 Tokens Prompt)
+// Fachbegriffe als Hinweis für Whisper (gegen Hörfehler wie „Terra-Abend“ statt „Theraband“).
+// Kurz halten: Whisper nutzt nur die letzten ~224 Tokens – dieser Text hat 150 (mit dem Whisper-Tokenizer gezählt).
+// Nur eine Liste – keine Sätze und keine Ziffern: Bei Stille gibt Whisper manchmal das Ende des Hinweises wieder.
+// Ein Echo über 40 Zeichen fängt halluzination() ab, ein kürzeres nicht – es darf deshalb nie eine Dosierung
+// („3 mal 12“) sein, die dann erfunden im Entwurf stünde. Der Text endet wie früher mit einem harmlosen Wort.
+// Grenze: Mit condition_on_previous_text: false wirkt der Hinweis nur im ersten 30-s-Fenster einer Aufnahme.
 export const WHISPER_PROMPT =
-  "Physiotherapeutische Behandlungsnotiz auf Deutsch. Fachbegriffe: Krankengymnastik, manuelle Therapie, " +
-  "Lymphdrainage, Mobilisation, Triggerpunkt, Faszien, HWS, BWS, LWS, ISG, NRS, Flexion, Extension, Abduktion, " +
-  "Außenrotation, Innenrotation, Rotatorenmanschette, Kreuzband, Bandscheibenvorfall, Wiederholungen.";
+  "Physiotherapeutische Behandlungsnotiz auf Deutsch. Fachbegriffe: Krankengymnastik, Manuelle Therapie, " +
+  "Lymphdrainage, Mobilisation, Triggerpunkt, Faszien, Theraband, Beinpresse, Kompression, Kühlung, Hausaufgaben, " +
+  "Patella, am Kniegelenk, Oberschenkel, Schulter, Rotatorenmanschette, Kreuzband, Bandscheibenvorfall, HWS, BWS, LWS, " +
+  "ISG, NRS, Flexion, Extension, Abduktion, Außenrotation, Innenrotation, Sätze, Wdh., Wiederholungen.";
 
 // Typische Whisper-Halluzinationen bei Stille (aus Notara kern.py übernommen)
 const HALLUZINATIONEN = [

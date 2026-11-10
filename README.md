@@ -13,6 +13,11 @@ gruppiert nach Heute/Gestern/Letzte 7 Tage/Älter, eigene Adresse `#/gespraech/<
 Notiz), Abmelden in fester Reihenfolge (nie eine Anfrage ohne Code), Fokus in Safari, ruhige Platzhalter – dazu 13
 weitere aus der Gegenprüfung (v. a. Abmelden mit zwei offenen Tabs) und 1 aus der Nachprüfung (Korrektur am Entwurf
 nach einem Netzfehler in zwei Tabs, siehe Log).
+**v2.1.2:** Eingabefeld ohne Anschnitt – der Cursor am Zeilenanfang wurde an der runden Kante des Eingaberahmens
+abgeschnitten (Chromium und Safari); jetzt 18 px Innenabstand im Textfeld selbst, Platzhalter bei 320 px einzeilig mit
+„…“. Worker 2.0.1: Whisper bekommt die Physio-Fachbegriffe als Hinweis, die Strukturierung korrigiert Hörfehler nur bei
+eindeutig passendem Fachbegriff (sonst „(unklar)“, jede Korrektur unter „Bitte prüfen“), und Gabi ergänzt nie Geschlecht,
+Alter oder andere Merkmale, die nicht in der Notiz stehen.
 
 > **Testversion – nur Testdaten.** Keine Klarnamen, keine echten Patientendaten. Kürzel brauchen deshalb eine Ziffer (z. B. `TP-01`).
 > Gabi stellt keine Diagnosen und gibt keine Therapieempfehlungen; sie antwortet nur aus gespeicherten Notizen und der Wissensdatei.
@@ -56,6 +61,7 @@ supabase/schema.sql             Tabellen patients_test + notes, RLS an (v2 brauc
 supabase/seed_test.sql          NUR TESTDATEN: 3 erfundene Test-Patienten mit je 2 Notizen
 supabase/reset_test.sql         ⚠️ löscht ALLE Notizen und Test-Patienten, dann Stand von seed_test.sql (nur von Hand, nach OK)
 tests/v2.mjs                    Ende-zu-Ende-Tests (Playwright): Handy/Laptop × Hell/Dunkel, Robustheit, echte lokale API, Safari
+tests/eingabefelder.mjs         Eingabefelder ohne Anschnitt (Cursor, Text, Platzhalter per Bildvergleich) – Block 5 von v2.mjs
 screenshots/                    Screenshots aus tests/v2.mjs
 ```
 
@@ -119,6 +125,8 @@ node dev/seed_erzeugen.mjs                 # seed_test.sql neu schreiben, wenn d
 node dev/wissen_erzeugen.mjs               # src/wissen.js neu schreiben, wenn knowledge/physioworks.md geändert wurde
 # Ende-zu-Ende (npm run lokal muss laufen; Playwright mit Chromium + WebKit):
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/v2.mjs [diktat.wav] [screenshots/]
+# nur die Eingabefelder (Chromium + WebKit, 320/390/1440, Hell/Dunkel; einzeln: GABI_MOTOREN=chromium GABI_BREITEN=320):
+PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/eingabefelder.mjs [screenshots/eingabefelder] [http://localhost:8788]
 ```
 
 ## Einrichtung (einmalig)
@@ -183,7 +191,7 @@ Prüfen: `https://gabi-api.<konto>.workers.dev/api/status` zeigt `"bereit": true
   Größenlimits (Aufnahme ≤ 5 Minuten, JSON ≤ 300 KB, Gespräch ≤ 40 Nachrichten, höchstens 6 Werkzeug-Runden),
   Eingaben werden auf Typ geprüft.
 
-## Was geht · was fehlt (Stand v2.1.1)
+## Was geht · was fehlt (Stand v2.1.2)
 **Geht:** Gesprächsverlauf (mehrere Gespräche, nur auf dem Gerät, eigene Adressen, Umbenennen, Löschen, Limit 50),
 Gesprächs-erste Oberfläche mit Schnellaktionen, Push-to-Talk (Finger, Maus, Leertaste; Wegziehen verwirft),
 Antworten live mit Tipp-Animation, Quellen, Kopieren, Vorlesen, Stopp, Wiederholen; Diktat → Entwurf → Bearbeiten →

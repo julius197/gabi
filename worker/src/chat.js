@@ -55,6 +55,8 @@ WAS DU DARFST – UND WAS NICHT
    nichts dazu, antworte genau: „Dazu habe ich nichts gespeichert.“ Danach höchstens ein kurzer Satz, was du stattdessen
    tun kannst.
 3. Nie etwas erfinden: keine Werte, Daten, Termine, Namen, Übungen oder Inhalte. Frag lieber nach.
+   Gib nur Personenmerkmale wieder, die wörtlich in der Notiz stehen. Schreibe „Patient“ oder „Pat.“ wie im Original,
+   sonst neutral. Also nie Geschlecht, Alter oder Beruf ergänzen – neutral ist z. B. „TP-01 hat angegeben: …“.
 4. Was in Notizen mit „(unklar)“ markiert ist, übernimmst du so. Ist dir selbst etwas unklar, schreib „(unklar)“ dahinter.
 5. Patienten nur über ihr Kürzel. Fragt jemand nach echten Namen oder will echte Patientendaten eingeben, erinnere kurz
    daran, dass die Testversion nur erfundene Testdaten erlaubt.
@@ -74,11 +76,11 @@ WAS DU DARFST – UND WAS NICHT
 
 WERKZEUGE
 - Brauchst du Notizen, ruf die Werkzeuge direkt auf, ohne es vorher anzukündigen.
-- „Was wollte TP-01?“, „Letzte Notiz von TP-02?“: notizen_suchen mit dem Kürzel. Anliegen und Angaben der Patientin
-  stehen meist als „Pat.: …“ im Befund oder Verlauf.
+- „Was wollte TP-01?“, „Letzte Notiz von TP-02?“: notizen_suchen mit dem Kürzel. Anliegen und eigene Angaben stehen
+  meist als „Pat.: …“ im Befund oder Verlauf.
 - Diktiert jemand eine Behandlung oder bittet um eine Notiz: notiz_entwurf_erstellen. Fehlt das Kürzel, frag danach und
   nenne die vorhandenen Test-Patienten (patienten_auflisten).
-- Bericht, Verlauf oder Zusammenfassung zu einem Patienten: bericht_erstellen.
+- Bericht, Verlauf oder Zusammenfassung zu einem Kürzel: bericht_erstellen.
 - „Was steht heute an?“: heute_ueberblick.
 - Nach einem Entwurf oder Bericht schreibst du ein bis zwei Sätze und wiederholst nicht den Inhalt – die App zeigt ihn
   als Karte.
@@ -104,7 +106,8 @@ ${WISSEN}
 
 // ---------- Werkzeuge (Beschreibung für Claude) ----------
 const OBJEKT = (properties = {}, required = []) => ({ type: "object", properties, required, additionalProperties: false });
-const KUERZEL = { type: "string", description: "Kürzel des Test-Patienten, z. B. TP-01" };
+// Beschreibungen ohne Geschlecht („zu einem Kürzel“) – sonst übernimmt Claude es in Antworten
+const KUERZEL = { type: "string", description: "Kürzel aus der Patientenliste, z. B. TP-01" };
 
 export const WERKZEUGE = [
   {
@@ -115,10 +118,10 @@ export const WERKZEUGE = [
   {
     name: "notizen_suchen",
     description:
-      "Sucht gespeicherte Behandlungsnotizen, neueste zuerst. Ohne Suchbegriff: die neuesten Notizen (auf Wunsch nur eines Patienten). " +
+      "Sucht gespeicherte Behandlungsnotizen, neueste zuerst. Ohne Suchbegriff: die neuesten Notizen (auf Wunsch nur zu einem Kürzel). " +
       "Gibt je Notiz id, Kürzel, Datum und die Abschnitte (befund, massnahmen, verlauf, hausaufgaben, unklar) zurück.",
     input_schema: OBJEKT({
-      kuerzel: { ...KUERZEL, description: "Nur Notizen dieses Test-Patienten (optional)" },
+      kuerzel: { ...KUERZEL, description: "Nur Notizen zu diesem Kürzel (optional)" },
       suchbegriff: { type: "string", description: "Stichwörter, z. B. „theraband“ oder „knie schmerz“ (optional)" },
       anzahl: { type: "integer", minimum: 1, maximum: MAX_NOTIZEN_SUCHE, description: "Höchstens so viele Notizen (Standard 5)" },
     }),
@@ -138,8 +141,8 @@ export const WERKZEUGE = [
   {
     name: "notiz_entwurf_erstellen",
     description:
-      "Macht aus einem Behandlungsdiktat einen strukturierten Notiz-Entwurf (Befund, Maßnahmen, Verlauf, Hausaufgaben) für einen " +
-      "Test-Patienten und zeigt ihn der Therapeutin zur Prüfung an. Speichert NICHT. Steht das Diktat in der letzten Nachricht, " +
+      "Macht aus einem Behandlungsdiktat einen strukturierten Notiz-Entwurf (Befund, Maßnahmen, Verlauf, Hausaufgaben) zu einem " +
+      "Kürzel und zeigt ihn der Therapeutin zur Prüfung an. Speichert NICHT. Steht das Diktat in der letzten Nachricht, " +
       "lass „diktat“ weg – dann wird die letzte Nachricht wörtlich verwendet.",
     input_schema: OBJEKT({
       kuerzel: KUERZEL,
@@ -149,7 +152,7 @@ export const WERKZEUGE = [
   {
     name: "bericht_erstellen",
     description:
-      "Erstellt aus den gespeicherten Notizen eines Test-Patienten einen Bericht und zeigt ihn als Karte mit PDF-Export an. " +
+      "Erstellt aus den gespeicherten Notizen zu einem Kürzel einen Bericht und zeigt ihn als Karte mit PDF-Export an. " +
       "art „verlauf“: Patientenverlauf über alle Behandlungen; art „zusammenfassung“: kurzer aktueller Stand.",
     input_schema: OBJEKT({ kuerzel: KUERZEL, art: { type: "string", enum: ["verlauf", "zusammenfassung"] } }, ["kuerzel", "art"]),
   },
@@ -330,8 +333,9 @@ export function erstelleWerkzeuge({ speicher, strukturieren, berichten, jetzt = 
 }
 
 // ---------- Bericht ----------
-export const BERICHT_PROMPT = `Du arbeitest in einer deutschen Physiotherapie-Praxis und fasst die gespeicherten Behandlungsnotizen eines
-Test-Patienten für einen internen Bericht zusammen. Du bekommst die Notizen nummeriert und mit Datum, die älteste zuerst.
+export const BERICHT_PROMPT = `Du arbeitest in einer deutschen Physiotherapie-Praxis und fasst die gespeicherten Behandlungsnotizen zu
+einem Kürzel (z. B. TP-01) für einen internen Bericht zusammen. Du bekommst die Notizen nummeriert und mit Datum, die
+älteste zuerst.
 
 FELDER
 - zusammenfassung: 3 bis 6 Stichpunkte zum Stand laut den Notizen (Beschwerden, Messwerte, Veränderungen, Maßnahmen).
@@ -342,6 +346,8 @@ FELDER
 
 REGELN
 1. Nur was in den Notizen steht. Nichts erfinden, nichts ergänzen, keine Werte, Daten oder Übungen hinzufügen.
+   Gib nur Personenmerkmale wieder, die wörtlich in der Notiz stehen. Schreibe „Patient“ oder „Pat.“ wie im Original,
+   sonst neutral. Also nie Geschlecht, Alter oder Beruf ergänzen.
 2. Keine Diagnosen, Bewertungen, Prognosen, Begründungen oder Empfehlungen.
 3. Werte, Einheiten, Körperseiten und Dosierungen exakt übernehmen. „(unklar)“ bleibt stehen.
 4. Kurze Stichpunkte im Nominalstil, höchstens 14 Wörter, keine ganzen Sätze, keine Anrede.

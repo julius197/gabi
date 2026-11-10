@@ -20,6 +20,23 @@ describe("Prompt", () => {
     expect(SYSTEM_PROMPT).not.toContain("(laut Notiz)");
   });
 
+  it("Hörfehler: nur korrigieren, wenn eindeutig ein Fachbegriff passt – sonst „(unklar)“; jede Korrektur unter „Bitte prüfen“", () => {
+    const p = SYSTEM_PROMPT.replace(/\s+/g, " ");
+    const regel = p.slice(p.indexOf(" 9. "), p.indexOf(" 10. ")); // Regel 9 im Abschnitt UNKLARES
+    expect(p.indexOf("UNKLARES")).toBeLessThan(p.indexOf(" 9. "));
+    for (const teil of [
+      "Offensichtliche Hörfehler nur korrigieren, wenn eindeutig ein Fachbegriff passt", "„Terra-Abend“ → „Theraband“",
+      "jede solche Korrektur in unklar melden", "Form: „„erkanntes Wort“ als „Fachbegriff“ gelesen“",
+      "Passt kein Fachbegriff eindeutig, nicht raten", "so übernehmen, wie es im Transkript steht, „(unklar)“ dahinter, in unklar melden",
+      "„A12 (unklar)“, nicht „3 × 12“", "nichts dazuerfinden",
+    ]) {
+      expect(regel).toContain(teil);
+    }
+    // „unklar“ zeigt die App als „Bitte prüfen“; das Beispiel meldet seine Korrektur in genau dieser Form
+    const beispiel = JSON.parse(SYSTEM_PROMPT.slice(SYSTEM_PROMPT.indexOf("Antwort:\n") + 9, SYSTEM_PROMPT.indexOf("\n\nAntworte ausschließlich")));
+    expect(beispiel.unklar).toContain("„Lümfdrainage“ als „Lymphdrainage“ gelesen");
+  });
+
   it("das Beispiel im Prompt ist gültig und passt zum Schema", () => {
     const beispiel = SYSTEM_PROMPT.slice(SYSTEM_PROMPT.indexOf("Antwort:\n") + 9, SYSTEM_PROMPT.indexOf("\n\nAntworte ausschließlich"));
     const daten = JSON.parse(beispiel);

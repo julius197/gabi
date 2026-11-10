@@ -1,20 +1,23 @@
 // Gabi als Assistent: Werkzeug-Auswahl und -Ausführung, Lesen der KI-Antworten (Strom, Ersatzmodell, Ablehnung),
 // Prüfung der Anfragen, NDJSON-Strom der Route /api/chat, Bericht, Praxiswissen.
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import Anthropic from "@anthropic-ai/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CODE, ENV, neueApp } from "./hilfen.js";
 import { chatAnfrage } from "../src/app.js";
 import { GRENZEN } from "../src/begrenzer.js";
 import {
-  ABGELEHNT, BERICHT_SCHEMA, CHAT_PROMPT, MAX_NACHRICHTEN, WERKZEUGE, WerkzeugFehler, berichtBauen, claudeBericht, claudeChat,
+  ABGELEHNT, BERICHT_PROMPT, BERICHT_SCHEMA, CHAT_PROMPT, MAX_NACHRICHTEN, WERKZEUGE, WerkzeugFehler, berichtBauen, claudeBericht, claudeChat,
   erstelleWerkzeuge, fuerVerlauf, notizenAlsText, tagBerlin,
 } from "../src/chat.js";
 import { StrukturFehler, kiFehlerLoggen } from "../src/strukturierung.js";
 import { arbeitsspeicher } from "../src/speicher.js";
-import { normalisieren } from "../src/notiz.js";
+import { SYSTEM_PROMPT, normalisieren } from "../src/notiz.js";
 import { WISSEN } from "../src/wissen.js";
 import { ZIEL, wissenJs } from "../dev/wissen_erzeugen.mjs";
+
+const DEMO = createRequire(import.meta.url)("../../demo.js"); // Demo-Assistent (lokal ohne KI-Schlüssel)
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -370,7 +373,7 @@ describe("Route /api/chat", () => {
   it("Status meldet Version 2 und die neuen Funktionen", async () => {
     const { rufe } = neueApp();
     const d = await (await rufe("/api/status", { code: null })).json();
-    expect(d.version).toBe("2.0.0");
+    expect(d.version).toBe("2.0.1");
     expect(d.funktionen).toEqual(["notizen", "chat", "bericht"]);
   });
 });
@@ -554,5 +557,81 @@ describe("Gespräch mit Claude (Anthropic-API nachgebildet)", () => {
     const abgelehnt = await claudeBericht(ENV_KI)({ notizen: [a], art: "verlauf" }).catch((e) => e);
     expect(abgelehnt).toBeInstanceOf(WerkzeugFehler);
     expect(abgelehnt).not.toBeInstanceOf(StrukturFehler);
+  });
+});
+
+// ---------- Personenmerkmale: nur wie in der Notiz, kein Geschlecht dazudichten ----------
+describe("Personenmerkmale wie in der Notiz („Patient“ bleibt „Patient“)", () => {
+  const REGEL = "Gib nur Personenmerkmale wieder, die wörtlich in der Notiz stehen. Schreibe „Patient“ oder „Pat.“ wie im Original, sonst neutral.";
+  const flach = (t) => String(t).replace(/\s+/g, " ");
+  const ENV_KI = { ANTHROPIC_API_KEY: "sk-test", ANTHROPIC_MODELL: "claude-opus-5-5", ANTHROPIC_EFFORT: "low" };
+
+  it("die Regel steht wörtlich in allen Prompts: Gespräch, Bericht, Strukturierung", () => {
+    for (const prompt of [CHAT_PROMPT, BERICHT_PROMPT, SYSTEM_PROMPT]) {
+      expect(flach(prompt)).toContain(REGEL);
+      expect(flach(prompt)).toContain("Also nie Geschlecht, Alter oder Beruf ergänzen");
+    }
+  });
+
+  it("kein einseitiges Geschlecht als Vorgabe in Prompts und Werkzeug-Beschreibungen", () => {
+    const texte = {
+      gespraech: CHAT_PROMPT.replace(WISSEN, ""), // Praxiswissen ist Material von der Website
+      bericht: BERICHT_PROMPT,
+      struktur: SYSTEM_PROMPT,
+      werkzeuge: JSON.stringify(WERKZEUGE),
+    };
+    for (const [name, text] of Object.entries(texte)) {
+      const rest = flach(text).replace(REGEL, "").replace(/\b(der|die) Patientin oder (der|des|dem|den) Patienten?\b/g, ""); // Paar ist neutral
+      expect(rest, name).not.toMatch(/\bPatientin\b/);
+      expect(rest, name).not.toMatch(/\b(der|des|dem|ein|einem|einen|eines|dieses|diesem)\s+(Test-)?Patient(en)?\b/);
+    }
+  });
+
+  // „Was wollte TP-01?“ durch die echte Route /api/chat; Claude nachgebildet: sucht, liest die Notiz, antwortet
+  for (const [original, anders] of [["Patient", "Patientin"], ["Patientin", "Patient"]]) {
+    it(`Notiz mit „${original}“: Regel im System, Notiz wörtlich im Werkzeug-Ergebnis, nirgends „${anders}“ von uns`, async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const { rufe, speicher } = neueApp({ chatten: claudeChat(ENV_KI) });
+      const p = await speicher.neuerPatient({ kuerzel: "TP-01", pseudonym: "Testfall Knie rechts (fiktiv)" });
+      const rohtext = `${original} kommt mit Schmerzen beim Treppensteigen. ${original} möchte wieder joggen.`;
+      const strukturiert = normalisieren({ befund: ["Pat.: Schmerzen beim Treppensteigen"], verlauf: [`${original} möchte wieder joggen`] });
+      const n = await speicher.neueNotiz({ patient_id: p.id, rohtext, strukturiert, suchtext: "tp-01" });
+      fetchMock
+        .mockResolvedValueOnce(sse([{ type: "tool_use", id: "toolu_s", name: "notizen_suchen", input: { kuerzel: "TP-01" } }], "tool_use"))
+        .mockResolvedValueOnce(sse([{ type: "tool_use", id: "toolu_l", name: "notiz_lesen", input: { id: n.id } }], "tool_use"))
+        .mockResolvedValueOnce(sse([{ type: "text", text: "TP-01 hat angegeben: Schmerzen beim Treppensteigen." }], "end_turn"));
+      const z = await zeilen(await rufe("/api/chat", { methode: "POST", body: { nachrichten: [{ rolle: "nutzer", text: "Was wollte TP-01?" }] } }));
+      expect(z.at(-1)).toEqual({ t: "fertig" });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+
+      const anfragen = fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body));
+      const fremd = new RegExp(`\\b${anders}\\b`); // „Patient“ trifft nicht „Patientin“ und umgekehrt
+      for (const a of anfragen) {
+        const system = flach(a.system.map((b) => b.text).join(" "));
+        expect(system).toContain(REGEL);
+        // Alles, was unser Code mitschickt: Prompt (ohne die Regel und das Knopf-Etikett „Neuer Test-Patient“), Werkzeuge, Gespräch
+        const unseres = [system.replace(REGEL, "").replace("„Neuer Test-Patient“", ""), JSON.stringify(a.tools), JSON.stringify(a.messages)].join("\n");
+        expect(unseres).not.toMatch(fremd);
+      }
+      // Die Notiz kommt wörtlich bei Claude an – Abschnitte aus der Suche, Diktat beim Lesen
+      const suche = JSON.parse(anfragen[1].messages[2].content[0].content);
+      expect(suche.notizen[0]).toMatchObject({ kuerzel: "TP-01", befund: strukturiert.befund, verlauf: strukturiert.verlauf });
+      const gelesen = JSON.parse(anfragen[2].messages[4].content[0].content);
+      expect(gelesen.diktat).toBe(rohtext);
+    });
+  }
+
+  it("Demo-Assistent (lokal ohne KI-Schlüssel): antwortet mit dem Kürzel, ohne Geschlecht dazuzudichten", async () => {
+    for (const original of ["Patient", "Patientin"]) {
+      const speicher = arbeitsspeicher();
+      const p = await speicher.neuerPatient({ kuerzel: "TP-01", pseudonym: "Testfall Knie rechts (fiktiv)" });
+      await speicher.neueNotiz({ patient_id: p.id, rohtext: `${original} kommt mit Schmerzen beim Treppensteigen.`, strukturiert: normalisieren({ befund: ["Pat.: Schmerzen beim Treppensteigen"] }), suchtext: "tp-01" });
+      const s = sammler();
+      await DEMO.demoGespraech({ letzte: "Was wollte TP-01?", werkzeuge: erstelleWerkzeuge({ speicher, strukturieren: vi.fn() }), senden: s.senden });
+      const antwort = s.ereignisse.filter((e) => e.t === "text").map((e) => e.d).join("");
+      expect(antwort).toMatch(/hat \*\*TP-01\*\* gesagt:\n- Schmerzen beim Treppensteigen$/);
+      expect(antwort).not.toMatch(/Patient/); // in der Notiz steht nur „Pat.:“ – also weder „Patient“ noch „Patientin“
+    }
   });
 });

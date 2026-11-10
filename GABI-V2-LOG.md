@@ -513,6 +513,112 @@ Die 10 „kann“-Funde stehen unter „Offen“ (Punkt 11).
 - Kein Test hat eine Anfrage an den Live-Worker oder die Live-Seite geschickt. Die Wache „keine Anfrage ohne Code“ blieb
   in allen Teilen leer.
 
+## v2.1.2 – Eingabefeld ohne Anschnitt, Fachwörter für Whisper, kein erfundenes Geschlecht (10.11.2026, Branch `gabi-v2-1-2`)
+
+Drei Aufträge von Julius (09./10.11.2026). Frontend 2.1.2 (`VERSION` und alle `?v=`) – nur auf dem Branch, nicht auf
+`main`, nicht live. Worker 2.0.1 – laut Auftrag nach grünen Tests deployt (siehe „Getestet“).
+
+### A – Eingabefeld „Frag Gabi oder diktiere …“: Cursor am Zeilenanfang angeschnitten
+
+**Ursache (gemessen per Bildvergleich – Bild mit Cursor minus Bild mit `caret-color: transparent`):**
+- Das Textfeld hatte keinen eigenen Innenabstand (`.eingabe-text { padding: 9px 0 }`). Die 16 px links saßen am Rahmen
+  `.eingabe` mit `border-radius: 26px`, der Text begann also genau an der Kante des Textfelds.
+- Dort schnitt eine runde Kante den Cursor am Zeilenanfang an – in Chromium und Safari, hell und dunkel, bei 320, 390 und
+  1440 px. Chromium: 11–12 statt 20 px hoch (Fläche 9,5 statt 20 px²). Safari: Fläche 25 statt 38 px². Er sah aus wie
+  ein „(“ auf dem „F“.
+- Belege: Rahmen ohne Rundung → voller Cursor. 2 px Innenabstand im Textfeld → voller Cursor. Nicht die Ursache:
+  `overflow` (Rahmen `visible`, Textfeld `auto`; `hidden` änderte nichts), `appearance`, `text-indent`, `transform`. Der
+  grüne Fokus-Ring ist ein äußerer Schatten und verschiebt nichts.
+- Zweiter Fund bei 320 px: Der Platzhalter (191 px breit) passte nicht in die Zeile (178 px). Er brach um, die zweite
+  Zeile lag unsichtbar unter dem Feld.
+- In Ordnung waren Zeilenhöhe und Auto-Höhe: `line-height` 1,4, oben und unten je 9 px, Höhe = Inhalt + Innenabstand. Bei
+  5 Zeilen gilt scrollHeight = clientHeight. „gyÄÖ“ war nie beschnitten.
+- Die anderen Eingabefelder mit derselben Messung: Suche im Notizordner, Umbenennen, Zugangscode, Entwurf bearbeiten,
+  Neuer Test-Patient. Alle ohne Anschnitt, ihr Text beginnt 12–44 px innerhalb des eigenen Felds. Dort nichts geändert.
+
+**Fix (`style.css`):**
+- `.eingabe-text { padding: 9px 18px }`, `.eingabe { padding-left: 0 }`. Der Innenabstand sitzt im Textfeld selbst, der
+  Text beginnt 18 px vom Rand (vorher 16 px).
+- `.aufnahme-anzeige` links 18 px statt 2 px. Die Aufnahme-Anzeige steht genau wie vorher.
+- Platzhalter immer einzeilig, zu Langes mit „…“: `::placeholder` nowrap/ellipsis, dazu `text-overflow: ellipsis` am
+  Textfeld, weil Chromium das „…“ von dort nimmt. Getippter Text bricht weiter um.
+  - Ab 353 px Breite steht der Platzhalter ganz da, darunter „Frag Gabi oder dik…“.
+  - Unter 360 px mit Fokus zeigt Chromium kein „…“. Dort blendet eine weiche Maske die letzten 18 px aus, statt hart
+    abzuschneiden. Das gilt nur für das leere Feld.
+
+**Test:** `tests/eingabefelder.mjs` (Block 5 von `tests/v2.mjs`, auch allein startbar). Chromium und WebKit, 320/390/1440,
+hell/dunkel. Gemessen wird:
+- Textanfang ≥ 16 px vom Rahmen, Innenabstand im Textfeld ≥ 18 px links und rechts.
+- Cursor am Zeilenanfang (leer und vor Text) so hoch und mindestens 85 % so groß wie ein freier Cursor.
+- „gyÄÖ“ so groß wie frei gesetzt.
+- Platzhalter einzeilig wie eine vom Browser sauber gekürzte Vergleichszeile; mit Fokus keine harte Kante rechts.
+- 5 Zeilen ohne inneres Scrollen, nirgends scrollWidth > clientWidth.
+- Dazu die fünf anderen Felder. Die Screenshots entstehen erst, wenn Fokus-Ring und Cursor zu sehen sind.
+
+Gegenproben:
+- Alter Stand (`style.css` von 0ee0e92, fertiger Test): 32 von 133 Prüfungen schlagen an. 12× Cursor am Zeilenanfang
+  (beide Engines, alle Breiten, hell/dunkel), 4× Platzhalter bei 320 px, 4× Platzhalter mit Fokus hart abgeschnitten,
+  12× Innenabstand. Die fünf anderen Felder bestehen auch dort – sie hatten das Problem nicht.
+- Ohne die Chromium-Zeile `text-overflow`: Chromium schlägt bei 320 px an (155 statt 150 px Tinte, hart abgeschnitten).
+
+### B – Fachwörter für Whisper (Worker 2.0.1)
+- `WHISPER_PROMPT` geht wie bisher als `initial_prompt` an Workers AI. Neu darin: alle 19 Begriffe aus dem Auftrag, dazu
+  „am Kniegelenk“. Länge 150 Tokens (Whisper liest höchstens ~224).
+  - Bewusst nur eine Liste, ohne Sätze und ohne Ziffern. Bei Stille gibt Whisper manchmal das Ende des Hinweises wieder.
+    Ein Echo über 40 Zeichen fängt der Filter ab, ein kürzeres nicht.
+  - Eine erste Fassung endete mit „3 mal 12 Wdh., 3 Sätze.“. Ein kurzes Echo davon wäre als erfundene Dosierung im Entwurf
+    gelandet (Fund der Gegenprüfung).
+  - Jetzt endet der Hinweis wie früher mit „Wiederholungen.“. Ein Unit-Test sichert: keine Ziffern im Hinweis.
+- Strukturierung, Regel 9 neu: Hörfehler nur korrigieren, wenn eindeutig ein Fachbegriff passt (z. B. „Terra-Abend“ →
+  „Theraband“), sonst wie im Transkript mit „(unklar)“ (z. B. „A12 (unklar)“, nicht „3 × 12“). Jede Korrektur steht unter
+  „Bitte prüfen“, nichts wird dazuerfunden. Hinweis: Der Auftrag nennt „unsichere Korrekturen“. Wir melden jede Korrektur –
+  sonst sähe die Therapeutin nie, was Gabi geändert hat.
+- Lokal vorher/nachher (synthetische Stimme Anna, mlx-whisper wie `dev/whisper_lokal.py`): „Kräftigung mit Teraband“
+  wurde zu „Kräftigung mit Theraband“, im kurzen und im 43-s-Diktat. „3 x 12“ bleibt „3 x 12“ – das ist richtig, nur eine
+  andere Schreibweise. Mit Ziffern im Hinweis stand dort „3 mal 12“. Den Hörfehler „A12“ und „mein Kniegelenk“ erzeugte die
+  Teststimme in keiner Fassung. Gibt es sie live, fängt Regel 9 sie ab: „A12 (unklar)“, unter „Bitte prüfen“.
+- Grenze: Mit `condition_on_previous_text: false` wirkt der Hinweis nur im ersten 30-s-Fenster einer Aufnahme (Whisper
+  setzt ihn danach zurück, lokal an einem 43-s-Diktat gesehen). Hörfehler später fängt Regel 9 ab („Bitte prüfen“). Siehe
+  „Offen“.
+
+### C – Gabi ergänzt kein Geschlecht
+- Ursache im Code: Im Chat-Prompt stand direkt bei der Beispielfrage „Was wollte TP-01?“ der Satz „Anliegen und Angaben
+  der Patientin stehen meist als „Pat.: …“ …“. Die Abschnitte der Notizen enthalten nur das neutrale „Pat.:“, das
+  Geschlecht kam also aus unserem Prompt. (Das Diktat einer Notiz geht beim Lesen mit; sagt es „Patientin“, darf Gabi das
+  übernehmen.)
+- Fix: Der Satz ist neutral („Anliegen und eigene Angaben …“). Die Regel steht jetzt in Chat-, Bericht- und
+  Strukturierungs-Prompt: „Gib nur Personenmerkmale wieder, die wörtlich in der Notiz stehen. Schreibe „Patient“ oder
+  „Pat.“ wie im Original, sonst neutral. Also nie Geschlecht, Alter oder Beruf ergänzen.“ Auch die Werkzeug-Beschreibungen
+  sind neutral („zu einem Kürzel“).
+- Tests (über die echte Route `/api/chat` mit nachgebauter Anthropic-API):
+  - Notiz mit „Patient“: Die Regel steht im System-Prompt, die Notiz kommt wörtlich an, nirgends „Patientin“ von uns.
+  - Dasselbe umgekehrt für „Patientin“.
+  - Kein Prompt und keine Werkzeug-Beschreibung gibt ein Geschlecht vor.
+  - Der Demo-Assistent ergänzt keins.
+- Grenze: Die Wortwahl des echten Modells lässt sich offline nicht testen. Geprüft ist, dass nichts von uns ein
+  Geschlecht vorgibt. → Julius, live:
+  - „Was wollte TP-02?“: In den Testdaten sagt das Diktat „Patient“, also darf kein „Patientin“ kommen.
+  - Umgekehrt „Was wollte TP-03?“: Dort steht „Patientin“.
+  - TP-01 eignet sich nicht, dessen Diktate sagen selbst „Patientin“.
+
+### Getestet (v2.1.2)
+- Unit-Tests: **159 grün** (149 + 10 neu: Whisper-Hinweis mit allen Begriffen und ohne Ziffern, Regel 9,
+  Personenmerkmale in allen Prompts und über die Route `/api/chat`, Demo-Assistent, Version 2.0.1).
+- Lokaler Gesamtlauf `tests/v2.mjs`: **564 von 564 grün** – die 431 bisherigen und 133 neue in Block 5 (Eingabefelder),
+  in Chromium und WebKit. Kein Test hat eine Anfrage an den Live-Worker geschickt.
+- Probe-Build des Workers (`wrangler deploy --dry-run`) sauber. Das Frontend v2.1 (live) liest aus `/api/status` nur
+  „bereit“, nicht die Version – Worker 2.0.1 passt dazu.
+- Gegenprüfung (eine Runde, Workflow: 4 Prüfer – Oberfläche, Prompts, Whisper, Tests/Sicherheit – und je Bereich ein
+  Gegenprüfer, der muss/sollte-Funde zu widerlegen versucht): kein bestätigter „muss“- oder „sollte“-Fund.
+  - Die zwei „sollte“-Funde stuften die Gegenprüfer herab: Der Cursor berührt in Safari den Platzhalter („kein Fehler“,
+    siehe „Offen“ 13). Die Ziffern im Whisper-Hinweis („kann“) habe ich trotzdem entfernt, weil sie live eine erfundene
+    Dosierung ermöglicht hätten.
+  - Aus „kann“-Funden außerdem nur eigene Angaben berichtigt: Testbeschreibung, Log-Zahlen, Live-Probe TP-02/TP-03. Dazu
+    kleine Robustheit im neuen Test: Messausschnitt, „webkit“ als Name, keine 0-Prüfungen-Läufe, auch das
+    Zugangscode-Fenster stumm.
+  - Alle anderen „kann“-Funde stehen unter „Offen“ 14.
+- [DEPLOY]
+
 ## Offen
 
 1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
@@ -556,3 +662,37 @@ Die 10 „kann“-Funde stehen unter „Offen“ (Punkt 11).
       - Nach „Ja“ verschwindet der auslösende Knopf, der Fokus fällt auf body. Betrifft: Notiz löschen, Änderungen
         verwerfen, Entwurf/Aufnahme verwerfen, Neuer Test-Patient.
       - Safari: Der erste Knopf einer Rückfrage hat nach Tippen sofort einen grünen Ring.
+12. **Whisper-Hinweis wirkt nur in den ersten 30 Sekunden** einer Aufnahme (v2.1.2). Mit
+    `condition_on_previous_text: false` setzt Whisper den Hinweis nach dem ersten 30-s-Fenster zurück. Lokal an einem
+    43-s-Diktat gesehen: erst „Theraband“, später wieder „Teraband“. Danach fängt Regel 9 Hörfehler ab („Bitte prüfen“).
+    Abhilfe wäre, die Aufnahme in Stücke von höchstens 30 s zu teilen, jedes mit Hinweis. Nicht umgesetzt – Entscheidung
+    bei Julius.
+13. **Safari: Cursor berührt im leeren Feld den ersten Buchstaben des Platzhalters** (v2.1.2, Gegenprüfung: „kein
+    Fehler“). Der Anschnitt ist behoben. Der 2 px breite Safari-Cursor liegt aber, wie in jedem Safari-Textfeld (auch Suche,
+    Kürzel), etwa 0,5 px auf dem Stamm des „F“ von „Frag …“. Chromium setzt ihn direkt daneben. Abhilfe wäre, den
+    Platzhalter 3 px einzurücken (`::placeholder { text-indent: 3px }`). Dann springt der Text beim ersten getippten
+    Buchstaben um 3 px nach links. Nicht umgesetzt – Entscheidung bei Julius.
+14. **„kann“-Funde der Gegenprüfung v2.1.2 (nur notiert):**
+    - Oberfläche: Die weiche Ausblendung unter 360 px (leeres Feld mit Fokus) greift auch, wenn der Platzhalter ganz passt.
+      Das „?“ von „Wonach suchst du?“ bei 320 px und das „…“ bei 353–359 px werden etwas blasser – nur vergrößert
+      sichtbar.
+    - Oberfläche: Die anderen Felder haben 12–14 px Innenabstand (Umbenennen, Entwurf, Notiz bearbeiten 12 px;
+      Zugangscode, Kürzel, Beschreibung 14 px; Suche 44 px). Gemessen ohne Anschnitt, das 16/18-px-Maß der Haupt-Eingabe
+      gilt dort nicht.
+    - Prompts: „Schreibe „Patient“ oder „Pat.“ wie im Original“ reibt sich mit der Regel, Beschwerden mit „Pat.:“ zu
+      beginnen. Notizen könnten „Patient: …“ statt „Pat.: …“ schreiben, mit dem Modell nicht gemessen. Vorschlag: „Angaben
+      zu Beschwerden beginnen weiter mit „Pat.:““.
+    - Prompts: Die neue Chat-Regel ist nicht auf Patienten begrenzt. Streng gelesen dürfte Gabi den Beruf eines
+      Teammitglieds aus dem Praxiswissen nicht nennen. Nicht gemessen. Vorschlag: „Das gilt für Test-Patienten; Angaben zum
+      Praxisteam kommen aus dem Praxiswissen.“
+    - Prompts: Im Beispiel-JSON wird aus „Lümfdrainage“ „MLD, 20 min“, der Prüfhinweis nennt aber „Lymphdrainage“. Das
+      passt nicht ganz zu „nur das falsch erkannte Wort ersetzen“. War schon vorher so.
+    - Tests:
+      - „Regel 9 steht unter UNKLARES“ findet die frühe Erwähnung von UNKLARES statt der Überschrift.
+      - Die Geschlechts-Regex übersieht „Der Patient“ am Satzanfang und „vom/beim/zum Patienten“.
+      - Der Echo-Test prüft keine Listen-Segmente mit Komma.
+    - Whisper: Der Echo-Filter verwirft ein echtes Segment über 40 Zeichen, wenn es nur aus Hinweis-Begriffen in derselben
+      Reihenfolge besteht (selten, gab es schon vorher). Später ließe sich zusätzlich `no_speech_prob`/`avg_logprob` der
+      Segmente nutzen.
+    - Live-Lauf: `GABI_LIVE=1 node tests/v2.mjs` von diesem Branch misst in Block 5 das Live-Frontend v2.1 (ohne den Fix)
+      und wäre dort rot. Block 5 live erst nach dem Frontend-Release werten.

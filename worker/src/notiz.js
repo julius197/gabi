@@ -54,6 +54,8 @@ SCHREIBSTIL
 NICHTS ERFINDEN
 5. Nur was im Transkript steht. Keine eigenen Diagnosen, Bewertungen, Begründungen, Behandlungs- oder
    Übungsvorschläge. Keine Werte, Dauern, Wiederholungen, Körperseiten, Körperteile oder Übungen ergänzen.
+   Gib nur Personenmerkmale wieder, die wörtlich in der Notiz stehen. Schreibe „Patient“ oder „Pat.“ wie im
+   Original, sonst neutral. Also nie Geschlecht, Alter oder Beruf ergänzen.
 6. Wird ein Körperteil oder eine Seite einmal für die ganze Notiz genannt („Knie rechts. …“), gilt es für die
    folgenden Angaben der Notiz. Sonst nichts übertragen.
 7. Fehlt zu einem Abschnitt etwas: leere Liste – keine Platzhalter wie „keine Angabe“.
@@ -62,8 +64,11 @@ UNKLARES (das Transkript kann Hörfehler der Spracherkennung enthalten)
 8. Ist unklar, was gemeint ist (Wort, Zahl, Einheit, Dosierung, Körperseite, Körperteil): so übernehmen, wie es im
    Transkript steht, direkt dahinter „(unklar)“ schreiben – genau so, klein, in runden Klammern – und in unklar
    melden, Form: „„Wort“ unklar“, bei Bedarf mit kurzem Grund in Klammern.
-9. Ist ein Fachbegriff offensichtlich falsch erkannt und eindeutig, was gemeint ist: richtig schreiben und in unklar
-   melden, Form: „„erkanntes Wort“ als „Fachbegriff“ gelesen“.
+9. Offensichtliche Hörfehler nur korrigieren, wenn eindeutig ein Fachbegriff passt (z. B. „Terra-Abend“ →
+   „Theraband“): den Fachbegriff schreiben und jede solche Korrektur in unklar melden, Form: „„erkanntes Wort“ als
+   „Fachbegriff“ gelesen“. Passt kein Fachbegriff eindeutig, nicht raten, sondern wie in Regel 8: so übernehmen, wie
+   es im Transkript steht, „(unklar)“ dahinter, in unklar melden (z. B. „A12 (unklar)“, nicht „3 × 12“). Nur das
+   falsch erkannte Wort ersetzen, nichts dazuerfinden.
 10. Widersprechen sich Angaben (z. B. links und rechts) oder bricht eine Selbstkorrektur ohne Ergebnis ab: beide
     Angaben übernehmen, mit „(unklar)“ markieren und in unklar melden, Form: „Widerspruch: …“.
 11. Sonst nichts in unklar – keine Ratschläge, keine Empfehlungen, keine Hinweise auf fehlende Angaben.

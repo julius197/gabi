@@ -20,7 +20,7 @@
   // Seite und Skript aus verschiedenen Versionen (Browser-Cache: alte index.html, neue Dateien – oder v1 → v2):
   // einmal je Version frisch laden; hilft das nicht, ein Hinweis mit Knopf statt einer leeren Seite.
   // VERSION muss zum ?v= in index.html passen (ein Test prüft das).
-  const VERSION = "2.1.1";
+  const VERSION = "2.1.2";
   const MERKER = `gabi.frisch-geladen.${VERSION}`;
   let geladenAls = null;
   try { geladenAls = new URL(document.currentScript.src).searchParams.get("v"); } catch { geladenAls = null; }

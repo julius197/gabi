@@ -7,7 +7,7 @@ import { SpeicherFehler, istUuid } from "./speicher.js";
 import { StrukturFehler } from "./strukturierung.js";
 import { ChatFehler, MAX_NACHRICHTEN, MAX_ZEICHEN_NACHRICHT, MAX_ZEICHEN_VERLAUF, erstelleWerkzeuge, kiFehler } from "./chat.js";
 
-export const VERSION = "2.0.0";
+export const VERSION = "2.0.1";
 export const MAX_AUDIO_BASE64 = 14_000_000; // ≈ 10 MB WAV ≈ 5 Minuten bei 16 kHz mono
 const MIN_AUDIO_BASE64 = 200;
 const MAX_JSON = 300_000;

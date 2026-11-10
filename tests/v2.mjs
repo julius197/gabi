@@ -20,6 +20,9 @@
 //     in 4b: Safari mit „Bewegung reduzieren“ (☰ ohne Ring), Info-Dialog → Fokus zurück aufs Badge
 //  4  Safari-Engine (WebKit): Demo bis zum PDF, Gesprächsverlauf in IndexedDB, zwei Tabs mit demselben Entwurf
 //  4b v2.1.1: Fokus rund um die Schublade und nach Rückfragen (WebKit und Chromium, Tippen/Tastatur, Laptop mit Maus)
+//  5  v2.1.2: Eingabefelder ohne Anschnitt – Cursor am Zeilenanfang, „gyÄÖ“, Platzhalter, 5 Zeilen, scrollWidth
+//     (Chromium und WebKit, 320/390/1440 px, Hell/Dunkel; dazu bei 390/1440 px Suche, Umbenennen, Zugangscode, Entwurf,
+//     Neuer Test-Patient)
 // Voraussetzung: `cd worker && npm run lokal` läuft (http://localhost:8788, Zugangscode „test“), Playwright mit Chromium + WebKit.
 // Aufruf: PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/v2.mjs [diktat.wav] [screenshot-ordner] [basis-url]
 // Ohne diktat.wav wird auf dem Mac eine erfundene Test-Aufnahme mit `say` erzeugt (spielt nichts ab).
@@ -2807,6 +2810,14 @@ for (const [name, typ] of [["safari", webkit], ["chromium", chromium]]) {
     }
   }
   await browser.close();
+}
+
+// ---------------------------------------------------------------------------
+// 5 v2.1.2: Eingabefelder ohne Anschnitt – Messung per Bildvergleich (tests/eingabefelder.mjs, auch allein startbar)
+// ---------------------------------------------------------------------------
+{
+  const { eingabefelderPruefen } = await import("./eingabefelder.mjs");
+  await eingabefelderPruefen({ chromium, webkit, basis, aus: join(aus, "eingabefelder"), pruefe, live: LIVE });
 }
 
 console.log(fehler.length ? `\n${fehler.length} Prüfung(en) fehlgeschlagen` : "\nAlle Prüfungen bestanden");
