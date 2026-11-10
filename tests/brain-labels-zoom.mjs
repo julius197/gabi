@@ -1,5 +1,7 @@
-// Brain – Labels beim Zoomen: 40 Schritte hinein, 40 heraus; je Label werden die Zustandswechsel (sichtbar ↔ unsichtbar)
-// gezählt. Soll: höchstens ein Wechsel pro Richtung. Chromium + WebKit, 1440 px, Hell und Dunkel.
+// Brain – Labels beim Zoomen: 40 schnelle Zoomschritte (Mausrad) hinein und 40 heraus. Pro Schritt wird für jedes Label
+// Seite, Text, Deckkraft und Rechteck gelesen. Muss gelten: 0 Seitenwechsel, 0 Textwechsel, 0 überlappende Labels (die
+// stehen sollen), 0 Labels, die über den Rand ragen, kein Label länger als 300 ms halbtransparent.
+// Chromium + WebKit, 1440 px, Hell und Dunkel.
 // Aufruf: PLAYWRIGHT_MODUL=… node tests/brain-labels-zoom.mjs [basis-url]   (Server: cd worker && npm run brain)
 import { zielPruefen } from "./ziel.mjs";
 const pw = await import(process.env.PLAYWRIGHT_MODUL || "playwright");
@@ -15,32 +17,37 @@ for (const motor of ["chromium", "webkit"]) {
     await ctx.addInitScript(() => { try { Object.defineProperty(window, "speechSynthesis", { value: { speak() {}, cancel() {}, getVoices: () => [], addEventListener() {}, removeEventListener() {} }, configurable: true }); } catch {} });
     const page = await ctx.newPage();
     await page.goto(`${basis}/?demo=1#/brain`);
-    await page.waitForFunction(() => { const m = window.GabiBrainAnsicht && window.GabiBrainAnsicht.aktuell && window.GabiBrainAnsicht.aktuell.messen(); return m && m.ruht; }, null, { timeout: 30000 });
+    await page.waitForFunction(() => { const m = window.GabiBrainAnsicht && window.GabiBrainAnsicht.aktuell && window.GabiBrainAnsicht.aktuell.messen(); return m && m.ruht && m.labelInfo && m.labelInfo.length > 5; }, null, { timeout: 30000 });
     const f = await page.locator("canvas.brain-graph-flaeche").boundingBox();
-    // zoomen um einen Punkt mit vielen Knoten (leicht links der Mitte)
     await page.mouse.move(f.x + f.width * 0.45, f.y + f.height * 0.5);
-    // je Schritt: welche Labels stehen, und welche Knoten liegen im Bild (Labels von Knoten, die beim Zoomen aus dem Bild
-    // laufen oder hereinkommen, zählen nicht – das ist kein Flackern)
-    const stand = () => page.evaluate(() => {
-      const a = window.GabiBrainAnsicht.aktuell, r = document.querySelector("#brain-graph-rahmen").getBoundingClientRect();
-      const im = a.brain.knoten().map((k) => k.id).filter((id) => { const o = a.ort(id); return o && o.sichtbar && o.x > r.left + 24 && o.x < r.right - 24 && o.y > r.top + 24 && o.y < r.bottom - 24; });
-      return { labels: a.messen().labelIds || [], im };
-    });
-    const verlauf = [], imBild = [];
-    const merken = async () => { const x = await stand(); verlauf.push(new Set(x.labels)); imBild.push(new Set(x.im)); };
-    const schritt = async (dy) => { await page.mouse.wheel(0, dy); await page.waitForTimeout(40); await merken(); };
-    await merken();
-    for (let i = 0; i < 40; i++) await schritt(-60);   // hinein
-    const wende = verlauf.length - 1;
-    for (let i = 0; i < 40; i++) await schritt(60);    // heraus
-    const alle = new Set(verlauf.flatMap((s) => [...s]));
-    let schlecht = 0; const bsp = [];
-    for (const id of alle) {
-      let hin = 0, her = 0;
-      for (let i = 1; i < verlauf.length; i++) if (imBild[i].has(id) && imBild[i - 1].has(id) && verlauf[i].has(id) !== verlauf[i - 1].has(id)) (i <= wende ? hin++ : her++);
-      if (hin > 1 || her > 1) { schlecht++; if (bsp.length < 3) bsp.push(`${id}: ${hin}/${her}`); }
+    const proben = [];
+    const messen = async () => proben.push(await page.evaluate(() => { const m = window.GabiBrainAnsicht.aktuell.messen(); return { t: performance.now(), b: m.breite, h: m.hoehe, l: m.labelInfo }; }));
+    await messen();
+    for (let i = 0; i < 80; i++) { await page.mouse.wheel(0, i < 40 ? -60 : 60); await page.waitForTimeout(30); await messen(); }
+    const info = { seite: [], text: [], ueber: 0, rand: 0, halb: [] };
+    const letzte = new Map(); const halbSeit = new Map(); let halbMax = 0;
+    for (const p of proben) {
+      const steht = p.l.filter((x) => x.ziel === 1 && x.a > 0.5);
+      for (const x of p.l) {
+        const v = letzte.get(x.id);
+        if (v && x.ziel === 1 && v.ziel === 1) { if (v.platz !== x.platz) info.seite.push(x.id); if (v.text !== x.text) info.text.push(x.id); }
+        letzte.set(x.id, x);
+        if (x.a > 0.05 && x.a < 0.95) { if (!halbSeit.has(x.id)) halbSeit.set(x.id, p.t); halbMax = Math.max(halbMax, p.t - halbSeit.get(x.id)); } else halbSeit.delete(x.id);
+      }
+      for (const x of steht) if (x.x < -0.5 || x.y < -0.5 || x.x + x.w > p.b + 0.5 || x.y + x.h > p.h + 0.5) info.rand++;
+      for (let i = 0; i < steht.length; i++) for (let j = i + 1; j < steht.length; j++) {
+        const a = steht[i], c = steht[j];
+        if (a.x < c.x + c.w && a.x + a.w > c.x && a.y < c.y + c.h && a.y + a.h > c.y) info.ueber++;
+      }
     }
-    pruefe(alle.size > 5 && schlecht === 0, `${motor} ${schema}: ${alle.size} Labels, höchstens ein Wechsel pro Richtung (${schlecht} Labels mit mehr${bsp.length ? ": " + bsp.join(", ") : ""})`);
+    const ids = new Set(proben.flatMap((p) => p.l.map((x) => x.id)));
+    const wo = `${motor} ${schema} (${ids.size} Labels)`;
+    pruefe(ids.size > 5, `${wo}: Labels da`);
+    pruefe(info.seite.length === 0, `${wo}: 0 Seitenwechsel (${info.seite.length}${info.seite.length ? ": " + [...new Set(info.seite)].slice(0, 3).join(", ") : ""})`);
+    pruefe(info.text.length === 0, `${wo}: 0 Textwechsel (${info.text.length})`);
+    pruefe(info.ueber === 0, `${wo}: 0 überlappende Label-Rechtecke in jedem Bild (${info.ueber})`);
+    pruefe(info.rand === 0, `${wo}: 0 Labels über dem Rand (${info.rand})`);
+    pruefe(halbMax <= 300, `${wo}: kein Label länger als 300 ms halbtransparent (längstens ${Math.round(halbMax)} ms)`);
     await ctx.close();
   }
   await browser.close();

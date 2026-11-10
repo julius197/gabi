@@ -920,7 +920,9 @@
    * Ein Raster verhindert Überlappung (auch mit Knoten: sperren = [{ x, y, r }]); merk (Map id → Platz) hält ein Label
    * an seiner Stelle, solange sie frei ist – so springt nichts. Höchstens max Labels, wichtige zuerst.
    */
-  function labelsWaehlen(kandidaten, { breite, hoehe, merk = new Map(), max = 140, zeile = 16, polster = 10, sperren = [] } = {}) {
+  function labelsWaehlen(kandidaten, { breite, hoehe, merk = new Map(), max = 140, zeile = 16, polster = 10, sperren = [], innen = false, rechtsZuerst = false, fest = null } = {}) {
+    // innen: ein Label liegt ganz im Bild oder gar nicht, nie überlappend erzwungen · rechtsZuerst: Standardseite ist rechts ·
+    // fest: Kennungen, deren Seite sich gerade nicht ändern darf (nur der gemerkte Platz, sonst kein Label)
     const ZB = 12;
     const ZH = 8;
     const sp = Math.max(1, Math.ceil(breite / ZB));
@@ -950,14 +952,17 @@
       const h = zeile;
       const gemerkt = merk.get(k.id);
       let gesetzt = null;
-      for (let versuch = 0; versuch < PLAETZE && !gesetzt; versuch++) {
-        // gemerkter Platz zuerst, dann die übrigen der Reihe nach
-        const platz = gemerkt === undefined ? versuch : versuch === 0 ? gemerkt : versuch <= gemerkt ? versuch - 1 : versuch;
+      const reihe = gemerkt !== undefined && fest && fest.has(k.id) ? [gemerkt]
+        : gemerkt !== undefined ? [gemerkt, ...[0, 1, 2, 3, 4, 5].filter((p) => p !== gemerkt)]
+        : rechtsZuerst ? [1, 0, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5];
+      for (let versuch = 0; versuch < reihe.length && !gesetzt; versuch++) {
+        const platz = reihe[versuch];
         const [x0, y0] = platzLage(platz, k, w, h);
         if (x0 + w < 0 || y0 + h < 0 || x0 > breite || y0 > hoehe) continue;
+        if (innen && (x0 < 0 || y0 < 0 || x0 + w > breite || y0 + h > hoehe)) continue;
         if (frei(x0, y0, x0 + w, y0 + h)) gesetzt = { id: k.id, x: x0, y: y0, breite: w, hoehe: h, platz };
       }
-      if (!gesetzt && k.erzwungen) {
+      if (!gesetzt && k.erzwungen && !innen) {
         const platz = gemerkt === undefined ? 0 : gemerkt;
         const [x0, y0] = platzLage(platz, k, w, h);
         gesetzt = { id: k.id, x: x0, y: y0, breite: w, hoehe: h, platz };
@@ -1260,7 +1265,14 @@
     const hervor = new Map();   // Index → { start, dauer }
     let pulsBis = 0;
     const labelMerk = new Map();  // id → Platz
-    const labelSeit = new Map();  // id → Zeitpunkt des letzten Zustandswechsels (Haltezeit)
+    // Labels: Sichtbarkeit, Seite und Kürzung werden NICHT bei jedem Bild entschieden, sondern einmal, wenn Zoom, Verschieben
+    // und Ziehen 150 ms ruhen (labelStand). Dazwischen folgen die Labels nur ihrem Knoten.
+    let labelStand = null;        // Map id → { i, platz, breite, hoehe, rr, text, fett, vorrang, unterdr }
+    let labelLetzt = "";          // Fingerabdruck der Knotenlagen (Kamera, Layout, Ziehen) im letzten Bild
+    let labelBewegt = -1e9;       // Zeitpunkt der letzten Bewegung
+    let labelSchmutz = true;      // es gibt etwas Neues zu entscheiden
+    let labelSchluessel = "";     // Auswahl, Hover, Treffer, Spur – ändern sich ohne Bewegung
+    const labelSeitSeit = new Map(); // id → Zeitpunkt des letzten Seitenwechsels (höchstens einer pro Sekunde)
     const labelDeck = new Map();  // id → { a, ziel, x, y, breite, hoehe, text, fett }
     const breiten = new Map();    // „fett|text“ → Breite
     let farbe = FARBEN_STANDARD;
@@ -1480,7 +1492,8 @@
         if (idx(ziehId) < 0) { halteEnde(); if (geste.typ === "knoten") geste = null; else geste.i = -1; } // der Knoten ist weg
         else { geste.i = idx(ziehId); if (mitIds) geste.mit = mitIds.map(idx).filter((i) => i >= 0); }
       }
-      for (const id of [...labelDeck.keys()]) if (!nIndex.has(id)) { labelDeck.delete(id); labelMerk.delete(id); labelSeit.delete(id); }
+      for (const id of [...labelDeck.keys()]) if (!nIndex.has(id)) { labelDeck.delete(id); labelMerk.delete(id); labelSeitSeit.delete(id); }
+      labelStand = null; labelSchmutz = true; // neue Knotenliste: Indizes stimmen nicht mehr
 
       const neueSignatur = `${liste.map((k) => k.id).join("\u0001")}\u0002${kanten.map((e) => `${e.a}>${e.b}`).join(",")}`;
       const strukturNeu = neueSignatur !== signatur;
@@ -2038,56 +2051,82 @@
       if (puls && zuKlaerenDa) laeuft = true;
       schloesser = gezeichnet;
 
-      // 5 Labels: Detailstufe je Zoom, wichtige zuerst, auf einer Platte; Lage wird gemerkt
-      const kandidaten = [];
-      const sperren = [];
-      for (let i = 0; i < n; i++) {
-        if (!imBild(i)) continue;
-        if (br[i] >= 3.5 && deck[i] > 0.5) sperren.push({ x: bx[i], y: by[i], r: br[i] + 1 }); // gedimmte Knoten dürfen überdeckt werden
-        if (deck[i] < 0.5 || bx[i] < 0 || bx[i] > b || by[i] < 0 || by[i] > h) continue;
-        const k = K[i];
-        // erzwungen sind nur Auswahl und Hover; Treffer, Gabi-Spur und Nachbarn kommen bevorzugt dazu – ohne Überlappung
-        // Naben (Schwelle 0) bleiben immer stehen – auch wenn kein freier Platz bleibt, sonst verschwänden sie beim Zoomen im Gedränge
-        const erzwungen = i === auswahl || i === hover || k.schwelle === 0;
-        const treffer = Boolean(trefferMenge && trefferMenge.has(i));
-        const spur = hervor.has(i);
-        const nachbar = Boolean(nahe && nahe[i]);
-        const alt = labelDeck.get(k.id);
-        // Hysterese: ein Label, das schon steht, bleibt bis 15 % unter seiner Schwelle – an der Schwelle kippt nichts hin und her
-        const steht = Boolean(alt && alt.ziel === 1);
-        if (!erzwungen && !treffer && !spur && !nachbar && z < (steht ? k.schwelle * 0.85 : k.schwelle)) continue;
-        const fett = k.grad >= 6;
-        kandidaten.push({ id: k.id, i, x: bx[i], y: by[i], r: br[i] + (k.status === "zu_klaeren" ? 4 : 0), breite: textBreite(k.kurz, fett), vorrang: k.grad + 0 + (treffer ? 1000 : 0) + (spur ? 800 : 0) + (nachbar ? 400 : 0), erzwungen, fett });
+      // 5 Labels. Entscheidung (Sichtbarkeit, Seite, Kürzung) nur, wenn Zoom/Verschieben/Ziehen 150 ms ruhen; dazwischen folgt
+      // jedes Label nur seinem Knoten. Seite: standardmäßig rechts, ein Wechsel höchstens einmal pro Sekunde. Ein Label liegt
+      // ganz im Bild oder gar nicht; sich überlappende Labels gibt es nicht (Gewinner: Verbindungen, dann Kennung).
+      let sx = 0;
+      let sy = 0;
+      for (let i = 0; i < n; i++) { sx += bx[i] + deck[i]; sy += by[i]; }
+      const lage = `${Math.round(sx * 10)}|${Math.round(sy * 10)}|${b}|${h}`;
+      if (lage !== labelLetzt) { labelLetzt = lage; labelBewegt = zeit; labelSchmutz = true; }
+      const schluessel = `${auswahl}|${hover}|${trefferMenge ? trefferMenge.size : 0}|${hervor.size}`;
+      if (schluessel !== labelSchluessel) { labelSchluessel = schluessel; labelSchmutz = true; }
+      if (labelSchmutz && (labelStand === null || zeit - labelBewegt >= 150)) {
+        labelSchmutz = false;
+        const kandidaten = [];
+        const sperren = [];
+        for (let i = 0; i < n; i++) {
+          if (!imBild(i)) continue;
+          if (br[i] >= 3.5 && deck[i] > 0.5) sperren.push({ x: bx[i], y: by[i], r: br[i] + 1 }); // gedimmte Knoten dürfen überdeckt werden
+          if (deck[i] < 0.5 || bx[i] < 0 || bx[i] > b || by[i] < 0 || by[i] > h) continue;
+          const k = K[i];
+          const erzwungen = i === auswahl || i === hover;
+          const treffer = Boolean(trefferMenge && trefferMenge.has(i));
+          const spur = hervor.has(i);
+          const nachbar = Boolean(nahe && nahe[i]);
+          // Hysterese: ein Label, das schon steht, bleibt bis 15 % unter seiner Schwelle
+          const steht = Boolean(labelStand && labelStand.has(k.id));
+          if (!erzwungen && !treffer && !spur && !nachbar && z < (steht ? k.schwelle * 0.85 : k.schwelle)) continue;
+          const fett = k.grad >= 6;
+          kandidaten.push({ id: k.id, i, x: bx[i], y: by[i], r: br[i] + (k.status === "zu_klaeren" ? 4 : 0), rr: k.status === "zu_klaeren" ? 4 : 0, breite: textBreite(k.kurz, fett), vorrang: k.grad + (treffer ? 1000 : 0) + (spur ? 800 : 0) + (nachbar ? 400 : 0), erzwungen, fett });
+        }
+        const vorher = new Map(labelMerk);
+        const fest = new Set();
+        for (const [id, t] of labelSeitSeit) if (zeit - t < 1000) fest.add(id);
+        const gesetzt = labelsWaehlen(kandidaten, { breite: b, hoehe: h, merk: labelMerk, max: 140, sperren, innen: true, rechtsZuerst: true, fest });
+        const nachIdKand = new Map(kandidaten.map((k) => [k.id, k]));
+        labelStand = new Map();
+        for (const g of gesetzt) {
+          const k = nachIdKand.get(g.id);
+          if (vorher.has(g.id) && vorher.get(g.id) !== g.platz) labelSeitSeit.set(g.id, zeit);
+          labelStand.set(g.id, { i: k.i, platz: g.platz, breite: g.breite, hoehe: g.hoehe, rr: k.rr, text: K[k.i].kurz, fett: k.fett, vorrang: k.vorrang, unterdr: false });
+        }
+      } else if (labelSchmutz) laeuft = true; // die Entscheidung steht noch aus: weiterzeichnen, bis sie fällt
+
+      // Sicherung zwischen zwei Entscheidungen: ein Label, das aus dem Bild liefe oder ein stärkeres berührte, wird
+      // ausgeblendet und bleibt es bis zur nächsten Entscheidung – es kommt nie etwas dazu, so wechselt jedes höchstens einmal
+      const rechtecke = [];
+      if (labelStand) {
+        const reihe = [...labelStand].sort((p, q) => (q[1].vorrang - p[1].vorrang) || (p[0] < q[0] ? -1 : 1));
+        for (const [id, s2] of reihe) {
+          if (!K[s2.i] || K[s2.i].id !== id) { s2.unterdr = true; continue; }
+          const [x0, y0] = platzLage(s2.platz, { x: bx[s2.i], y: by[s2.i], r: br[s2.i] + s2.rr }, s2.breite, s2.hoehe);
+          s2.x = x0; s2.y = y0;
+          if (s2.unterdr) continue;
+          if (x0 < 0 || y0 < 0 || x0 + s2.breite > b || y0 + s2.hoehe > h || rechtecke.some((r2) => x0 < r2[2] && x0 + s2.breite > r2[0] && y0 < r2[3] && y0 + s2.hoehe > r2[1])) { s2.unterdr = true; continue; }
+          rechtecke.push([x0, y0, x0 + s2.breite, y0 + s2.hoehe]);
+        }
       }
-      const gesetzt = labelsWaehlen(kandidaten, { breite: b, hoehe: h, merk: labelMerk, max: 140, sperren });
-      const nachIdKand = new Map(kandidaten.map((k) => [k.id, k]));
-      for (const l of labelDeck.values()) { l.vor = l.ziel; l.ziel = 0; }
-      for (const g of gesetzt) {
-        const k = nachIdKand.get(g.id);
-        let l = labelDeck.get(g.id);
-        if (!l) { l = { a: ruhig ? 1 : 0 }; labelDeck.set(g.id, l); }
-        l.ziel = 1; l.x = g.x; l.y = g.y; l.breite = g.breite; l.hoehe = g.hoehe; l.text = K[k.i].kurz; l.fett = k.fett; l.i = k.i;
+      for (const l of labelDeck.values()) l.ziel = 0;
+      if (labelStand) {
+        for (const [id, s2] of labelStand) {
+          if (s2.unterdr) continue;
+          let l = labelDeck.get(id);
+          if (!l) { l = { a: ruhig ? 1 : 0 }; labelDeck.set(id, l); }
+          l.ziel = 1; l.x = s2.x; l.y = s2.y; l.breite = s2.breite; l.hoehe = s2.hoehe; l.text = s2.text; l.fett = s2.fett; l.i = s2.i;
+        }
       }
-      // Mindest-Haltezeit: Ein Label wechselt seinen Zustand höchstens alle 450 ms. Im Gedränge entscheidet die Kollision von
-      // Bild zu Bild anders – ohne Haltezeit blinkt das Label; so bleibt es stehen (oder weg), bis sich die Lage beruhigt hat.
-      // (der Zeitpunkt des letzten Wechsels steht in labelSeit, nicht im Eintrag – der wird nach dem Ausblenden gelöscht)
-      for (const [id, l] of labelDeck) {
-        const vor = l.vor === undefined ? 0 : l.vor;
-        const seit = labelSeit.get(id);
-        if (vor !== l.ziel && seit !== undefined && zeit - seit < 450 && !ruhig) l.ziel = vor;
-        if (vor !== l.ziel) labelSeit.set(id, zeit);
-      }
-      const schritt = ruhig ? 1 : 1 - Math.exp(-dt / 55);
+      // Ein- und Ausblenden nur über die Deckkraft: linear in 150 ms (bei „Bewegung reduzieren“ sofort)
+      const schritt = ruhig ? 1 : dt / 150;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       for (let durchgang = 0; durchgang < 2; durchgang++) {
         ctx.font = labelSchrift(durchgang === 1);
         for (const [id, l] of labelDeck) {
           if (Boolean(l.fett) !== (durchgang === 1)) continue; // je Schrift ein Durchgang
-          l.a += (l.ziel - l.a) * schritt;
-          if (Math.abs(l.ziel - l.a) < 0.02) l.a = l.ziel;
-          else laeuft = true;
-          if (l.a <= 0.01) { if (l.ziel === 0) labelDeck.delete(id); continue; }
+          l.a = l.ziel > l.a ? Math.min(l.ziel, l.a + schritt) : Math.max(l.ziel, l.a - schritt);
+          if (l.a !== l.ziel) laeuft = true;
+          if (l.a <= 0.001) { if (l.ziel === 0) labelDeck.delete(id); continue; }
           const a = l.a * (l.i !== undefined && l.i < n ? Math.max(0.35, deck[l.i]) : 1);
           ctx.globalAlpha = a * 0.86;
           ctx.fillStyle = f.platte;
@@ -2685,7 +2724,7 @@
           knoten: K.length, kanten: kanten.length, fest: K.reduce((n, k) => n + (k.fest ? 1 : 0), 0), bilder, zeichnenP50: q(0.5), zeichnenP95: q(0.95),
           fps: lauf >= 8 && spanne > 0 ? Math.round((lauf - 1) / spanne * 10000) / 10 : null,
           layoutMs, ticks: layoutTicks, ruht: !layoutLaeuft, worker: Boolean(treiber && treiber.art === "worker"),
-          zoom: Math.round(kam.zoom * 1000) / 1000, pixel: Math.round(dpr * 100) / 100, breite: cssB, hoehe: cssH, labels: [...labelDeck.values()].filter((l) => l.ziel === 1).length, labelIds: [...labelDeck].filter(([, l]) => l.ziel === 1).map(([id]) => id),
+          zoom: Math.round(kam.zoom * 1000) / 1000, pixel: Math.round(dpr * 100) / 100, breite: cssB, hoehe: cssH, labels: [...labelDeck.values()].filter((l) => l.ziel === 1).length, labelIds: [...labelDeck].filter(([, l]) => l.ziel === 1).map(([id]) => id), labelInfo: [...labelDeck].map(([id, l]) => ({ id, ziel: l.ziel, a: Math.round(l.a * 100) / 100, x: Math.round(l.x * 10) / 10, y: Math.round(l.y * 10) / 10, w: Math.round(l.breite), h: l.hoehe, text: l.text, platz: labelStand && labelStand.has(id) ? labelStand.get(id).platz : -1 })),
           schloesser,
         };
       },

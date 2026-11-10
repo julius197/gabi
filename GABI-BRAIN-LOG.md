@@ -293,6 +293,11 @@ zwischen zwei Zustandswechseln (nicht bei „Bewegung reduzieren“); das Ein-/A
 1440 px, Hell/Dunkel): alter Stand 4/4 rot (6 Labels mit bis zu 3 Wechseln), neuer Stand 4/4 grün. Unit 909, Graph-Checks
 274/274, Brain-Kurzlauf 220/220 grün.
 
+### Bugfix 2 (10.11. nachts): Graph-Labels flackerten beim Zoomen weiter – der erste Fix (`0ddae03`) traf nicht die Hauptursache
+**Ursache** (belegt mit dem neuen Test gegen `0ddae03`: 105 Seitenwechsel, 15–36 Überlappungen, 128–168 Labels über dem Rand, Labels bis 2,8 s halbtransparent): `labelsWaehlen` lief in jedem Bild neu – Seite (rechts/unten/links), Sichtbarkeit und Kollision wurden bei jedem Zoomschritt frisch entschieden, Teile durften über den Rand ragen oder überlappt „erzwungen“ werden, Ein-/Ausblenden war exponentiell (lange Halbzustände). Die Kürzung des Textes (`kurz`) war schon zoomfest; das Wechseln kam vom Auftauchen/Verschwinden.
+**Fix** (nur `brain-graph.js`): Entscheidung (Sichtbarkeit, Seite, Kürzung) fällt einmal, 150 ms nach der letzten Zoom-/Pan-/Zieh-/Layout-Bewegung; dazwischen folgen die Labels nur ihrem Knoten. Standardseite rechts, Seitenwechsel höchstens einmal pro Sekunde. Ein Label liegt ganz im Bild oder gar nicht, keine Überlappung (Gewinner: Verbindungen, dann Kennung); zwischen zwei Entscheidungen kann ein Label nur ausgeblendet werden, nie dazukommen. Ein-/Ausblenden linear in 150 ms, bei „Bewegung reduzieren“ sofort. Naben haben keinen Sonderplatz mehr. Layout und Physik unberührt.
+**Test:** `tests/brain-labels-zoom.mjs` (ersetzt die alte Messung): 80 Mausrad-Schritte, je Schritt Seite/Text/Deckkraft/Rechteck. Neuer Stand 24/24 grün, `0ddae03` 14 von 24 rot. Unit 909, Graph 274/274, Brain-Kurzlauf 220/220, Leistung unverändert (60 Bilder/s, 0 in Ruhe). Grenzen: Überlappung und Rand sind für Labels geprüft, die stehen sollen (Ziel 1); ein ausblendendes Label steht bis zu 150 ms an seiner letzten gültigen Stelle. Während einer Bewegung kommen keine neuen Labels hinzu – sie erscheinen 150 ms nach dem Loslassen.
+
 ## Vorkommnisse
 
 **Fehlalarm „Anfrage an den Live-Worker“ (10.11., ca. 15:50) – nachgeprüft, nichts passiert.**
