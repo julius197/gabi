@@ -121,6 +121,8 @@
 .brain-reiter-knopf .badge { height: 18px; padding: 0 6px; font-size: 11px; }
 .brain-suche input { height: 44px; }
 .brain-suche input:placeholder-shown { padding-right: 14px; } /* leer: kein Knopf rechts, mehr Platz für den Text */
+/* Platzhalter der Brain-Felder mit --text-3: ≥ 4,5:1 in Hell und Dunkel (die Vorgabe --text-4 aus style.css hat 2,6:1) */
+.brain .suche input::placeholder, .brain .eingabefeld::placeholder, dialog.brain-palette .suche input::placeholder, .brain-karte .eingabefeld::placeholder { color: var(--text-3); opacity: 1; }
 .brain-suche .rund-knopf { top: 4px; }
 .brain-suche.aus { opacity: 0.45; }
 .brain-werkzeuge { display: flex; align-items: center; gap: 6px; }
