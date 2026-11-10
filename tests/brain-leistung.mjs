@@ -5,9 +5,13 @@
 // Voraussetzung: `cd worker && npm run brain` läuft (http://localhost:8790). Nie gegen die Live-Seite.
 // Aufruf: PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/brain-leistung.mjs [basis-url]
 // Ergebnis: Markdown-Tabelle (für GABI-BRAIN-LOG.md). Ende mit Fehler, wenn 500 Knoten am Laptop unter 50 Bildern/s liegen.
+import { zielPruefen } from "./ziel.mjs";
+
 const pw = await import(process.env.PLAYWRIGHT_MODUL || "playwright");
 const [, , basis = "http://localhost:8790"] = process.argv;
 if (/gabi\.automatilabs\.de|workers\.dev/.test(basis)) { console.error("Nur lokal messen."); process.exit(2); }
+
+await zielPruefen(basis, { live: false }); // siehe tests/ziel.mjs
 const MOTOREN = (process.env.GABI_MOTOREN || "chromium,webkit").split(",").map((m) => m.trim()).filter(Boolean);
 const warte = (ms) => new Promise((r) => setTimeout(r, ms));
 const rund = (x, n = 1) => (x == null ? "–" : String(Math.round(x * 10 ** n) / 10 ** n).replace(".", ","));

@@ -304,6 +304,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const { chromium, webkit } = await import(process.env.PLAYWRIGHT_MODUL || "playwright");
   const WURZEL = resolve(fileURLToPath(new URL("..", import.meta.url)));
   const [, , aus = join(WURZEL, "screenshots", "eingabefelder"), basis = "http://localhost:8788"] = process.argv;
+  const { zielPruefen } = await import("./ziel.mjs");
+  await zielPruefen(basis); // nie gegen einen echten Worker, außer bewusst mit GABI_LIVE=1
   const fehler = [];
   const pruefe = (ok, text) => { if (!ok) { fehler.push(text); console.log(`✗ ${text}`); } else console.log(`✓ ${text}`); };
   await eingabefelderPruefen({ chromium, webkit, basis, aus, pruefe, live: process.env.GABI_LIVE === "1" });

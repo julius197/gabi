@@ -17,11 +17,15 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { zielPruefen } from "./ziel.mjs";
 
 const pw = await import(process.env.PLAYWRIGHT_MODUL || "playwright");
 const WURZEL = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const [, , aus = join(WURZEL, "screenshots", "brain"), basis = "http://localhost:8790"] = process.argv;
 if (/gabi\.automatilabs\.de|workers\.dev/.test(basis)) { console.error("Diese Tests laufen nur lokal – nie gegen die Live-Seite oder den Live-Worker."); process.exit(2); }
+
+// Auch nicht gegen eine Vorschau, die mit einem echten Worker spricht – siehe tests/ziel.mjs.
+await zielPruefen(basis, { live: false });
 await mkdir(aus, { recursive: true });
 const ablage = await mkdtemp(join(tmpdir(), "gabi-brain-"));
 const MOTOREN = (process.env.GABI_MOTOREN || "chromium,webkit").split(",").map((m) => m.trim()).filter(Boolean);
@@ -580,7 +584,7 @@ async function teil2(browser, motor, { geraet, schema, wenigBewegung = false, bi
   }
 
   // --- Neuladen: alles noch da, der Graph liegt ruhig ---
-  await page.evaluate(() => { location.hash = "#/brain"; });
+  await page.evaluate(() => { location.hash = "#/brain/graph"; });
   await page.waitForSelector("#brain-graph:not([hidden]) canvas.brain-graph-flaeche");
   await graphRuht(page);
   await warte(900);
@@ -612,7 +616,7 @@ async function teil2(browser, motor, { geraet, schema, wenigBewegung = false, bi
     await page.waitForSelector("#ansicht-chat:not([hidden])");
     await page.evaluate(() => { location.hash = "#/notizen"; });
     await page.waitForSelector("#ansicht-notizen:not([hidden]) .patient-karte");
-    await page.evaluate(() => { location.hash = "#/brain"; });
+    await page.evaluate(() => { location.hash = "#/brain/graph"; });
     await page.waitForSelector("#ansicht-brain:not([hidden]) #brain-graph:not([hidden])");
   };
   await runde(); // erster Besuch jeder Ansicht darf einmal aufbauen

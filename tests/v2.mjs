@@ -33,10 +33,14 @@ import { mkdir, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { zielPruefen } from "./ziel.mjs";
 
 const { chromium, webkit } = await import(process.env.PLAYWRIGHT_MODUL || "playwright");
 const WURZEL = resolve(fileURLToPath(new URL("..", import.meta.url)));
 let [, , audio, aus = join(WURZEL, "screenshots"), basis = "http://localhost:8788"] = process.argv;
+
+// Nie gegen einen echten Worker (außer bewusst mit GABI_LIVE=1) – siehe tests/ziel.mjs.
+await zielPruefen(basis);
 await mkdir(aus, { recursive: true });
 const downloads = await mkdtemp(join(tmpdir(), "gabi-pdf-"));
 if (!audio) {
