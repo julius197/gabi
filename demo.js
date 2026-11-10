@@ -577,18 +577,21 @@
   const BESCHWERDE = "(?:schmerz\\w*|\\bweh\\b|wehtu\\w*|verspann\\w*|entzünd\\w*|geschwollen|schwellung\\w*|bandscheib\\w*|\\bvorfall|arthrose|migräne|kopfweh|fieber|verletz\\w*|zerr\\w*|prell\\w*|\\bbruch\\b|gebrochen|verstauch\\w*|schwindel\\w*|taubheit|kribbel\\w*|hexenschuss|ischias|kr[aä]mpf\\w*|muskelkater|erkält\\w*|grippe|blockade|blockiert|\\bsteif\\w*|rheuma|gicht|osteoporose|skoliose|karpaltunnel|tennisarm|golferarm|fersensporn|beschwerden|symptom\\w*|\\bop\\b|operation|operiert|\\briss\\b|schleudertrauma)";
   const ARZNEI = "(?:ibuprofen|paracetamol|diclofenac|voltaren|novalgin|metamizol|aspirin|naproxen|tramadol|tilidin|kortison|cortison|schmerzmittel|schmerztablette\\w*|antibiotik\\w*)";
   const ANGEBOT = /\b(?:bietet ihr|bieten wir|macht ihr|machen wir|habt ihr|haben wir|gibt es|gibts|behandelt ihr|behandeln wir|bei euch|bei uns|in der praxis|in eurer praxis|in unserer praxis|zur akupunktur|zur osteopathie|zum training|zur therapie|zur behandlung)\b/i;
+  // Wörter, die zeigen, dass es um Zeiten und Abläufe der Praxis geht – nicht um Rat („Darf ich samstags trainieren?“,
+  // „Soll ich lieber anrufen oder mailen?“, „Habe ich einen Termin?“)
+  const ABLAUF = /\b(?:wann|wo|montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|wochenende|feiertags?|uhr|abends|morgens|mittags|vormittags|nachmittags|ohne (?:termin|rezept|anmeldung)|termin\w*|rezept\w*|rechnung\w*|gutschein\w*|karte|platz|anmeld\w*|anrufen|mailen|schreiben|buchen|vorbeikommen|parken|zahlen|bezahlen|überweisen|mitbringen|kostet|kosten)\b/i;
+  const MITTEL = "(?:tablette\\w*|medikament\\w*|pille\\w*|salbe\\w*|tropfen|spritze\\w*|präparat\\w*)";
+  // (1) immer eine Bitte um Rat – egal, was sonst im Satz steht
   const RAT_IMMER = new RegExp([
     `\\b${ARZNEI}\\b`,
     "\\bwelche[sn]? (?:medikament|tablette|salbe|spritze)\\w*",
-    "\\b(?:soll|sollte|darf|kann|muss) (?:ich|er|sie|man|der patient|die patientin)\\b.{0,60}\\b(?:nehmen|einnehmen|schlucken|spritzen)\\b",
+    "\\b(?:soll|sollte|darf|kann|muss) (?:ich|er|sie|man|der patient|die patientin)\\b.{0,60}\\b(?:einnehmen|schlucken|spritzen)\\b",
+    `\\b${MITTEL}\\b.{0,60}\\b(?:nehmen|geben|auftragen|verwenden)\\b`,
+    `\\b(?:nehmen|geben|auftragen|verwenden)\\b.{0,60}\\b${MITTEL}\\b`,
     "\\b(?:was|welche \\w+) (?:empfiehlst|empfehlen|rätst|raten|würdest) (?:du|sie)\\b",
-    "\\bwas (?:hab|habe|hat) (?:ich|er|sie)\\b(?! .{0,30}\\b(?:gesagt|gebucht|bezahlt|gewollt)\\b)",
-    "\\b(?:hab|habe) ich (?:einen?|eine)\\b",
-    "\\b(?:soll|sollte) ich\\b.{0,60}\\b(?:lieber|besser|oder)\\b",
-    // („üben“ ohne \\b davor: die Wortgrenze greift in JavaScript vor Umlauten nicht)
-    "\\b(?:darf|soll|sollte|muss) (?:ich|man|er|sie)\\b.{0,60}(?:\\b(?:trainieren|sport|belasten|pausieren|schonen|kühlen|wärmen|dehnen|laufen|joggen|heben)|\\süben)\\b",
-    "\\bwelche (?:dehn)?übung(?:en)?\\b",
+    "^\\W*was (?:hab|habe|hat) (?:ich|er|sie)(?: denn| wohl| da)?\\W*$", // „Was hab ich?“ – die Frage nach der Diagnose
   ].join("|"), "i");
+  // (2) nur zusammen mit einer Beschwerde („… bei Rückenschmerzen“) – und nicht als Frage nach dem Angebot der Praxis
   const RAT_MIT_BESCHWERDE = new RegExp([
     "\\bwas (?:hilft|tun|machen|kann (?:ich|man)|soll(?:te)? (?:ich|man)|würdest du)\\b",
     "\\b(?:hilft|helfen|heilt|heilen|wirkt|bringt)\\b",
@@ -597,12 +600,23 @@
     "\\b(?:darf|soll|sollte|muss) (?:ich|man|er|sie)\\b",
     "\\b(?:hab|habe|hat) (?:ich|er|sie)\\b",
   ].join("|"), "i");
+  // (3) auch ohne Beschwerde – aber nicht, wenn es um das Angebot oder um Zeiten und Abläufe der Praxis geht
+  //     („Wie oft sollte ich trainieren?“ ja · „Darf ich samstags trainieren?“ nein · „Habe ich einen Termin?“ nein)
+  const RAT_OHNE_BESCHWERDE = new RegExp([
+    // („üben“ ohne \\b davor: die Wortgrenze greift in JavaScript vor Umlauten nicht)
+    "\\b(?:darf|soll|sollte|muss) (?:ich|man|er|sie)\\b.{0,60}(?:\\b(?:trainieren|sport|belasten|pausieren|schonen|kühlen|wärmen|dehnen|laufen|joggen|heben)|\\süben)\\b",
+    "\\b(?:soll|sollte) ich\\b.{0,60}\\b(?:lieber|besser|oder)\\b",
+    "\\b(?:hab|habe) ich (?:einen?|eine)\\b",
+    "\\bwelche (?:dehn)?übung(?:en)?\\b",
+  ].join("|"), "i");
   const HAT_BESCHWERDE = new RegExp(BESCHWERDE, "i");
   /** Bittet die Frage um medizinischen Rat (Diagnose, Übung, Therapie-Wahl, Medikament)? */
   function istRatFrage(frage) {
     const t = String(frage || "");
     if (RAT_IMMER.test(t)) return true;
-    return HAT_BESCHWERDE.test(t) && RAT_MIT_BESCHWERDE.test(t) && !ANGEBOT.test(t);
+    if (ANGEBOT.test(t)) return false; // „Bietet ihr Akupunktur bei Migräne an?“, „Welche Übungen macht ihr im Youngster Training?“
+    if (HAT_BESCHWERDE.test(t)) return RAT_MIT_BESCHWERDE.test(t);
+    return RAT_OHNE_BESCHWERDE.test(t) && !ABLAUF.test(t);
   }
   // … und enthielte die Antwort aus dem Brain einen? (Medikament, Dosierung, Diagnose, Empfehlung zu einer Beschwerde)
   const RAT_IN_ANTWORT = new RegExp([
