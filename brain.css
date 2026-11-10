@@ -549,3 +549,14 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border-radius: 6
   .brain-detail.oeffnet { animation: none; }
   .brain-kennzahl:active, .brain .chip:active { transform: none !important; }
 }
+
+/* Graph – Prüfrunde 1 ---------------------------------------------------------------------
+   Doppeltipp oder Doppelklick auf einen Knoten: Schon der erste Tipp öffnet das Detail – genau unter dem Finger. Für die
+   Spanne des zweiten Tipps (brain-ansicht.js setzt die Klasse 350 ms) nimmt deshalb alles, was über dem Graphen liegt,
+   keine Zeiger an; der zweite Tipp zentriert den Knoten, statt im Detail etwas auszulösen. */
+.brain.tipp-sperre .brain-detail, .brain.tipp-sperre .brain-graph-karte, .brain.tipp-sperre .brain-graph-knoepfe,
+.brain.tipp-sperre .brain-fokus, .brain.tipp-sperre .brain-legende { pointer-events: none; }
+/* „Bewegung reduzieren“: style.css gibt dann jedem Element 120 ms Übergang – auch dem Innenabstand, der am Handy unter dem
+   Blatt Platz zum Rollen schafft. Die Graphfläche änderte ihre Höhe sonst über mehrere Bilder (und die Seite könnte erst
+   danach an ihre Stelle rücken). Der Abstand gilt sofort. */
+@media (prefers-reduced-motion: reduce) { .brain .brain-rahmen { transition-property: none !important; } }

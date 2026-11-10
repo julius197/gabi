@@ -48,7 +48,7 @@
     const statusName = (id) => (B.STATUS.find((s) => s.id === id) || { name: id }).name;
     const vorsatz = () => (z.demo ? "gabi.demo." : "gabi.");
     const schmal = window.matchMedia("(max-width: 479.98px)");
-    const grob = window.matchMedia("(pointer: coarse)"); // Touch-Gerät: Fokus nie von selbst in ein Textfeld (klappte die Tastatur auf)
+    const grob = window.matchMedia("(pointer: coarse)"); // Touch-Gerät: Fokus nie von selbst in ein Textfeld (klappte die Tastatur auf); Knoten im Graphen greift man mit dem Finger durch kurzes Halten
     const PROBE_KNOTEN = Math.min(5000, Math.max(0, Math.floor(Number(new URLSearchParams(location.search).get("brainknoten")) || 0)));
     const lokal = {
       lesen(k) { try { return JSON.parse(localStorage.getItem(vorsatz() + k) || "null"); } catch { return null; } },
@@ -285,7 +285,7 @@
                   <li><span class="brain-zeichen klaeren">?</span>Zu klären</li>
                   <li><span class="brain-zeichen entwurf"></span>Entwurf (gestrichelt)</li>
                   <li><span class="brain-zeichen schloss">${symbol("schloss", "klein")}</span>Geschützt (nur lesen)</li>
-                  <li><span class="brain-zeichen fest"></span>Von dir festgesetzt (gezogen)</li>
+                  <li><span class="brain-zeichen fest"></span>${grob.matches ? "Von dir festgesetzt (kurz halten, dann ziehen)" : "Von dir festgesetzt (gezogen)"}</li>
                 </ul>
               </details>
               <p class="unsichtbar" id="brain-ansage" aria-live="polite"></p>
@@ -301,20 +301,6 @@
         <p class="unsichtbar" id="brain-meldung" role="status"></p>
         <datalist id="brain-quellen"><option value="Philipp"></option><option value="Julius"></option><option value="physio-works.de"></option></datalist>
         <datalist id="brain-titel-liste"></datalist>`;
-      // Am Laptop ist die Legende von Anfang an offen – wenn sie ganz unter die Zoom-Knöpfe passt. Ist die Fläche dafür zu
-      // niedrig (ihr Inhalt scrollte dann, siehe max-height), bleibt sie zugeklappt. Entschieden wird, sobald der Graph
-      // seine Größe hat – der Beobachter meldet das vor dem ersten Bild, es klappt also nichts sichtbar um.
-      if (app.laptop.matches && typeof ResizeObserver === "function") {
-        const graph = $("#brain-graph");
-        const legende = $("#brain-legende");
-        const groesse = new ResizeObserver(() => {
-          if (!graph.clientHeight) return;
-          groesse.disconnect();
-          legende.open = true;
-          if (legende.scrollHeight > legende.clientHeight + 1) legende.open = false;
-        });
-        groesse.observe(graph);
-      } else if (app.laptop.matches) $("#brain-legende").open = true;
       const suche = $("#brain-suche");
       let uhr = null;
       suche.addEventListener("input", () => {
@@ -362,13 +348,12 @@
       filterZeichnen();
       standZeichnen(); // Trefferzahl und leerer Zustand im Graphen (Einblendung in der Fläche), Ansage für Screenreader
       for (const [id] of REITER) $(`#brain-${id}`).hidden = z.reiter !== id;
+      detailZeichnen(); // vor dem Graphen: Er rechnet mit dem Bereich, den Panel oder Blatt frei lassen
       if (z.reiter === "graph") graphZeichnen();
       else if (z.graph) z.graph.aktiv(false);
       if (z.reiter === "liste") listeZeichnen();
       if (z.reiter === "luecken") lueckenZeichnen();
       if (z.reiter === "faehigkeiten") faehigkeitenZeichnen();
-      detailZeichnen();
-      if (z.graph && z.reiter === "graph") z.graph.verdeckt(verdeckt()); // Zentrieren und Einpassen rechnen mit dem freien Bereich
       if (z.wiederherstellbar) notfallAnbieten();
     }
 
@@ -525,12 +510,95 @@
       return { hintergrund: f("--brain-g-hintergrund"), platte: f("--brain-g-platte"), text: f("--brain-g-text"), textLeise: f("--brain-g-text-leise"), kante: f("--brain-g-kante"), kanteStark: f("--brain-g-kante-stark"), akzent: f("--brain-g-akzent"), warn: f("--brain-g-warn"), arten };
     }
     const ansage = (text) => { const a = $("#brain-ansage"); if (a) a.textContent = text; };
+    const ABSTAND_KOPF = 8;  // so weit unter dem Kopf steht der Graph, wenn am Handy das Blatt aufgeht
+    const FREI_MIN = 120;    // weniger Graph über dem Blatt lohnt das Rücken nicht (brain-graph.js rechnet dann ohne die Ränder)
+    let blatt = null;        // Handy: { vorher, ziel } – Rollstand der Seite vor und nach dem Rücken für das Blatt
+    let rollZiel = null;     // dorthin ist die Seite gerade unterwegs
+    let rollLauf = 0;
+    /**
+     * Lage des Details im Fenster in Ruhe – ohne die Einblend-Bewegung, die es beim Aufgehen kurz versetzt. Deshalb aus
+     * dem Layout gelesen (offsetLeft/offsetTop kennen keine Verschiebung), nicht aus dem gemalten Rechteck.
+     */
+    function detailLage(d) {
+      const p = d.offsetParent; // Laptop: die Bühne · Handy: keiner (das Blatt hängt fest am Fensterrand)
+      const r = p ? p.getBoundingClientRect() : { left: 0, top: 0 };
+      return { links: r.left + (p ? p.clientLeft : 0) + d.offsetLeft, oben: r.top + (p ? p.clientTop : 0) + d.offsetTop };
+    }
+    const kopfUnten = () => { const k = document.getElementById("kopf"); return k && !k.hidden ? Math.max(0, k.getBoundingClientRect().bottom) : 0; };
+    /**
+     * Was das Detail vom Graphen verdeckt: am Laptop das Panel rechts, am Handy das Blatt unten (und der Kopf oben, wenn
+     * die Seite gerollt ist). Gerechnet wird mit dem Stand, an dem die Seite ankommt – nicht mit dem Bild mitten im Rollen.
+     */
     function verdeckt() {
       const d = $("#brain-detail");
       if (!d || d.hidden) return {};
-      const r = d.getBoundingClientRect();
-      const b = $("#brain-graph").getBoundingClientRect();
-      return app.laptop.matches ? { rechts: Math.max(0, b.right - r.left) } : { unten: Math.max(0, b.bottom - r.top) };
+      const g = $("#brain-graph").getBoundingClientRect();
+      const lage = detailLage(d);
+      if (app.laptop.matches) return { offen: true, rechts: Math.max(0, g.right - lage.links) };
+      const rollt = rollZiel === null ? 0 : rollZiel - window.scrollY;
+      // einpassen: false – das Blatt liegt nur über der Fläche: „Alles zeigen“ nimmt sie ganz, der gewählte Knoten steht im freien Streifen
+      return { offen: true, oben: Math.max(0, kopfUnten() - (g.top - rollt)), unten: Math.max(0, g.bottom - rollt - lage.oben), einpassen: false };
+    }
+    /** Was über der Graphfläche schwebt (Minimap, Knöpfe, Legende, Fokus-Leiste) – „Alles zeigen“ legt keinen Knoten darunter. */
+    function hindernisse() {
+      const f = $("#brain-graph-rahmen").getBoundingClientRect();
+      return [...wurzel.querySelectorAll(".brain-graph-karte, .brain-graph-knoepfe, .brain-legende, .brain-fokus")].filter((e) => !e.hidden)
+        .map((e) => { const r = e.getBoundingClientRect(); return { x: r.left - f.left, y: r.top - f.top, breite: r.width, hoehe: r.height }; });
+    }
+    /** Seite rollen: weich und im Takt mit Kamera und Blatt (260 ms) – sofort bei „Bewegung reduzieren“ oder wenn die Ansicht eben erst erscheint. */
+    function rollen(ziel, sofort) {
+      const lauf = ++rollLauf;
+      rollZiel = ziel;
+      // im nächsten Bild: app.js rollt beim Wechsel in den Bereich erst noch an den Anfang
+      requestAnimationFrame((t0) => {
+        if (lauf !== rollLauf) return;
+        const von = window.scrollY;
+        if (sofort || Math.abs(ziel - von) < 1) { window.scrollTo(0, ziel); rollZiel = null; return; }
+        const schritt = (t) => {
+          if (lauf !== rollLauf) return;
+          const p = Math.min(1, (t - t0) / 260);
+          window.scrollTo(0, von + (ziel - von) * (1 - Math.pow(1 - p, 4)));
+          if (p < 1) requestAnimationFrame(schritt); else rollZiel = null;
+        };
+        requestAnimationFrame(schritt);
+      });
+    }
+    /**
+     * Handy: Geht das Blatt über dem Graphen auf, läge er ganz darunter. Die Seite rückt ihn deshalb einmal direkt unter
+     * den Kopf (danach bestimmt wieder die Hand); geht das Blatt zu, steht sie wieder, wo sie war. warDa: Der Graph stand
+     * eben schon im Bild (sonst erscheint er gleich an der richtigen Stelle – nichts rollt sichtbar).
+     */
+    function blattPlatz(warDa) {
+      const d = $("#brain-detail");
+      if (!warDa) blatt = null; // inzwischen woanders gewesen: Der gemerkte Stand gilt nicht mehr
+      if (d.hidden || app.laptop.matches) {
+        if (!blatt) return;
+        const b = blatt;
+        blatt = null;
+        rollLauf++;
+        rollZiel = null;
+        if (b.ziel !== b.vorher) window.scrollTo(0, b.vorher);
+        return;
+      }
+      if (blatt) return;
+      const g = $("#brain-graph").getBoundingClientRect();
+      const kopf = kopfUnten();
+      const start = warDa ? window.scrollY : 0;
+      const hoechstens = Math.max(0, document.documentElement.scrollHeight - document.documentElement.clientHeight);
+      let ziel = Math.round(Math.min(hoechstens, g.top + window.scrollY - kopf - ABSTAND_KOPF));
+      if (ziel <= start + 1 || detailLage(d).oben - kopf - ABSTAND_KOPF < FREI_MIN) ziel = start; // steht schon hoch genug – oder es bliebe kaum etwas zu sehen
+      blatt = { vorher: start, ziel };
+      if (ziel !== start || !warDa) rollen(ziel, !warDa || app.wenigBewegung.matches);
+    }
+    /**
+     * Knoten per Tipp oder Klick geöffnet: Für die Spanne eines Doppeltipps nimmt alles, was über dem Graphen liegt, keine
+     * Zeiger an (brain.css) – der zweite Tipp zentriert den Knoten, statt im aufgehenden Detail etwas auszulösen.
+     */
+    let sperrUhr = null;
+    function tippSperre() {
+      wurzel.classList.add("tipp-sperre");
+      clearTimeout(sperrUhr);
+      sperrUhr = setTimeout(() => wurzel.classList.remove("tipp-sperre"), 350);
     }
 
     /** Das ganze Bild frisch anordnen – löst auch alle von Hand festgesetzten Knoten. */
@@ -543,8 +611,12 @@
 
     function graphZeichnen() {
       const rahmen = $("#brain-graph-rahmen");
+      const warDa = Boolean(z.graph) && z.graph.istAktiv(); // stand der Graph eben schon im Bild?
+      const neu = !z.graph;
       if (!z.graph) {
         if (!rahmen.clientWidth || !rahmen.clientHeight) { requestAnimationFrame(() => { if (!wurzel.hidden && z.reiter === "graph") zeichnen(); }); return; }
+        // Legende: offen nur, wo sie dem Graphen genug Platz lässt (auf kleiner Fläche deckte sie ein Viertel davon zu)
+        $("#brain-legende").open = app.laptop.matches && rahmen.clientWidth >= 1000 && rahmen.clientHeight >= 560;
         z.graph = G.erstelle(rahmen, {
           farben,
           wenigBewegung: () => app.wenigBewegung.matches,
@@ -553,15 +625,22 @@
           beiAuswahl: (id, info) => {
             if (info && info.quelle === "tastatur" && id && !$("#brain-detail").hidden && !ungespeichert()) app.adresseSetzen(`#/brain/${id}`, { ersetzen: true });
           },
-          beiOeffnen: (id) => { if (id) oeffnen(id, { fokus: true }); },
+          beiOeffnen: (id, info) => {
+            if (!id) return;
+            if (info && info.quelle === "zeiger") tippSperre(); // nur per Tipp oder Klick – nicht bei Eingabetaste oder aus der Liste
+            oeffnen(id, { fokus: true });
+          },
           beiHover: () => {},
           // gezogen = festgesetzt: das offene Detail bekommt den Knopf „Lösen“ (nur wenn gerade nicht bearbeitet wird)
           beiFixiert: (id) => { if (id === z.auswahl && !z.bearbeitung && !$("#brain-detail").hidden) detailZeichnen(); },
+          hindernisse,
           ansage,
         });
         z.graphSignatur = "";
       }
       z.graph.aktiv(true);
+      blattPlatz(warDa);
+      z.graph.verdeckt(verdeckt()); // vor allem, was die Kamera bewegt: Sie rechnet mit dem freien Bereich
       if (PROBE_KNOTEN) {
         // Leistungsmessung: erfundener Graph (nur die Zeichnung – das Brain selbst bleibt unberührt)
         if (!z.graphSignatur) { z.graphSignatur = "probe"; z.graph.setzen(G.testDaten(PROBE_KNOTEN, 7)); z.graph.einpassen({}); }
@@ -582,16 +661,19 @@
       z.graph.treffer(z.treffer);
       const fokusOk = z.fokus && z.brain.hol(z.fokus.id);
       if (z.fokus && !fokusOk) z.fokus = null;
+      fokusLeiste(); // vor dem Einpassen: Die Leiste liegt über der Fläche, darunter soll kein Knoten stehen
       z.graph.fokus(z.fokus ? z.fokus.id : null, z.fokus ? z.fokus.tiefe : 1);
-      // Sprung aus dem Gespräch (Quellen-Chip): den Knoten in den Blick holen – sonst bleibt der Ausschnitt, wie er ist
+      // Die Auswahl wird jedes Mal gesetzt, in den Blick geholt wird der Knoten nur, wenn sie wechselt (brain-graph.js) –
+      // beim Sprung aus dem Gespräch (Quellen-Chip) fliegt die Kamera ausdrücklich hin. Sonst bleibt der Ausschnitt, wie er ist.
       z.graph.auswaehlen(z.auswahl && z.brain.hol(z.auswahl) ? z.auswahl : null, { zentrieren: Boolean(z.leuchten.length && z.auswahl) });
-      if (erstes) z.graph.einpassen({ verdeckt: verdeckt() });
-      fokusLeiste();
+      if (erstes) z.graph.einpassen({ verdeckt: verdeckt(), sofort: true });
       if (z.leuchten.length) {
         const ids = z.leuchten.filter((id) => z.brain.hol(id));
         z.leuchten = [];
         if (ids.length) setTimeout(() => { if (z.graph) z.graph.hervorheben(ids, { dauer: 1800 }); }, 260);
       }
+      // eben erst angelegt: Jetzt weiß der Graph, welche Knoten festgesetzt sind – das offene Detail bekommt seinen Knopf „Lösen“
+      if (neu && !$("#brain-detail").hidden && !z.bearbeitung) detailZeichnen();
     }
 
     function fokusLeiste() {

@@ -18,6 +18,8 @@
   const ZWEI_PI = Math.PI * 2;
   const GOLDEN = Math.PI * (3 - Math.sqrt(5));
   const klemmen = (w, min, max) => (w < min ? min : w > max ? max : w);
+  /** Zwei Mengen mit demselben Inhalt? */
+  const gleicheMenge = (a, b) => { if (a.size !== b.size) return false; for (const w of a) if (!b.has(w)) return false; return true; };
   const uhr = typeof performance !== "undefined" && performance && typeof performance.now === "function" ? () => performance.now() : () => Date.now();
   const nachId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
@@ -757,6 +759,129 @@
     const zielY = ob + (hoehe - ob - u) / 2;
     return { x: mx - (zielX - breite / 2) / zoom, y: my - (zielY - hoehe / 2) / zoom, zoom };
   }
+  /** Zwei Kameras zeigen dasselbe Bild (Unterschied unter einem Zwanzigstel Pixel). */
+  const gleicheKamera = (a, b) => Boolean(a && b) && Math.abs(a.zoom / b.zoom - 1) < 1e-4 && Math.abs(a.x - b.x) * a.zoom < 0.05 && Math.abs(a.y - b.y) * a.zoom < 0.05;
+  const FREI_MIN = 120; // px
+  /**
+   * Die Ränder, mit denen die Kamera rechnet. Bleibt neben einem Panel oder über einem Blatt weniger als mindest frei
+   * (am Handy deckt das Blatt die Fläche fast ganz zu), zählen sie gar nicht – sonst flöge alles ins Verdeckte oder das
+   * Bild fiele auf den kleinsten Zoom zusammen. einpassen: false = nur für den Blick auf einen Knoten, „Alles zeigen“ nimmt
+   * die ganze Fläche (ein Blatt liegt nur darüber).
+   */
+  function freieRaender(verdeckt, breite, hoehe, mindest = FREI_MIN) {
+    const v = verdeckt || {};
+    const zahl = (w) => (Number.isFinite(w) && w > 0 ? w : 0);
+    const r = { links: zahl(v.links), rechts: zahl(v.rechts), oben: zahl(v.oben), unten: zahl(v.unten), einpassen: v.einpassen !== false };
+    if (breite - r.links - r.rechts < mindest || hoehe - r.oben - r.unten < mindest) return { links: 0, rechts: 0, oben: 0, unten: 0, einpassen: true };
+    return r;
+  }
+  /** Liegt der Bildpunkt in der freien Fläche – mit Abstand zum Rand (höchstens rand, in einem schmalen Streifen ein Viertel davon)? */
+  function imFreien(p, breite, hoehe, raender, rand = 56) {
+    const rx = Math.min(rand, (breite - raender.links - raender.rechts) / 4);
+    const ry = Math.min(rand, (hoehe - raender.oben - raender.unten) / 4);
+    return p.x >= raender.links + rx && p.x <= breite - raender.rechts - rx && p.y >= raender.oben + ry && p.y <= hoehe - raender.unten - ry;
+  }
+  /**
+   * Kamera so verschieben – erst wenn das nicht reicht, verkleinern –, dass kein Knoten unter einem Bedienelement liegt,
+   * das über der Fläche schwebt (Minimap, Legende, Knöpfe). Rein.
+   *   punkte      [{ x, y, r }] in Welt-Koordinaten (r = Radius im Bild bei Zoom 1)
+   *   hindernisse [{ x, y, breite, hoehe }] im Bild
+   *   frei        { links, oben, rechts, unten }: Kanten der freien Fläche im Bild (Standard: alles)
+   *   rand, randUnten: so viel Abstand zum Rand bleibt mindestens (unten mehr: dort stehen die Labels)
+   *   radius(r, zoom) → Radius im Bild · abstand: Luft um jedes Bedienelement · schritte: höchstens so oft um 5 % verkleinern
+   * Ohne Lösung bleibt die Kamera, wie sie war.
+   */
+  function kameraAusweichen(kamera, punkte, breite, hoehe, { hindernisse = [], frei = null, rand = 14, randUnten = rand, abstand = 5, schritte = 12, raster = 4, radius = (r, zoom) => r * zoom, minZoom = ZOOM_MIN } = {}) {
+    const f = frei || { links: 0, oben: 0, rechts: breite, unten: hoehe };
+    const dinge = [];
+    for (const h of hindernisse || []) {
+      if (!h || !(h.breite > 0) || !(h.hoehe > 0)) continue;
+      const d = { l: h.x - abstand, o: h.y - abstand, r: h.x + h.breite + abstand, u: h.y + h.hoehe + abstand };
+      if (d.r <= f.links || d.l >= f.rechts || d.u <= f.oben || d.o >= f.unten) continue; // liegt selbst im Verdeckten
+      dinge.push(d);
+    }
+    const n = punkte ? punkte.length : 0;
+    if (!dinge.length || !n || !(kamera.zoom > 0)) return kamera;
+    // der Weltpunkt, der beim Start in der Mitte der freien Fläche liegt, bleibt der Anker
+    const cx = (f.links + f.rechts) / 2;
+    const cy = (f.oben + f.unten) / 2;
+    const anker = zuWelt(kamera, cx, cy, breite, hoehe);
+    const bx = new Float32Array(n);
+    const by = new Float32Array(n);
+    const br = new Float32Array(n);
+    const nah = [];
+    let zoom = kamera.zoom;
+    for (let s = 0; s <= schritte && zoom >= minZoom; s++, zoom *= 0.95) {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (let i = 0; i < n; i++) {
+        const p = punkte[i];
+        bx[i] = cx + (p.x - anker.x) * zoom;
+        by[i] = cy + (p.y - anker.y) * zoom;
+        br[i] = radius(p.r, zoom);
+        if (bx[i] - br[i] < minX) minX = bx[i] - br[i];
+        if (bx[i] + br[i] > maxX) maxX = bx[i] + br[i];
+        if (by[i] - br[i] < minY) minY = by[i] - br[i];
+        if (by[i] + br[i] > maxY) maxY = by[i] + br[i];
+      }
+      // so weit darf das Bild rücken, ohne dass ein Knoten dem Rand zu nahe kommt
+      const dxMin = f.links + rand - minX;
+      const dxMax = f.rechts - rand - maxX;
+      const dyMin = f.oben + rand - minY;
+      const dyMax = f.unten - randUnten - maxY;
+      if (dxMin > dxMax || dyMin > dyMax) continue; // passt bei diesem Zoom nicht in die Ränder
+      // nur Knoten, die überhaupt unter ein Bedienelement geraten können
+      nah.length = 0;
+      for (let i = 0; i < n; i++) {
+        for (const d of dinge) {
+          if (bx[i] + br[i] + dxMax > d.l && bx[i] - br[i] + dxMin < d.r && by[i] + br[i] + dyMax > d.o && by[i] - br[i] + dyMin < d.u) { nah.push(i); break; }
+        }
+      }
+      const trifft = (dx, dy) => {
+        for (const i of nah) {
+          const x = bx[i] + dx;
+          const y = by[i] + dy;
+          for (const d of dinge) {
+            const qx = x < d.l ? d.l : x > d.r ? d.r : x;
+            const qy = y < d.o ? d.o : y > d.u ? d.u : y;
+            if ((x - qx) * (x - qx) + (y - qy) * (y - qy) < br[i] * br[i]) return true;
+          }
+        }
+        return false;
+      };
+      // die kleinste Verschiebung gewinnt (feste Reihenfolge: gleiches Bild → gleiches Ergebnis)
+      let bestX = 0;
+      let bestY = 0;
+      let bester = Infinity;
+      const x0 = klemmen(0, dxMin, dxMax);
+      const y0 = klemmen(0, dyMin, dyMax);
+      const xs = [x0];
+      const ys = [y0];
+      for (let x = x0 - raster; x >= dxMin; x -= raster) xs.push(x);
+      for (let x = x0 + raster; x <= dxMax; x += raster) xs.push(x);
+      for (let y = y0 - raster; y >= dyMin; y -= raster) ys.push(y);
+      for (let y = y0 + raster; y <= dyMax; y += raster) ys.push(y);
+      if (!xs.includes(dxMax)) xs.push(dxMax); // die Ränder des Spielraums gehören dazu
+      if (!xs.includes(dxMin)) xs.push(dxMin);
+      if (!ys.includes(dyMax)) ys.push(dyMax);
+      if (!ys.includes(dyMin)) ys.push(dyMin);
+      for (const dy of ys) {
+        for (const dx of xs) {
+          const w = dx * dx + dy * dy;
+          if (w >= bester || trifft(dx, dy)) continue;
+          bester = w;
+          bestX = dx;
+          bestY = dy;
+        }
+      }
+      if (bester === Infinity) continue;
+      if (s === 0 && bestX === 0 && bestY === 0) return kamera; // nichts liegt darunter
+      return { x: anker.x - (cx + bestX - breite / 2) / zoom, y: anker.y - (cy + bestY - hoehe / 2) / zoom, zoom };
+    }
+    return kamera;
+  }
 
   // ---------- Labels ----------
   /** Titel für das Label: an der Wortgrenze gekürzt, mit „…“. */
@@ -843,6 +968,25 @@
       ergebnis.push(gesetzt);
     }
     return ergebnis;
+  }
+
+  // ---------- Zeichen am Knoten, Trefferflächen ----------
+  /**
+   * Schloss an einem geschützten Knoten (r = Radius im Bild): Es wächst mit dem Knoten – in der Übersicht klein, ab 6 px
+   * in voller Größe. Sehr kleine Knoten tragen es zarter, die kleinsten Punkte gar nicht (sonst wäre das Zeichen größer
+   * als der Knoten). Am Zoom hängt es nicht.
+   */
+  function schlossMass(r) {
+    return { groesse: klemmen(r / 6, 0.5, 1), deckkraft: klemmen((r - 2.6) / 0.8, 0, 1) };
+  }
+  /**
+   * Trefferfläche eines Knotens (r = Radius im Bild, Ergebnis in px). Maus: knapp um den Knoten. Finger: zum Antippen
+   * mindestens 44 px Durchmesser – zum sofortigen Ziehen aber nur der sichtbare Knoten selbst, sonst zöge fast jeder
+   * Wisch durch den Graphen einen Knoten mit (greifen geht über kurzes Halten, siehe HALTEN_MS).
+   */
+  function trefferRadius(r, zeigerTyp, ziehen = false) {
+    if (zeigerTyp === "mouse") return r + 5;
+    return ziehen ? r + 2 : Math.max(22, r + 8);
   }
 
   // ---------- Tastatur: Nachbar in Pfeilrichtung ----------
@@ -1019,6 +1163,9 @@
   const DIMM_HOVER = 0.16;    // Rest beim Zeigen auf einen Knoten
   const DIMM_TREFFER = 0.22;  // Rest bei Suchtreffern
   const FLUG_MS = 260;
+  const DOPPEL_MS = 320;      // zwei Tipps an derselben Stelle in dieser Zeit = Doppeltipp
+  const DOPPEL_PX = 24;
+  const HALTEN_MS = 250;      // Finger so lange still auf einem Knoten = gegriffen (kürzer als ein Doppeltipp – ein gehaltener Tipp ist nie dessen zweiter)
   const PULS_MS = 6000;       // „zu klären“ pulsiert so lange nach dem Erscheinen – danach steht der Ring still (kein Dauerlauf)
   const PULS_PERIODE = 1700;
   const SCHEIN_MS = 1800;
@@ -1032,12 +1179,18 @@
    *   wenigBewegung()  → true: Layout fertig rechnen und ein Bild zeigen, keine Flüge, kein Puls, kein Schein
    *   workerUrl        Adresse dieser Datei für den Web Worker (null = Layout im Hauptfaden, höchstens 6 ms je Bild)
    *   positionen       { lesen() → { id: [x, y, fest] }, schreiben(obj) } – nach dem Beruhigen und nach dem Ziehen
-   *   beiAuswahl(id | null, { quelle: "zeiger" | "tastatur" }) · beiOeffnen(id) · beiHover(id | null) · ansage(text)
+   *   beiAuswahl(id | null, { quelle: "zeiger" | "tastatur" }) · beiOeffnen(id, { quelle }) · beiHover(id | null) · ansage(text)
    *   beiFixiert(id, true) nach dem Ziehen eines Knotens (er bleibt liegen, bis fixieren(id, false) oder neuAnordnen({ auchFeste }))
+   *   hindernisse()    → [{ x, y, breite, hoehe }] relativ zum Behälter: was über der Fläche schwebt (Minimap, Legende, Knöpfe) –
+   *                      beim Einpassen bleibt kein Knoten darunter
    *   ziehen           "ruhig" (Standard): nur der Knoten wandert, seine Blätter kommen starr mit, der Rest steht still ·
    *                    "lebendig": die Nachbarn federn über das Layout mit
    *   layout           eigene Layout-Werte (siehe LAYOUT_STANDARD) · drossel: false = Pixeldichte nie senken
-   * Über den Bauplan hinaus: verdeckt(ränder), lageImBild(id), istFest(id), neuAnordnen({ auchFeste }), messen() mit ruht/worker/zoom/fest.
+   * Über den Bauplan hinaus: verdeckt(ränder), lageImBild(id), istFest(id), istAktiv(), neuAnordnen({ auchFeste }),
+   * messen() mit ruht/worker/zoom/fest/schloesser.
+   * Kamera und Detail: verdeckt(ränder) meldet, was Panel oder Blatt verdecken. Geht es auf, holt auswaehlen(id) den
+   * Knoten einmal in den freien Bereich (nur beim Wechsel der Auswahl – ein bloßes Neuzeichnen bewegt nichts); geht es
+   * zu, steht die Kamera wieder wie vorher, wenn sie inzwischen niemand von Hand bewegt hat.
    */
   function erstelle(behaelter, optionen) {
     const opt = optionen || {};
@@ -1060,6 +1213,7 @@
     flaeche.setAttribute("aria-roledescription", "Wissensgraph");
     flaeche.setAttribute("aria-label", "Wissensgraph. Pfeiltasten springen zum nächsten verbundenen Knoten, Eingabe öffnet die Details, Plus und Minus zoomen, 0 zeigt alles.");
     flaeche.style.touchAction = "none";
+    flaeche.style.webkitTouchCallout = "none"; // Halten greift einen Knoten – kein Auswahlmenü des Systems
     const ersatz = dok.createElement("ul"); // Ersatzinhalt für Hilfstechnik: dieselben Knoten als Liste
     flaeche.append(ersatz);
     const karte = dok.createElement("canvas");
@@ -1093,7 +1247,10 @@
     let flug = null;            // { von, nach, start, dauer }
     let kameraBeruehrt = false; // seit dem letzten Datenstand von Hand bewegt → nicht mehr automatisch einpassen
     let ersteLagen = true;
-    let verdeckt = { links: 0, rechts: 0, oben: 0, unten: 0 };
+    let verdeckt = { links: 0, rechts: 0, oben: 0, unten: 0, einpassen: true, offen: false };
+    let gewuenscht = null;      // Auswahl der Ansicht (der Eintrag im offenen Detail) – nur ihr Wechsel holt den Knoten in den Blick
+    let blick = null;           // { vorher, nach }: Kamera vor und nach dem Verschieben für das Detail (zum Zurückstellen)
+    let mitteAuf = null;        // { i, kamera }: zuletzt auf diesen Knoten zentriert
     let auswahl = -1;
     let hover = -1;
     let trefferMenge = null;    // Set von Indizes
@@ -1127,7 +1284,9 @@
     const kosten = [];           // Zeichenkosten der letzten Bilder (ms)
     const bildZeiten = [];       // Zeitpunkte der letzten Bilder
     let bilder = 0;
-    let letzterTipp = null;
+    let schloesser = 0;          // im letzten Bild gezeichnete Schlösser (Messwert)
+    let letzterTipp = null;      // { id, zeit, x, y } – Ort im Fenster: die Fläche kann unter dem Finger wandern
+    let halteUhr = 0;
     const zeiger = new Map();
     let geste = null;
     let treiber = null;
@@ -1258,10 +1417,12 @@
       const trefferIds = trefferMenge ? [...trefferMenge].map((i) => K[i] && K[i].id) : null;
       const fokusIds = fokusMenge ? [...fokusMenge].map((i) => K[i] && K[i].id) : null;
       const hervorAlt = [...hervor].map(([i, h]) => [K[i] && K[i].id, h]);
-      const ziehId = geste && geste.typ === "knoten" && K[geste.i] ? K[geste.i].id : null;
+      const ziehId = geste && geste.i >= 0 && K[geste.i] ? K[geste.i].id : null;
       const mitIds = ziehId && geste.mit ? geste.mit.map((i) => K[i] && K[i].id) : null;
 
       uebergang = null; // neuer Datenstand: ein laufendes Hinübergleiten endet (die Reihenfolge der Knoten kann sich ändern)
+      mitteAuf = null;  // … und gemerkte Nummern von Knoten gelten nicht mehr
+      if (flug) flug.mitte = -1;
       nIndex = new Map(liste.map((k, i) => [k.id, i]));
       // Kanten: jedes Paar einmal, ohne Schleifen
       const paare = new Set();
@@ -1313,9 +1474,9 @@
       fokusMenge = fokusIds ? new Set(fokusIds.map(idx).filter((i) => i >= 0)) : null;
       hervor.clear();
       for (const [id, h] of hervorAlt) if (idx(id) >= 0) hervor.set(idx(id), h);
-      if (geste && geste.typ === "knoten") {
-        // mitten im Ziehen kam ein neuer Datenstand (z. B. aus einem anderen Fenster): die Geste folgt ihrem Knoten
-        if (idx(ziehId) < 0) geste = null;
+      if (geste && geste.i >= 0) {
+        // mitten in einer Geste kam ein neuer Datenstand (z. B. aus einem anderen Fenster): die Geste folgt ihrem Knoten
+        if (idx(ziehId) < 0) { halteEnde(); if (geste.typ === "knoten") geste = null; else geste.i = -1; } // der Knoten ist weg
         else { geste.i = idx(ziehId); if (mitIds) geste.mit = mitIds.map(idx).filter((i) => i >= 0); }
       }
       for (const id of [...labelDeck.keys()]) if (!nIndex.has(id)) { labelDeck.delete(id); labelMerk.delete(id); }
@@ -1523,29 +1684,109 @@
       }
       return zahl ? { minX, minY, maxX, maxY, zahl } : null;
     }
-    function fliegen(ziel, dauer = FLUG_MS) {
+    /** mitte: Nummer des Knotens, auf den der Flug zentriert (ändert sich dabei der freie Bereich, zieht das Ziel nach). */
+    function fliegen(ziel, dauer = FLUG_MS, mitte = -1) {
+      if (!flug && gleicheKamera(kam, ziel)) return; // steht schon dort
       if (dauer <= 0 || wenig() || cssB < 2) { kam = { ...ziel }; flug = null; anfordern(); return; }
-      flug = { von: { ...kam }, nach: { ...ziel }, start: 0, dauer };
+      flug = { von: { ...kam }, nach: { ...ziel }, start: 0, dauer, mitte };
       anfordern();
+    }
+    /** Wohin die Kamera will: das Ziel eines laufenden Flugs, sonst ihr Stand. */
+    const kameraZiel = () => (flug ? flug.nach : kam);
+    /** Die Ränder, mit denen gerechnet wird (zu wenig frei → keine, siehe freieRaender). */
+    const frei = () => freieRaender(verdeckt, cssB, cssH);
+    /** Liegt der Knoten bei dieser Kamera in der freien Fläche (mit rand px Abstand zu ihrem Rand)? */
+    const knotenFrei = (i, kamera, r = frei(), rand = 56) => imFreien(zuBild(kamera, px[i], py[i], cssB, cssH), cssB, cssH, r, rand);
+    const RAND_DETAIL = 12; // geht das Detail auf, rückt die Kamera nur für Knoten, die es (fast) verdeckt – nicht für jeden am Rand
+    /** Bedienelemente über der Fläche (Minimap, Legende, Knöpfe): Die Kamera rückt, bis kein Knoten darunter liegt. */
+    function meiden(ziel, r, schmal) {
+      let dinge = null;
+      try { dinge = typeof opt.hindernisse === "function" ? opt.hindernisse() : null; } catch { dinge = null; }
+      if (!Array.isArray(dinge) || !dinge.length) return ziel;
+      const punkte = [];
+      for (let i = 0; i < K.length; i++) if (hatLage[i] && !versteckt(i)) punkte.push({ x: px[i], y: py[i], r: K[i].r });
+      return kameraAusweichen(ziel, punkte, cssB, cssH, {
+        hindernisse: dinge, frei: { links: r.links, oben: r.oben, rechts: cssB - r.rechts, unten: cssH - r.unten },
+        rand: schmal ? 12 : 16, randUnten: schmal ? 24 : 32, radius: (w, zoom) => Math.max(R_MIN, w * radiusZoom(zoom)),
+      });
     }
     function einpassenJetzt(sofort) {
       const g = grenzen(true);
       if (!g || cssB < 2 || cssH < 2) return;
-      // Platz für die Labels unter den Knoten und für die Minimap mitdenken
-      const ziel = kameraEinpassen(g, cssB, cssH, { rand: cssB < 520 ? 28 : 56, verdeckt, maxZoom: 1.5 });
+      const r = frei();
+      const schmal = cssB < 520;
+      // Platz für die Labels unter den Knoten mitdenken; ein Blatt (einpassen: false) liegt nur über der Fläche
+      const flaecheFrei = r.einpassen ? r : { links: 0, rechts: 0, oben: 0, unten: 0 };
+      let ziel = meiden(kameraEinpassen(g, cssB, cssH, { rand: schmal ? 28 : 56, verdeckt: flaecheFrei, maxZoom: 1.5 }), flaecheFrei, schmal);
+      // … dann muss der Eintrag des offenen Details im freien Streifen stehen
+      const i = gewuenscht != null && nIndex.has(gewuenscht) ? nIndex.get(gewuenscht) : -1;
+      if (!r.einpassen && i >= 0 && hatLage[i] && !versteckt(i) && !knotenFrei(i, ziel, r, RAND_DETAIL)) ziel = kameraAuf(i, ziel.zoom);
       fliegen(ziel, sofort ? 0 : FLUG_MS);
     }
-    const freieMitte = () => ({ x: verdeckt.links + (cssB - verdeckt.links - verdeckt.rechts) / 2, y: verdeckt.oben + (cssH - verdeckt.oben - verdeckt.unten) / 2 });
+    const freieMitte = () => { const r = frei(); return { x: r.links + (cssB - r.links - r.rechts) / 2, y: r.oben + (cssH - r.oben - r.unten) / 2 }; };
     function kameraAuf(i, zoom) {
       const m = freieMitte();
       const z = klemmen(zoom, ZOOM_MIN, ZOOM_MAX);
       return { x: px[i] - (m.x - cssB / 2) / z, y: py[i] - (m.y - cssH / 2) / z, zoom: z };
     }
-    function sichtbarMachen(i) {
+    /**
+     * Knoten in die freie Fläche holen, wenn er außerhalb liegt. fuerDetail: Das Verschieben gilt dem aufgehenden Detail –
+     * die Kamera davor wird gemerkt (blickZurueck stellt sie wieder her).
+     */
+    function sichtbarMachen(i, fuerDetail = false) {
       if (i < 0 || !hatLage[i] || cssB < 2) return;
-      const p = zuBild(kam, px[i], py[i], cssB, cssH);
-      const rand = 56;
-      if (p.x < verdeckt.links + rand || p.x > cssB - verdeckt.rechts - rand || p.y < verdeckt.oben + rand || p.y > cssH - verdeckt.unten - rand) fliegen(kameraAuf(i, kam.zoom));
+      const jetzt = kameraZiel();
+      if (knotenFrei(i, jetzt, frei(), fuerDetail ? RAND_DETAIL : 56)) return;
+      const ziel = kameraAuf(i, jetzt.zoom);
+      if (fuerDetail) {
+        if (!(blick && gleicheKamera(jetzt, blick.nach))) blick = { vorher: { ...jetzt } }; // sonst: weiter vom Stand vor dem ersten Verschieben aus
+        blick.nach = { ...ziel };
+      }
+      fliegen(ziel);
+    }
+    /**
+     * Das Detail ist zu: Kamera zurück – aber nur, wenn sie seit dem Verschieben niemand von Hand bewegt hat.
+     * sofort: ohne Flug (am Handy springt mit dem Blatt ohnehin das ganze Bild zurück – dann steht gleich alles wie vorher).
+     */
+    function blickZurueck(sofort) {
+      const b = blick;
+      blick = null;
+      if (!kameraBeruehrt) { einpassenJetzt(sofort); return; } // nie von Hand bewegt: wieder alles zeigen, jetzt in der ganzen Fläche
+      if (b && gleicheKamera(kameraZiel(), b.nach)) fliegen(b.vorher, sofort ? 0 : FLUG_MS); // eigener Ausschnitt: genau dorthin zurück
+    }
+    /**
+     * Ränder setzen, die Panel oder Blatt verdecken (offen: Das Detail ist da – auch wenn es gerade nichts verdeckt).
+     * zurueck: Geht es zu, die Kamera zurückstellen.
+     */
+    function verdecktSetzen(v, zurueck) {
+      const b0 = cssB;
+      const h0 = cssH;
+      groesseGeaendert(); // das Blatt ändert am Handy auch die Höhe der Fläche – erst damit stimmt die Rechnung
+      const neu = { links: Math.max(0, (v && v.links) || 0), rechts: Math.max(0, (v && v.rechts) || 0), oben: Math.max(0, (v && v.oben) || 0), unten: Math.max(0, (v && v.unten) || 0), einpassen: !(v && v.einpassen === false) };
+      neu.offen = Boolean(v && v.offen) || neu.links + neu.rechts + neu.oben + neu.unten > 0;
+      const war = verdeckt.offen;
+      const gleich = neu.offen === war && neu.einpassen === verdeckt.einpassen && ["links", "rechts", "oben", "unten"].every((s) => Math.abs(neu[s] - verdeckt[s]) < 1.5);
+      verdeckt = neu;
+      const andereGroesse = neu.offen !== war && b0 > 1 && h0 > 1 && (cssB !== b0 || cssH !== h0);
+      if (andereGroesse) {
+        // Mit dem Detail ändert sich die Größe der Fläche (das Blatt nimmt ihr unten Höhe): Das Bild bleibt dabei oben
+        // links stehen, statt um die halbe Differenz zu rutschen – und steht nach dem Schließen wieder genau wie vorher
+        const dx = (cssB - b0) / 2;
+        const dy = (cssH - h0) / 2;
+        for (const k of flug ? [kam, flug.von, flug.nach] : [kam]) { k.x += dx / k.zoom; k.y += dy / k.zoom; }
+        if (blick) for (const k of [blick.vorher, blick.nach]) { k.x += dx / k.zoom; k.y += dy / k.zoom; }
+        if (mitteAuf) { mitteAuf.kamera.x += dx / mitteAuf.kamera.zoom; mitteAuf.kamera.y += dy / mitteAuf.kamera.zoom; }
+      }
+      if (gleich) return;
+      if (neu.offen) {
+        // eben auf einen Knoten zentriert (Doppeltipp, Sprung vom Quellen-Chip), und erst jetzt geht das Detail auf: Mitte des freien Bereichs
+        const m = mitteAuf;
+        if (m && m.i < K.length && hatLage[m.i] && gleicheKamera(kameraZiel(), m.kamera)) {
+          const ziel = kameraAuf(m.i, m.kamera.zoom);
+          m.kamera = ziel;
+          if (flug) flug.nach = { ...ziel }; else fliegen(ziel, FLUG_MS, m.i);
+        }
+      } else if (war && zurueck) blickZurueck(andereGroesse);
     }
 
     // ---------- Zeichnen ----------
@@ -1559,20 +1800,21 @@
       c.arcTo(x, y, x + w, y, r);
       c.closePath();
     }
-    function schlossZeichnen(x, y, a) {
+    /** s: Größe (1 = volle Größe, kleiner an kleinen Knoten – siehe schlossMass). */
+    function schlossZeichnen(x, y, a, s = 1) {
       ctx.globalAlpha = a;
       ctx.fillStyle = farbe.platte;
       ctx.beginPath();
-      ctx.arc(x, y, 5.6, 0, ZWEI_PI);
+      ctx.arc(x, y, 5.6 * s, 0, ZWEI_PI);
       ctx.fill();
       ctx.fillStyle = farbe.textLeise;
       ctx.strokeStyle = farbe.textLeise;
-      ctx.lineWidth = 1.1;
+      ctx.lineWidth = Math.max(0.8, 1.1 * s);
       ctx.setLineDash([]);
-      rundRechteck(ctx, x - 2.7, y - 0.7, 5.4, 3.9, 0.9);
+      rundRechteck(ctx, x - 2.7 * s, y - 0.7 * s, 5.4 * s, 3.9 * s, 0.9 * s);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(x, y - 0.9, 1.7, Math.PI, 0);
+      ctx.arc(x, y - 0.9 * s, 1.7 * s, Math.PI, 0);
       ctx.stroke();
     }
 
@@ -1689,6 +1931,7 @@
       // 4 Status und Zustände – nie nur über Farbe
       const puls = !ruhig && zeit < pulsBis;
       let zuKlaerenDa = false;
+      let gezeichnet = 0;
       for (let i = 0; i < n; i++) {
         if (!imBild(i)) continue;
         const k = K[i];
@@ -1742,7 +1985,10 @@
             ctx.fillText("?", x, y + 0.5);
           }
         }
-        if (k.geschuetzt && z >= 0.95 && r >= 6) schlossZeichnen(x + r * 0.74, y + r * 0.74, a);
+        if (k.geschuetzt) { // Schloss: wächst mit dem Knoten, hängt nicht am Zoom
+          const m = schlossMass(r);
+          if (m.deckkraft > 0) { schlossZeichnen(x + r * 0.74, y + r * 0.74, a * m.deckkraft, m.groesse); gezeichnet++; }
+        }
         if (k.fest && r >= 4.5) { // fixiert: kleiner Punkt oben rechts
           ctx.globalAlpha = a;
           ctx.fillStyle = f.platte;
@@ -1789,6 +2035,7 @@
         }
       }
       if (puls && zuKlaerenDa) laeuft = true;
+      schloesser = gezeichnet;
 
       // 5 Labels: Detailstufe je Zoom, wichtige zuerst, auf einer Platte; Lage wird gemerkt
       const kandidaten = [];
@@ -1969,18 +2216,19 @@
       zieleRechnen();
       rufe("beiHover", i >= 0 ? K[i].id : null);
     }
-    /** Knoten unter einem Bildpunkt (der nächste, dessen Trefferfläche den Punkt enthält); Finger: mindestens 44 px. */
-    function treffen(x, y, zeigerTyp) {
+    /**
+     * Knoten unter einem Bildpunkt (der nächste, dessen Trefferfläche den Punkt enthält); Finger: mindestens 44 px.
+     * ziehen: die engere Fläche, auf der ein Wisch den Knoten sofort mitnimmt (siehe trefferRadius).
+     */
+    function treffen(x, y, zeigerTyp, ziehen = false) {
       const rz = radiusZoom(kam.zoom);
-      const zusatz = zeigerTyp === "mouse" ? 5 : 8;
-      const mindest = zeigerTyp === "mouse" ? 0 : 22;
       let bester = -1;
       let wert = Infinity;
       for (let i = 0; i < K.length; i++) {
         if (!hatLage[i] || deckZiel[i] === 0) continue;
         const dx = (px[i] - kam.x) * kam.zoom + cssB / 2 - x;
         const dy = (py[i] - kam.y) * kam.zoom + cssH / 2 - y;
-        const r = Math.max(mindest, Math.max(R_MIN, K[i].r * rz) + zusatz);
+        const r = trefferRadius(Math.max(R_MIN, K[i].r * rz), zeigerTyp, ziehen);
         const d = dx * dx + dy * dy;
         if (d <= r * r && d < wert) { wert = d; bester = i; }
       }
@@ -1989,22 +2237,40 @@
 
     // ---------- Zeiger ----------
     const punkt = (e, el = flaeche) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const halteEnde = () => { if (halteUhr) { fenster.clearTimeout(halteUhr); halteUhr = 0; } };
     function zeigerRunter(e) {
       if (e.pointerType === "mouse" && e.button !== 0) return;
       const p = punkt(e);
+      const typ = e.pointerType || "mouse";
       try { flaeche.setPointerCapture(e.pointerId); } catch { /* egal */ }
       if (dok.activeElement !== flaeche) { try { flaeche.focus({ preventScroll: true, focusVisible: false }); } catch { /* egal */ } }
-      zeiger.set(e.pointerId, { x: p.x, y: p.y, typ: e.pointerType || "mouse" });
+      zeiger.set(e.pointerId, { x: p.x, y: p.y, typ });
       flug = null;
+      halteEnde();
       if (zeiger.size >= 2) {
         if (geste && geste.typ === "knoten" && geste.bewegt) knotenLoslassen(geste.i, geste.mit, geste.ruhig);
+        if (geste && geste.gegriffen && hover >= 0) hoverSetzen(-1);
         const [a, b] = [...zeiger.values()];
         geste = { typ: "pinch", abstand: Math.max(8, Math.hypot(a.x - b.x, a.y - b.y)), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, kam: { ...kam } };
         return;
       }
-      const i = treffen(p.x, p.y, e.pointerType || "mouse");
+      // Maus: Der Knoten unter dem Zeiger wird gezogen. Finger: Antippen trifft großzügig (44 px); sofort gezogen wird nur,
+      // wer auf dem Knoten selbst ansetzt – ein Wisch daneben verschiebt den Ausschnitt. Kurzes Halten greift den Knoten.
+      const getippt = treffen(p.x, p.y, typ);
+      const direkt = typ === "mouse" ? getippt : treffen(p.x, p.y, typ, true);
+      const i = direkt >= 0 ? direkt : getippt;
       const w = zuWelt(kam, p.x, p.y, cssB, cssH);
-      geste = { typ: i >= 0 ? "knoten" : "frei", i, startX: p.x, startY: p.y, bewegt: false, kamX: kam.x, kamY: kam.y, zeigerTyp: e.pointerType || "mouse", versatzX: i >= 0 ? px[i] - w.x : 0, versatzY: i >= 0 ? py[i] - w.y : 0 };
+      const g = { typ: direkt >= 0 ? "knoten" : "frei", i, startX: p.x, startY: p.y, bewegt: false, gegriffen: false, kamX: kam.x, kamY: kam.y, zeigerTyp: typ, versatzX: i >= 0 ? px[i] - w.x : 0, versatzY: i >= 0 ? py[i] - w.y : 0 };
+      geste = g;
+      if (typ !== "mouse" && i >= 0) {
+        halteUhr = fenster.setTimeout(() => {
+          halteUhr = 0;
+          if (zerstoert || geste !== g || g.bewegt || g.i < 0) return;
+          g.typ = "knoten"; // gegriffen: Die nächste Bewegung zieht den Knoten
+          g.gegriffen = true;
+          hoverSetzen(g.i); // zeigt es: Ring und Label wie beim Zeigen mit der Maus
+        }, HALTEN_MS);
+      }
     }
     function knotenLoslassen(i, mit, ruhig) {
       K[i].fest = true; // gezogen = fixiert (lösen über fixieren(id, false))
@@ -2043,6 +2309,7 @@
       if (!geste.bewegt) {
         if (Math.hypot(dx, dy) < (geste.zeigerTyp === "mouse" ? 4 : 8)) return; // noch ein Tipp
         geste.bewegt = true;
+        halteEnde(); // losgewischt, bevor gegriffen war: Der Ausschnitt wandert
         flaeche.style.cursor = "grabbing";
         if (hover >= 0 && geste.typ === "frei") hoverSetzen(-1);
         if (geste.typ === "knoten") {
@@ -2083,26 +2350,42 @@
       }
       const g = geste;
       geste = null;
+      halteEnde();
+      if (g.gegriffen && hover >= 0) hoverSetzen(-1); // der Finger ist weg: Das Greif-Zeichen auch
       flaeche.style.cursor = hover >= 0 ? "pointer" : "";
       if (g.typ === "knoten" && g.bewegt) { knotenLoslassen(g.i, g.mit, g.ruhig); return; }
       if (g.bewegt || abbruch) return;
-      tipp(g.i, punkt(e), g.zeigerTyp);
+      tipp(g.i, punkt(e), g.zeigerTyp, e);
     }
-    function tipp(i, p, zeigerTyp) {
-      const jetzt = jetztMs();
-      const doppelt = letzterTipp && letzterTipp.i === i && jetzt - letzterTipp.zeit < 320 && Math.hypot(p.x - letzterTipp.x, p.y - letzterTipp.y) < 24;
-      letzterTipp = doppelt ? null : { i, zeit: jetzt, x: p.x, y: p.y };
+    /**
+     * Zweiter Tipp eines Doppeltipps? Es zählen Zeit und Ort im Fenster – nicht, was dann dort liegt: Nach dem ersten Tipp
+     * geht das Detail auf, die Kamera fliegt, am Handy rollt die Seite.
+     */
+    const zweiterTipp = (e) => Boolean(letzterTipp) && jetztMs() - letzterTipp.zeit < DOPPEL_MS && Math.hypot(e.clientX - letzterTipp.x, e.clientY - letzterTipp.y) < DOPPEL_PX;
+    function tipp(i, p, zeigerTyp, e) {
+      const erster = letzterTipp;
+      const doppelt = zweiterTipp(e) && (erster.id != null || i < 0);
+      letzterTipp = doppelt ? null : { id: i >= 0 ? K[i].id : null, zeit: jetztMs(), x: e.clientX, y: e.clientY };
+      if (doppelt && erster.id != null) { zentrieren(erster.id); return; } // der Knoten des ERSTEN Tipps kommt in die Mitte
+      if (doppelt) { kameraBeruehrt = true; fliegen(zoomUmPunkt(kam, 1.7, p.x, p.y, cssB, cssH), 200); return; }
       if (i >= 0) {
         const id = K[i].id;
-        if (doppelt) { zentrieren(id); return; }
         auswahlSetzen(i);
         rufe("beiAuswahl", id, { quelle: "zeiger" });
-        rufe("beiOeffnen", id);
+        rufe("beiOeffnen", id, { quelle: "zeiger" });
         return;
       }
-      if (doppelt) { kameraBeruehrt = true; fliegen(zoomUmPunkt(kam, 1.7, p.x, p.y, cssB, cssH), 200); return; }
-      if (auswahl >= 0) { auswahlSetzen(-1); rufe("beiAuswahl", null, { quelle: "zeiger" }); }
+      // leere Stelle: Die Auswahl fällt auf den Eintrag zurück, dessen Detail offen ist (der Ring bleibt bei ihm) – sonst ist nichts mehr gewählt
+      const bleibt = gewuenscht != null && nIndex.has(gewuenscht) ? nIndex.get(gewuenscht) : -1;
+      if (auswahl !== bleibt) { auswahlSetzen(bleibt); if (bleibt < 0) rufe("beiAuswahl", null, { quelle: "zeiger" }); }
       if (zeigerTyp !== "mouse" && hover >= 0) hoverSetzen(-1);
+    }
+    /** Der zweite Tipp landet nicht immer auf der Fläche (am Handy rollt sie unter dem Finger weg) – er zählt trotzdem. */
+    function tippDaneben(e) {
+      if (e.target === flaeche || !letzterTipp || letzterTipp.id == null || !zweiterTipp(e)) return;
+      const id = letzterTipp.id;
+      letzterTipp = null;
+      zentrieren(id);
     }
     function rad(e) {
       e.preventDefault();
@@ -2177,7 +2460,7 @@
       if (e.key === "0") { e.preventDefault(); kameraBeruehrt = false; einpassenJetzt(false); return; }
       if (e.key === "Enter" || e.key === " ") {
         if (e.key === " " || auswahl >= 0) e.preventDefault(); // die Leertaste rollt hier nie die Seite
-        if (auswahl >= 0) rufe("beiOeffnen", K[auswahl].id);
+        if (auswahl >= 0) rufe("beiOeffnen", K[auswahl].id, { quelle: "tastatur" });
       }
     }
 
@@ -2205,7 +2488,9 @@
       const i = nIndex.has(id) ? nIndex.get(id) : -1;
       if (i < 0 || !hatLage[i]) return;
       kameraBeruehrt = true;
-      fliegen(kameraAuf(i, Math.max(kam.zoom, 1.35)));
+      const ziel = kameraAuf(i, Math.max(kam.zoom, 1.35));
+      mitteAuf = { i, kamera: ziel };
+      fliegen(ziel, FLUG_MS, i);
     }
     function zoomen(faktor) {
       const m = freieMitte();
@@ -2231,10 +2516,14 @@
         for (const a of rand) for (const b of nachbarn[a]) if (!menge.has(b) && !(sichtbarMenge && !sichtbarMenge.has(K[b].id))) { menge.add(b); naechste.push(b); }
         rand = naechste;
       }
+      // eingepasst wird nur, wenn sich Knoten, Tiefe oder die gezeigte Menge geändert haben – ein bloßes Neuzeichnen der
+      // Ansicht (Suche, Filterzeile, Klick auf einen Nachbarn) lässt den eigenen Ausschnitt stehen
+      const gleich = Boolean(fokusZustand && fokusMenge) && fokusZustand.id === id && fokusZustand.tiefe === t && gleicheMenge(menge, fokusMenge);
       if (!fokusZustand) fokusZustand = { id, tiefe: t, kamera: { ...(flug ? flug.nach : kam) } };
       else { fokusZustand.id = id; fokusZustand.tiefe = t; }
       fokusMenge = menge;
       zieleRechnen();
+      if (gleich) return;
       kameraBeruehrt = true;
       einpassenJetzt(false);
     }
@@ -2252,6 +2541,8 @@
     hoere(flaeche, "gesturechange", gesteLaeuft);
     hoere(flaeche, "gestureend", gesteEnde);
     hoere(flaeche, "keydown", taste);
+    hoere(flaeche, "contextmenu", (e) => { if (geste && geste.zeigerTyp !== "mouse") e.preventDefault(); }); // Halten mit dem Finger greift – kein Menü
+    hoere(dok, "pointerup", tippDaneben, true);
     hoere(karte, "pointerdown", karteRunter);
     hoere(karte, "pointermove", karteBewegt);
     hoere(karte, "pointerup", karteHoch);
@@ -2275,11 +2566,18 @@
 
     return {
       setzen,
+      /**
+       * Auswahl der Ansicht setzen (der Eintrag im offenen Detail; null = keiner). Der Ring wird jedes Mal gesetzt, in den
+       * Blick geholt wird der Knoten nur beim Wechsel – wer danach woanders hinschiebt, wird beim nächsten Neuzeichnen
+       * nicht zurückgeholt. zentrieren: ausdrücklich hinfliegen (Sprung vom Quellen-Chip), auch wenn er schon gewählt ist.
+       */
       auswaehlen(id, { zentrieren: hin = false } = {}) {
         const i = id != null && nIndex.has(id) ? nIndex.get(id) : -1;
+        const neu = (i >= 0 ? id : null) !== gewuenscht;
+        gewuenscht = i >= 0 ? id : null;
         auswahlSetzen(i);
         if (i >= 0 && hin) zentrieren(id);
-        else if (i >= 0) sichtbarMachen(i);
+        else if (i >= 0 && neu) sichtbarMachen(i, true);
       },
       zentrieren,
       /** Gabi-Spur: diese Knoten leuchten kurz auf (mit „Bewegung reduzieren“: stiller Ring für dieselbe Zeit). */
@@ -2301,13 +2599,21 @@
         zieleRechnen();
       },
       fokus,
+      /** Alles zeigen – in der freien Fläche, und so, dass kein Knoten unter Minimap, Legende oder Knöpfen liegt. */
       einpassen({ verdeckt: v, sofort = false } = {}) {
-        if (v) verdeckt = { links: Math.max(0, v.links || 0), rechts: Math.max(0, v.rechts || 0), oben: Math.max(0, v.oben || 0), unten: Math.max(0, v.unten || 0) };
+        if (v) verdecktSetzen(v, false);
         kameraBeruehrt = false;
+        blick = null;
         einpassenJetzt(sofort);
       },
-      /** Ränder, die Panels verdecken – für Zentrieren und Tastatur, ohne die Kamera zu bewegen. */
-      verdeckt(v) { verdeckt = { links: Math.max(0, (v && v.links) || 0), rechts: Math.max(0, (v && v.rechts) || 0), oben: Math.max(0, (v && v.oben) || 0), unten: Math.max(0, (v && v.unten) || 0) }; },
+      /**
+       * Ränder, die Panel oder Blatt verdecken ({ links, rechts, oben, unten } in px; offen: true = das Detail ist da;
+       * einpassen: false = die Ränder gelten nur für den Blick auf einen Knoten, „Alles zeigen“ nimmt die ganze Fläche).
+       * Die Kamera bewegt das nicht – außer das Detail ist wieder zu: dann steht sie wie vorher.
+       */
+      verdeckt(v) { verdecktSetzen(v, true); },
+      /** Wird gerade gezeichnet (Ansicht im Bild)? */
+      istAktiv: () => istAktiv,
       zoomen,
       fixieren(id, fest) {
         const i = nIndex.has(id) ? nIndex.get(id) : -1;
@@ -2367,6 +2673,7 @@
           fps: lauf >= 8 && spanne > 0 ? Math.round((lauf - 1) / spanne * 10000) / 10 : null,
           layoutMs, ticks: layoutTicks, ruht: !layoutLaeuft, worker: Boolean(treiber && treiber.art === "worker"),
           zoom: Math.round(kam.zoom * 1000) / 1000, pixel: Math.round(dpr * 100) / 100, breite: cssB, hoehe: cssH, labels: [...labelDeck.values()].filter((l) => l.ziel === 1).length,
+          schloesser,
         };
       },
       /** Lage eines Knotens im Bild (CSS-Pixel relativ zum Behälter) – für Tests und zum Ausrichten von Hinweisen. */
@@ -2382,6 +2689,7 @@
         zerstoert = true;
         if (rafId) fenster.cancelAnimationFrame(rafId);
         fenster.clearTimeout(groesseUhr);
+        halteEnde();
         for (const weg of horcher) weg();
         if (beobachter) beobachter.disconnect();
         if (treiber) treiber.ende();
@@ -2395,8 +2703,8 @@
     erstelle, workerStarten,
     // rein (für Tests, Messungen und die Ansicht)
     erstelleLayout, erstelleBaum, abstossung, abstossungDirekt, LAYOUT_STANDARD, knotenRadius,
-    kamera: { zuBild, zuWelt, zoomUmPunkt, einpassen: kameraEinpassen, ZOOM_MIN, ZOOM_MAX },
-    kuerzen, labelSchwelle, labelsWaehlen, nachbarInRichtung, testDaten, hash32, einheit, zufall,
+    kamera: { zuBild, zuWelt, zoomUmPunkt, einpassen: kameraEinpassen, ausweichen: kameraAusweichen, freieRaender, imFreien, gleich: gleicheKamera, ZOOM_MIN, ZOOM_MAX, FREI_MIN },
+    kuerzen, labelSchwelle, labelsWaehlen, nachbarInRichtung, testDaten, hash32, einheit, zufall, schlossMass, trefferRadius, gleicheMenge,
     ART_NAMEN, STATUS_NAMEN, FARBEN_STANDARD,
   };
 });

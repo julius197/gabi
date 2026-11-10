@@ -407,6 +407,159 @@ describe("Kamera", () => {
     // ein winziger Graph wird nicht riesig aufgeblasen
     expect(K.einpassen({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, 1200, 800).zoom).toBe(1.5);
   });
+
+  // Prüfrunde 1, Fund 1: Am Handy deckt das Blatt die Fläche zu – „verdeckt“ war größer als die Fläche selbst
+  it("verdeckte Ränder zählen nur, wenn daneben genug frei bleibt – sonst fiele das Bild auf den kleinsten Zoom zusammen", () => {
+    const null4 = { links: 0, rechts: 0, oben: 0, unten: 0, einpassen: true };
+    // Handy 390 × 844: Fläche 358 × 380, das Blatt meldete 460 px (mehr als die Fläche hoch ist)
+    expect(K.freieRaender({ unten: 460 }, 358, 380)).toEqual(null4);
+    expect(K.freieRaender({ unten: 300 }, 358, 380)).toEqual(null4); // nur 80 px frei: zu wenig
+    expect(K.freieRaender({ rechts: 300, links: 20 }, 420, 600)).toEqual(null4); // auch in der Breite
+    expect(K.FREI_MIN).toBe(120);
+    // genug frei: Die Ränder gelten – am Laptop neben dem Panel, am Handy über dem Blatt (dort nur für den Blick auf einen Knoten)
+    expect(K.freieRaender({ rechts: 420 }, 1104, 673)).toEqual({ links: 0, rechts: 420, oben: 0, unten: 0, einpassen: true });
+    expect(K.freieRaender({ oben: 0, unten: 129, einpassen: false }, 358, 380)).toEqual({ links: 0, rechts: 0, oben: 0, unten: 129, einpassen: false });
+    // kaputte Angaben schaden nicht
+    expect(K.freieRaender(null, 800, 600)).toEqual(null4);
+    expect(K.freieRaender({ links: -5, rechts: NaN, oben: "x", unten: Infinity }, 800, 600)).toEqual(null4);
+    // die Folge fürs Einpassen: mit dem rohen Wert fällt das Bild auf den kleinsten Zoom zusammen und liegt über dem oberen
+    // Rand (Mitte der „freien“ Fläche bei −40 px) – mit den geprüften Rändern füllt es die Fläche
+    const g = { minX: -300, minY: -480, maxX: 300, maxY: 480 };
+    const roh = K.einpassen(g, 358, 380, { rand: 28, verdeckt: { unten: 460 } });
+    const gut = K.einpassen(g, 358, 380, { rand: 28, verdeckt: K.freieRaender({ unten: 460 }, 358, 380) });
+    expect(roh.zoom).toBe(K.ZOOM_MIN);
+    expect(K.zuBild(roh, 0, 0, 358, 380).y).toBeCloseTo(-40, 6);
+    expect(gut.zoom).toBeCloseTo((380 - 56) / 960, 6);
+    expect(gut.zoom).toBeGreaterThan(roh.zoom * 3);
+    const oben = K.zuBild(gut, 0, -480, 358, 380);
+    const unten = K.zuBild(gut, 0, 480, 358, 380);
+    expect(oben.y).toBeGreaterThanOrEqual(28 - 0.01); // alles in der Fläche – nichts fliegt über den oberen Rand hinaus
+    expect(unten.y).toBeLessThanOrEqual(380 - 28 + 0.01);
+  });
+
+  it("im Freien: innerhalb der freien Fläche mit Abstand zum Rand – in einem schmalen Streifen mit weniger", () => {
+    const frei = K.freieRaender({ rechts: 420 }, 1104, 673);
+    expect(K.imFreien({ x: 300, y: 300 }, 1104, 673, frei)).toBe(true);
+    expect(K.imFreien({ x: 700, y: 300 }, 1104, 673, frei)).toBe(false); // unter dem Panel (ab 684)
+    expect(K.imFreien({ x: 650, y: 300 }, 1104, 673, frei)).toBe(false); // sichtbar, aber näher als 56 px am Panel
+    expect(K.imFreien({ x: 650, y: 300 }, 1104, 673, frei, 12)).toBe(true); // … mit kleinem Abstand zählt er als sichtbar
+    expect(K.imFreien({ x: 20, y: 300 }, 1104, 673, frei)).toBe(false);
+    // Streifen über dem Blatt am Handy: 251 px hoch – der Abstand ist höchstens ein Viertel davon
+    const streifen = K.freieRaender({ unten: 129, einpassen: false }, 358, 380);
+    expect(K.imFreien({ x: 179, y: 125 }, 358, 380, streifen)).toBe(true);
+    expect(K.imFreien({ x: 179, y: 245 }, 358, 380, streifen, 12)).toBe(false); // 6 px über dem Blatt: zu knapp
+    expect(K.imFreien({ x: 179, y: 300 }, 358, 380, streifen, 12)).toBe(false); // unter dem Blatt
+    const niedrig = K.freieRaender({ unten: 250, einpassen: false }, 358, 380); // 130 px Streifen
+    expect(K.imFreien({ x: 179, y: 65 }, 358, 380, niedrig)).toBe(true); // 56 px Abstand wären hier nie zu erfüllen
+  });
+
+  it("gleiche Kamera: Unterschiede unter einem Zwanzigstel Pixel zählen nicht", () => {
+    const k = { x: 12, y: -7, zoom: 0.8 };
+    expect(K.gleich(k, { ...k })).toBe(true);
+    expect(K.gleich(k, { x: 12.01, y: -7, zoom: 0.8 })).toBe(true);
+    expect(K.gleich(k, { x: 13, y: -7, zoom: 0.8 })).toBe(false);
+    expect(K.gleich(k, { x: 12, y: -7, zoom: 0.81 })).toBe(false);
+    expect(K.gleich(k, null)).toBe(false);
+  });
+});
+
+// Prüfrunde 1, Fund 5: „Alles zeigen“ ließ Knoten unter Minimap und Legende liegen
+describe("Kamera weicht Bedienelementen aus (Minimap, Legende, Knöpfe)", () => {
+  const K = G.kamera;
+  const B = 1104;
+  const H = 673;
+  const radius = (r, zoom) => r * zoom;
+  const karte = { x: 922, y: 547, breite: 168, hoehe: 112 };   // Minimap unten rechts
+  const legende = { x: 14, y: 495, breite: 257, hoehe: 164 };  // offene Legende unten links
+  const knoepfe = { x: 14, y: 14, breite: 44, hoehe: 164 };
+  /** Liegt die Scheibe eines Punkts (plus Luft) über einem Bedienelement? */
+  const darunter = (kamera, punkte, dinge, luft = 0) => punkte.filter((p) => {
+    const b = K.zuBild(kamera, p.x, p.y, B, H);
+    const r = radius(p.r, kamera.zoom) + luft;
+    return dinge.some((d) => { const qx = Math.max(d.x, Math.min(b.x, d.x + d.breite)); const qy = Math.max(d.y, Math.min(b.y, d.y + d.hoehe)); return Math.hypot(b.x - qx, b.y - qy) < r; });
+  }).length;
+  const imRahmen = (kamera, punkte, rand) => punkte.every((p) => { const b = K.zuBild(kamera, p.x, p.y, B, H); const r = radius(p.r, kamera.zoom); return b.x - r >= rand - 0.01 && b.x + r <= B - rand + 0.01 && b.y - r >= rand - 0.01 && b.y + r <= H - rand + 0.01; });
+  /** Punktwolke wie ein eingepasster Graph: eine Raute (die Ecken der Fläche bleiben frei), dazu lose Teile. */
+  const wolke = (lose = []) => {
+    const z = G.zufall(5);
+    const punkte = [{ x: -460, y: 0, r: 7 }, { x: 460, y: 0, r: 7 }, { x: 0, y: -240, r: 7 }, { x: 0, y: 240, r: 7 }];
+    while (punkte.length < 60) { const x = (z() * 2 - 1) * 460; const y = (z() * 2 - 1) * 240; if (Math.abs(x) / 460 + Math.abs(y) / 240 <= 1) punkte.push({ x, y, r: 7 }); }
+    for (const e of lose) punkte.push({ ...e, r: 7 });
+    return punkte;
+  };
+  const grenzen = (punkte) => ({ minX: Math.min(...punkte.map((p) => p.x - p.r)), minY: Math.min(...punkte.map((p) => p.y - p.r)), maxX: Math.max(...punkte.map((p) => p.x + p.r)), maxY: Math.max(...punkte.map((p) => p.y + p.r)) });
+
+  it("liegt nichts darunter, bleibt die Kamera genau, wie sie ist", () => {
+    const punkte = wolke();
+    const start = K.einpassen(grenzen(punkte), B, H, { rand: 56 });
+    expect(darunter(start, punkte, [karte, legende, knoepfe])).toBe(0);
+    expect(K.ausweichen(start, punkte, B, H, { hindernisse: [karte, legende, knoepfe], radius })).toBe(start);
+    expect(K.ausweichen(start, punkte, B, H, { hindernisse: [], radius })).toBe(start);
+    expect(K.ausweichen(start, [], B, H, { hindernisse: [karte], radius })).toBe(start);
+  });
+
+  it("ein Knoten unter der Minimap: Das Bild rückt – der Zoom bleibt (lieber verschieben als verkleinern)", () => {
+    const punkte = wolke([{ x: 356, y: 210 }]); // loses Teil unten rechts: im Bild bei (930, 560), also knapp unter der Minimap
+    const start = K.einpassen(grenzen(punkte), B, H, { rand: 56 });
+    expect(darunter(start, punkte, [karte])).toBeGreaterThan(0);
+    const ziel = K.ausweichen(start, punkte, B, H, { hindernisse: [karte, legende, knoepfe], rand: 16, randUnten: 32, radius });
+    expect(ziel.zoom).toBe(start.zoom);
+    expect(K.gleich(ziel, start)).toBe(false);
+    expect(darunter(ziel, punkte, [karte, legende, knoepfe], 4)).toBe(0); // mit Luft drumherum
+    expect(imRahmen(ziel, punkte, 16)).toBe(true); // und nichts rutscht aus dem Bild
+    // gleiches Bild → gleiches Ergebnis
+    expect(K.ausweichen(start, punkte, B, H, { hindernisse: [karte, legende, knoepfe], rand: 16, randUnten: 32, radius })).toEqual(ziel);
+    // die kleinste Verschiebung, die genügt – kein Sprung quer durchs Bild
+    const a = K.zuBild(start, 0, 0, B, H);
+    const b = K.zuBild(ziel, 0, 0, B, H);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(60);
+  });
+
+  it("reicht Verschieben nicht (Knoten unter Minimap UND Legende, kein Spielraum nach oben), wird schrittweise verkleinert – nie stark", () => {
+    const punkte = wolke([{ x: 470, y: 250 }, { x: -470, y: 250 }, { x: 0, y: -245 }, { x: 0, y: 250 }]);
+    const start = K.einpassen(grenzen(punkte), B, 560, { rand: 56 });
+    const dinge = [{ ...karte, y: 434 }, { ...legende, y: 382 }];
+    const unter = (kamera) => punkte.filter((p) => { const q = K.zuBild(kamera, p.x, p.y, B, 560); const r = radius(p.r, kamera.zoom) + 4; return dinge.some((d) => Math.hypot(q.x - Math.max(d.x, Math.min(q.x, d.x + d.breite)), q.y - Math.max(d.y, Math.min(q.y, d.y + d.hoehe))) < r); }).length;
+    expect(unter(start)).toBeGreaterThan(0);
+    const ziel = K.ausweichen(start, punkte, B, 560, { hindernisse: dinge, rand: 16, randUnten: 32, radius });
+    expect(unter(ziel)).toBe(0);
+    expect(ziel.zoom).toBeLessThan(start.zoom);
+    expect(ziel.zoom).toBeGreaterThan(start.zoom * 0.5);
+  });
+
+  it("keine Lösung (ein Element über der ganzen Fläche): Die Kamera bleibt – nichts wird ins Winzige verkleinert", () => {
+    const punkte = wolke();
+    const start = K.einpassen(grenzen(punkte), B, H, { rand: 56 });
+    expect(K.ausweichen(start, punkte, B, H, { hindernisse: [{ x: 0, y: 0, breite: B, hoehe: H }], radius })).toBe(start);
+  });
+
+  it("was selbst im Verdeckten liegt, zählt nicht – und der Rand der freien Fläche gilt (Panel rechts)", () => {
+    const punkte = wolke([{ x: 356, y: 210 }]);
+    const frei = { links: 0, oben: 0, rechts: B - 420, unten: H };
+    const start = K.einpassen(grenzen(punkte), B, H, { rand: 56, verdeckt: { rechts: 420 } });
+    // die Minimap an ihrem alten Platz liegt jetzt unter dem Panel: kein Grund zu rücken
+    expect(K.ausweichen(start, punkte, B, H, { hindernisse: [karte], frei, radius })).toBe(start);
+    // neben das Panel gerückt (wie in der Ansicht) liegt wieder ein Knoten darunter: Das Bild weicht aus und bleibt links vom Panel
+    const karteNeu = { ...karte, x: 922 - 434 };
+    const ziel = K.ausweichen(start, punkte, B, H, { hindernisse: [karteNeu], frei, rand: 16, randUnten: 32, radius });
+    expect(darunter(ziel, punkte, [karteNeu], 4)).toBe(0);
+    expect(punkte.every((p) => K.zuBild(ziel, p.x, p.y, B, H).x + radius(p.r, ziel.zoom) <= B - 420 - 16 + 0.01)).toBe(true);
+  });
+
+  it("500 Knoten: schnell genug, um beim Einpassen nicht zu stören", () => {
+    const d = G.testDaten(500, 7);
+    const layout = G.erstelleLayout(d);
+    layout.bisRuhe(1500);
+    const lagen = layout.lagen();
+    const punkte = layout.ids.map((id, i) => ({ x: lagen[2 * i], y: lagen[2 * i + 1], r: 7 }));
+    const start = K.einpassen(grenzen(punkte), B, H, { rand: 56 });
+    const t0 = performance.now();
+    const ziel = K.ausweichen(start, punkte, B, H, { hindernisse: [karte, legende, knoepfe], rand: 16, randUnten: 32, radius: (r, zoom) => Math.max(2.4, r * Math.pow(zoom, 0.85)) });
+    const ms = performance.now() - t0;
+    console.log(`Ausweichen mit 500 Knoten: ${ms.toFixed(1)} ms, Zoom ${start.zoom.toFixed(3)} → ${ziel.zoom.toFixed(3)}`);
+    expect(ms).toBeLessThan(120);
+    expect(ziel.zoom).toBeGreaterThan(start.zoom * 0.5);
+  });
 });
 
 describe("Labels", () => {
@@ -493,6 +646,65 @@ describe("Labels", () => {
     const ergebnis = G.labelsWaehlen([...voll, { ...k, id: "wichtig", vorrang: 0, erzwungen: true }], { breite: 800, hoehe: 600 });
     expect(ergebnis[0].id).toBe("wichtig");
     expect(ergebnis.length).toBeLessThanOrEqual(7); // sechs Plätze rund um den Knoten
+  });
+});
+
+describe("Zeichen am Knoten und Trefferflächen", () => {
+  // Prüfrunde 1, Fund 7: Das Schloss hing am Zoom (≥ 0,95) – in der Standardansicht üblicher Fenster fehlte es an allen
+  it("Schloss: hängt nicht am Zoom, wächst mit dem Knoten – klein in der Übersicht, voll ab 6 px, an den kleinsten Punkten gar nicht", () => {
+    expect(G.schlossMass.length).toBe(1); // nur der Radius im Bild zählt
+    expect(G.schlossMass(6)).toEqual({ groesse: 1, deckkraft: 1 });
+    expect(G.schlossMass(9.5)).toEqual({ groesse: 1, deckkraft: 1 });
+    // Standardansicht 1440 × 790 (Zoom 0,87): Radien 6,6–8,7 → volles Schloss; 1280 × 720 (Zoom 0,70): Notizen mit 5,4 px
+    expect(G.schlossMass(6.6).groesse).toBe(1);
+    const notiz = G.schlossMass(5.4);
+    expect(notiz.deckkraft).toBe(1);
+    expect(notiz.groesse).toBeGreaterThan(0.8);
+    expect(notiz.groesse).toBeLessThan(1);
+    // 1024 × 768 (Zoom 0,49): 4,1 px – verkleinert, aber da
+    expect(G.schlossMass(4.1).deckkraft).toBe(1);
+    expect(G.schlossMass(4.1).groesse).toBeGreaterThan(0.6);
+    // je kleiner der Knoten, desto kleiner und zarter – nie größer als am größeren Knoten
+    const reihe = [2.4, 2.8, 3.1, 3.5, 4.1, 5, 5.4, 6.2, 7.2, 12].map(G.schlossMass);
+    for (let i = 1; i < reihe.length; i++) {
+      expect(reihe[i].groesse).toBeGreaterThanOrEqual(reihe[i - 1].groesse);
+      expect(reihe[i].deckkraft).toBeGreaterThanOrEqual(reihe[i - 1].deckkraft);
+    }
+    expect(G.schlossMass(2.4).deckkraft).toBe(0); // kleinster Punkt: kein Zeichen, das größer wäre als der Knoten
+    expect(G.schlossMass(3.3).deckkraft).toBeGreaterThan(0.5); // Handy-Übersicht: schon gut zu sehen
+    expect(Math.min(...reihe.map((m) => m.groesse))).toBeGreaterThanOrEqual(0.5);
+    // im Zeichner steht keine Zoom-Schwelle mehr vor dem Schloss
+    expect(QUELLE).not.toMatch(/geschuetzt\s*&&\s*z\s*>=/);
+    expect(QUELLE).toMatch(/schlossZeichnen\(x \+ r \* 0\.74, y \+ r \* 0\.74, a \* m\.deckkraft, m\.groesse\)/);
+  });
+
+  // Prüfrunde 1, Fund 3: Am Handy startete jeder Wisch im 22-px-Umkreis eines Knotens das Ziehen (und setzte ihn fest)
+  it("Trefferfläche: Finger tippen großzügig (44 px), ziehen sofort nur auf dem Knoten selbst – für die Maus bleibt alles", () => {
+    // Maus: wie bisher Radius + 5, egal ob Klick oder Ziehen
+    for (const r of [2.4, 3.3, 5.7, 12, 22]) {
+      expect(G.trefferRadius(r, "mouse")).toBe(r + 5);
+      expect(G.trefferRadius(r, "mouse", true)).toBe(r + 5);
+    }
+    // Finger (und Stift), Tipp: mindestens 22 px Radius, bei großen Knoten Radius + 8 – wie bisher
+    expect(G.trefferRadius(3.3, "touch")).toBe(22);
+    expect(G.trefferRadius(5.7, "touch")).toBe(22);
+    expect(G.trefferRadius(20, "touch")).toBe(28);
+    expect(G.trefferRadius(3.3, "pen")).toBe(22);
+    // Finger, sofort ziehen: nur der sichtbare Knoten (2 px Rand) – 15 px neben „Leistungen“ (5,7 px) ist das kein Treffer mehr
+    expect(G.trefferRadius(5.7, "touch", true)).toBeCloseTo(7.7, 6);
+    expect(G.trefferRadius(5.7, "touch", true)).toBeLessThan(15);
+    expect(G.trefferRadius(3.3, "touch", true)).toBeLessThan(6);
+    expect(G.trefferRadius(20, "touch", true)).toBe(22);
+    // Übersicht am Handy (Radien 3,3–5,7 px): Die Zieh-Fläche ist höchstens ein Achtel der Tipp-Fläche
+    for (const r of [3.3, 4, 5.7]) expect((G.trefferRadius(r, "touch", true) / G.trefferRadius(r, "touch")) ** 2).toBeLessThan(0.125);
+  });
+
+  // Prüfrunde 1, Fund 4: Der Fokus-Modus passte bei jedem Neuzeichnen neu ein – verglichen wird jetzt der Inhalt der Menge
+  it("gleiche Menge: der Inhalt zählt, nicht das Objekt", () => {
+    expect(G.gleicheMenge(new Set([1, 2, 3]), new Set([3, 2, 1]))).toBe(true);
+    expect(G.gleicheMenge(new Set([1, 2]), new Set([1, 2, 3]))).toBe(false);
+    expect(G.gleicheMenge(new Set([1, 2, 4]), new Set([1, 2, 3]))).toBe(false);
+    expect(G.gleicheMenge(new Set(), new Set())).toBe(true);
   });
 });
 
