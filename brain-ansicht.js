@@ -1182,7 +1182,7 @@
       const r = B.importLesen(gelesen);
       gelesen = null;
       fehler.push(...r.fehler);
-      const vergleich = B.importVergleichen([...z.brain.eigene(), ...z.brain.papierkorb().map((p) => p.knoten)], r.knoten);
+      const vergleich = B.importVergleichen([...z.brain.eigene(), ...z.brain.papierkorb().map((p) => p.knoten)], r.knoten, { kanten: z.brain.kanten() });
       importZeigen(vergleich, fehler);
     }
     function importZeigen(vergleich, fehler) {
@@ -1192,8 +1192,11 @@
       const zeile = (v, i) => {
         const wahl = v.art === "neu" || v.art === "geaendert";
         const marke = { neu: ["Neu", "akzent"], geaendert: ["Geändert", "warn"], gleich: ["Unverändert", ""], ungueltig: ["Nicht möglich", ""] }[v.art];
-        const diff = v.art === "geaendert" ? `<details class="brain-diff"><summary>Was sich ändert (${v.felder.map((f) => FELD[f]).join(", ") || "aus dem Papierkorb zurück"})</summary>${v.felder.map((f) => `<div class="brain-diff-feld"><span class="augenbraue">${FELD[f]}</span><div class="brain-diff-paar"><div class="brain-diff-alt"><span class="unsichtbar">Vorher: </span>${esc(f === "tags" ? (v.alt.tags || []).join(", ") : f === "status" ? statusName(v.alt.status) : f === "art" ? artName(v.alt.art) : String(v.alt[f] || "")) || "–"}</div><div class="brain-diff-neu"><span class="unsichtbar">Nachher: </span>${esc(f === "tags" ? (v.knoten.tags || []).join(", ") : f === "status" ? statusName(v.knoten.status) : f === "art" ? artName(v.knoten.art) : String(v.knoten[f] || "")) || "–"}</div></div></div>`).join("")}</details>`
-          : v.art === "neu" ? `<details class="brain-diff"><summary>Inhalt ansehen</summary><div class="brain-diff-neu einzeln">${esc(v.knoten.inhalt) || "–"}</div></details>` : "";
+        // Verbindungen von Hand aus der Datei, die es hier noch nicht gibt – sie entstehen mit dem Übernehmen
+        const kanten = v.verbindungen || [];
+        const verbunden = kanten.length ? `<div class="brain-diff-feld"><span class="augenbraue">${kanten.length === 1 ? "Neue Verbindung" : "Neue Verbindungen"}</span><div class="brain-diff-neu">${esc(kanten.map((x) => `${KANTE_NAME[x.art] || x.art} → ${x.titel}`).join("\n"))}</div></div>` : "";
+        const diff = v.art === "geaendert" ? `<details class="brain-diff"><summary>Was sich ändert (${[...v.felder.map((f) => FELD[f]), ...(kanten.length ? ["Verbindungen"] : [])].join(", ") || "aus dem Papierkorb zurück"})</summary>${v.felder.map((f) => `<div class="brain-diff-feld"><span class="augenbraue">${FELD[f]}</span><div class="brain-diff-paar"><div class="brain-diff-alt"><span class="unsichtbar">Vorher: </span>${esc(f === "tags" ? (v.alt.tags || []).join(", ") : f === "status" ? statusName(v.alt.status) : f === "art" ? artName(v.alt.art) : String(v.alt[f] || "")) || "–"}</div><div class="brain-diff-neu"><span class="unsichtbar">Nachher: </span>${esc(f === "tags" ? (v.knoten.tags || []).join(", ") : f === "status" ? statusName(v.knoten.status) : f === "art" ? artName(v.knoten.art) : String(v.knoten[f] || "")) || "–"}</div></div></div>`).join("")}${verbunden}</details>`
+          : v.art === "neu" ? `<details class="brain-diff"><summary>${kanten.length ? `Inhalt und ${kanten.length === 1 ? "1 Verbindung" : `${kanten.length} Verbindungen`} ansehen` : "Inhalt ansehen"}</summary><div class="brain-diff-neu einzeln">${esc(v.knoten.inhalt) || "–"}</div>${verbunden}</details>` : "";
         return `<li class="brain-import-zeile">
           <label class="brain-import-kopf"><input type="checkbox" data-import="${i}"${wahl ? " checked" : " disabled"}><span class="brain-import-titel"><strong>${esc(v.knoten.titel || "(ohne Titel)")}</strong><span class="stumm">${esc(artName(v.knoten.art))} · ${esc(statusName(v.knoten.status))}${v.fehler ? ` · ${esc(v.fehler)}` : ""}</span></span><span class="badge ${marke[1]}">${marke[0]}</span></label>
           ${diff}
@@ -1224,7 +1227,8 @@
         if (!auswahl.length) return;
         const r = await z.brain.importieren(auswahl);
         const n = r.neu + r.geaendert;
-        toast(`${n === 1 ? "1 Eintrag" : `${n} Einträge`} übernommen${r.fehler.length ? ` · ${r.fehler.length} nicht` : ""}.`, { art: r.fehler.length ? "warn" : "erfolg", dauer: 6000, ...(n ? { aktion: { text: "Rückgängig", tun: rueckgaengig } } : {}) });
+        const kanten = r.verbindungen || 0;
+        toast(`${n === 1 ? "1 Eintrag" : `${n} Einträge`}${kanten ? ` und ${kanten === 1 ? "1 Verbindung" : `${kanten} Verbindungen`}` : ""} übernommen${r.fehler.length ? ` · ${r.fehler.length} nicht` : ""}.`, { art: r.fehler.length ? "warn" : "erfolg", dauer: 6000, ...(n ? { aktion: { text: "Rückgängig", tun: rueckgaengig } } : {}) });
       }, { once: true });
       d.showModal();
     }

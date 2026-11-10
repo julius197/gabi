@@ -32,7 +32,7 @@
   const GRENZEN = {
     titelMin: 2, titelMax: 120, inhaltMax: 20000, tagsMax: 12, tagMax: 30, quelleMax: 80,
     versionen: 20, papierkorbTage: 30, veraltetTage: SUCHE.VERALTET_TAGE, undo: 50, luecken: 200, audit: 200,
-    importDatei: 200000, importGesamt: 2000000, importKnoten: 500,
+    importDatei: 200000, importGesamt: 2000000, importKnoten: 500, importVerbindungen: 30,
   };
   const ID_MUSTER = /^[A-Za-z0-9_-]{4,40}$/;
   const KERNREGELN_ID = "kernregeln";
@@ -240,7 +240,7 @@
   const iso = (ms) => { const d = new Date(Number(ms) || 0); return Number.isNaN(d.getTime()) ? "" : d.toISOString(); };
   const dateiName = (titel) => (SUCHE.normal(titel).replace(/ /g, "-").slice(0, 60).replace(/-+$/, "") || "eintrag");
 
-  function alsMarkdown(k) {
+  function alsMarkdown(k, verbindungen = []) {
     const kopf = [
       "---",
       `id: ${k.id}`,
@@ -251,24 +251,39 @@
       `quelle: ${JSON.stringify(String(k.quelle || ""))}`,
       `erstellt: ${iso(k.erstellt)}`,
       `geaendert: ${iso(k.geaendert)}`,
+      // Verbindungen von Hand, die von diesem Eintrag ausgehen („art:kennung-des-ziels“) – die Zeile gibt es nur, wenn es welche gibt
+      ...(verbindungen.length ? [`verbindungen: [${verbindungen.join(", ")}]`] : []),
       "---",
     ];
     return `${kopf.join("\n")}\n\n${String(k.inhalt || "").trim()}\n`;
   }
   const exportierbar = (knoten) => (Array.isArray(knoten) ? knoten : []).filter((k) => k && !k.abgeleitet && !k.geloescht && ARTEN_EIGEN.includes(k.art));
 
-  /** Je Knoten eine Markdown-Datei mit Frontmatter und [[Verweisen]]: [{ name, text }]. */
-  function exportDateien(knoten) {
+  /**
+   * Je Knoten eine Markdown-Datei mit Frontmatter und [[Verweisen]]: [{ name, text }].
+   * kanten (optional): Verbindungen von Hand. Sie stehen im Kopf des Ausgangsknotens – aber nur zwischen exportierten
+   * Einträgen: nie zu Test-Patienten, Notizen, Berichten, den Kernregeln oder in den Papierkorb (deren Kennungen gehören in
+   * keine Datei). Verweise aus dem Text ([[…]]) stehen ohnehin im Inhalt.
+   */
+  function exportDateien(knoten, kanten = []) {
+    const liste = exportierbar(knoten);
+    const dabei = new Set(liste.map((k) => k.id));
+    const jeKnoten = new Map();
+    for (const k of Array.isArray(kanten) ? kanten : []) {
+      if (!k || k.auto || !KANTEN_EIGEN.includes(k.art) || k.von === k.nach || !dabei.has(k.von) || !dabei.has(k.nach)) continue;
+      if (!jeKnoten.has(k.von)) jeKnoten.set(k.von, new Set());
+      jeKnoten.get(k.von).add(`${k.art}:${k.nach}`);
+    }
     const namen = new Map();
-    return exportierbar(knoten).sort((a, b) => String(a.titel).localeCompare(String(b.titel), "de")).map((k) => {
+    return liste.sort((a, b) => String(a.titel).localeCompare(String(b.titel), "de")).map((k) => {
       const basis = dateiName(k.titel);
       const n = (namen.get(basis) || 0) + 1;
       namen.set(basis, n);
-      return { name: `${n > 1 ? `${basis}-${n}` : basis}.md`, text: alsMarkdown(k) };
+      return { name: `${n > 1 ? `${basis}-${n}` : basis}.md`, text: alsMarkdown(k, [...(jeKnoten.get(k.id) || [])].sort()) };
     });
   }
   /** Alle Knoten in einer Datei (zum schnellen Ansehen oder wenn kein ZIP gewünscht ist). */
-  const exportEineDatei = (knoten) => exportDateien(knoten).map((d) => d.text.trim()).join(`\n\n${TRENNER}\n\n`).concat("\n");
+  const exportEineDatei = (knoten, kanten) => exportDateien(knoten, kanten).map((d) => d.text.trim()).join(`\n\n${TRENNER}\n\n`).concat("\n");
 
   // ---------- Import ----------
   const zeitAus = (wert, jetzt) => { const ms = Date.parse(String(wert || "")); return Number.isFinite(ms) && ms > 0 ? Math.min(ms, jetzt) : 0; };
@@ -298,6 +313,22 @@
     return { kopf, rest: text.slice(m[0].length) };
   }
   const feld = (kopf, ...namen) => { for (const n of namen) if (kopf[n] !== undefined && !Array.isArray(kopf[n])) return String(kopf[n]); return ""; };
+  const VERBINDUNG = new RegExp(`^(${KANTEN_EIGEN.join("|")}):([A-Za-z0-9_-]{4,40})$`);
+  /**
+   * Verbindungen von Hand aus dem Kopf einer Datei („verbindungen: [gehoert_zu:<kennung>, verweis:<kennung>]“) → [{ art, nach }].
+   * Eine Datei ist fremd: nur die zwei Arten, die sich von Hand anlegen lassen, nur gültige Kennungen gespeicherter Einträge
+   * (nie Kernregeln, Test-Patienten, Notizen, Berichte), ohne Doppelte, begrenzt. Angelegt wird später über kanteAnlegen().
+   */
+  function verbindungenLesen(kopf, eigeneId) {
+    const roh = Array.isArray(kopf.verbindungen) ? kopf.verbindungen : feld(kopf, "verbindungen").split(",");
+    const liste = [];
+    for (const eintrag of roh.slice(0, 500)) {
+      const m = VERBINDUNG.exec(String(eintrag == null ? "" : eintrag).trim());
+      if (!m || m[2] === KERNREGELN_ID || /^[pnb]-/.test(m[2]) || m[2] === eigeneId) continue;
+      if (liste.length < GRENZEN.importVerbindungen && !liste.some((v) => v.art === m[1] && v.nach === m[2])) liste.push({ art: m[1], nach: m[2] });
+    }
+    return liste;
+  }
 
   /**
    * Import-Dateien lesen: [{ name, text }] → { knoten, fehler }. Alles wird bereinigt (kein HTML/Skript), begrenzt
@@ -337,13 +368,14 @@
         const tags = [...new Set(tagsRoh.map((t) => tagNormal(einzeilig(t))).filter((t) => TAG_MUSTER.test(t)))].slice(0, GRENZEN.tagsMax);
         const id = feld(kopf, "id").trim();
         const erstellt = zeitAus(feld(kopf, "erstellt", "created"), jetzt);
+        const verbindungen = verbindungenLesen(kopf, id);
         knoten.push({
           id: ID_MUSTER.test(id) && id !== KERNREGELN_ID && !/^[pnb]-/.test(id) ? id : "",
           art, titel, inhalt: inhalt.slice(0, GRENZEN.inhaltMax), tags, status,
           // ohne Angabe im Kopf: „Import“ – eine bewusst leere Quelle (eigener Export) bleibt leer
           quelle: kopf.quelle === undefined && kopf.source === undefined ? "Import" : einzeilig(feld(kopf, "quelle", "source")).slice(0, GRENZEN.quelleMax),
           erstellt, geaendert: zeitAus(feld(kopf, "geaendert", "updated"), jetzt) || erstellt,
-          datei: name, ...(herabgestuft ? { herabgestuft: true } : {}),
+          datei: name, ...(herabgestuft ? { herabgestuft: true } : {}), ...(verbindungen.length ? { verbindungen } : {}),
         });
       }
     }
@@ -357,14 +389,19 @@
   /**
    * Import mit dem Bestand vergleichen (Vorschau vor dem Übernehmen): je Eintrag neu / geaendert / gleich / ungueltig,
    * mit dem alten Stand und den geänderten Feldern. Zuordnung über die id, sonst über den Titel.
+   * Dazu je Eintrag verbindungen: [{ art, nach, titel }] – Verbindungen von Hand aus der Datei, deren Ziel es gibt (unter
+   * den Einträgen dieses Imports oder im Bestand); nach = Kennung des Ziels HIER. Mit kanten (die vorhandenen Verbindungen,
+   * auch die aus dem Text) stehen dort nur die neuen – und ein sonst gleicher Eintrag mit neuer Verbindung gilt als geaendert.
    */
-  function importVergleichen(aktuell, importiert) {
+  function importVergleichen(aktuell, importiert, { kanten = null } = {}) {
     const bestand = (Array.isArray(aktuell) ? aktuell : []).filter((k) => k && !k.abgeleitet);
     const nachId = new Map(bestand.map((k) => [k.id, k]));
     const nachTitel = new Map(bestand.filter((k) => !k.geloescht).map((k) => [schluessel(k.titel), k]));
     const ergebnis = [];
     const neueTitel = new Set();
+    const dateiIds = []; // Kennung laut Datei je Ergebnis (hier kann der Eintrag eine andere haben)
     for (const k of Array.isArray(importiert) ? importiert : []) {
+      dateiIds.push(k && typeof k.id === "string" ? k.id : "");
       const alt = (k.id && nachId.get(k.id)) || nachTitel.get(schluessel(k.titel)) || null;
       if (alt && alt.geschuetzt) { ergebnis.push({ art: "ungueltig", knoten: k, alt, felder: [], fehler: "Geschützte Einträge lassen sich nicht überschreiben." }); continue; }
       const p = pruefen(k, { alle: bestand, eigeneId: alt ? alt.id : "" });
@@ -379,6 +416,23 @@
       const nurHerabgestuft = Boolean(k.herabgestuft) && alt.status === "bestaetigt" && felder.length === 1 && felder[0] === "status";
       if (nurHerabgestuft) felder = [];
       ergebnis.push({ art: alt.geloescht || felder.length ? "geaendert" : "gleich", knoten: { ...sauber, id: alt.id, ...(nurHerabgestuft ? { status: alt.status } : {}) }, alt, felder, fehler: "" });
+    }
+    // Verbindungen von Hand: das Ziel über die Kennung aus der Datei finden – zuerst unter den Einträgen dieses Imports,
+    // sonst im Bestand (nicht im Papierkorb). Was sich nicht zuordnen lässt, entfällt.
+    const zielLautDatei = new Map();
+    ergebnis.forEach((e, i) => { if (dateiIds[i] && e.art !== "ungueltig" && e.knoten.id && !zielLautDatei.has(dateiIds[i])) zielLautDatei.set(dateiIds[i], { id: e.knoten.id, titel: e.knoten.titel }); });
+    const vorhanden = Array.isArray(kanten) ? kanten : [];
+    const gibtEs = (art, a, b) => vorhanden.some((x) => x && x.art === art && ((x.von === a && x.nach === b) || (x.von === b && x.nach === a)));
+    for (const e of ergebnis) {
+      e.verbindungen = [];
+      if (e.art === "ungueltig") continue;
+      for (const v of Array.isArray(e.knoten.verbindungen) ? e.knoten.verbindungen : []) {
+        const imBestand = nachId.get(v.nach);
+        const ziel = zielLautDatei.get(v.nach) || (imBestand && !imBestand.geloescht ? { id: imBestand.id, titel: imBestand.titel } : null);
+        if (!ziel || ziel.id === e.knoten.id || (e.alt && gibtEs(v.art, e.alt.id, ziel.id))) continue;
+        if (!e.verbindungen.some((x) => x.art === v.art && x.nach === ziel.id)) e.verbindungen.push({ art: v.art, nach: ziel.id, titel: ziel.titel });
+      }
+      if (e.art === "gleich" && e.verbindungen.length && Array.isArray(kanten)) e.art = "geaendert";
     }
     return ergebnis;
   }
@@ -775,7 +829,11 @@
       const p = pruefen(daten, { alle: eigeneListe() });
       if (!p.ok) return { fehler: p.fehler };
       const t = jetzt();
-      const neu = { id: id && ID_MUSTER.test(id) && !z.knoten.has(id) ? id : neueId(), ...p.knoten, erstellt: Number(daten.erstellt) > 0 ? Number(daten.erstellt) : t, geaendert: t, geschuetzt: false, rev: 0, geloescht: 0 };
+      const erstellt = Number(daten.erstellt) > 0 ? Number(daten.erstellt) : t;
+      // Import: „zuletzt geändert“ aus der Datei bleibt erhalten (nie in der Zukunft, nie vor „erstellt“) – sonst gälte nach
+      // Export → Import alles als heute geändert, und „veraltet“ verschwände
+      const geaendert = grund === "import" && Number(daten.geaendert) > 0 ? Math.min(t, Math.max(erstellt, Number(daten.geaendert))) : t;
+      const neu = { id: id && ID_MUSTER.test(id) && !z.knoten.has(id) ? id : neueId(), ...p.knoten, erstellt, geaendert, geschuetzt: false, rev: 0, geloescht: 0 };
       const r = await schreiben(neu, { neu: true });
       if (!r.ok) return r.konflikt ? { fehler: { allgemein: "Diesen Eintrag gibt es schon." } } : r;
       if (mitUndo) merkeUndo({ name: `„${r.knoten.titel}“ angelegt`, zurueck: () => loeschen(r.knoten.id, { mitUndo: false }), tun: () => wiederherstellen(r.knoten.id, { mitUndo: false }) });
@@ -1083,10 +1141,16 @@
     }
 
     // ---- Import, Zurücksetzen ----
-    /** Ausgewählte Einträge aus importVergleichen übernehmen (neu und geaendert) – ein Schritt zum Rückgängigmachen. */
+    /**
+     * Ausgewählte Einträge aus importVergleichen übernehmen (neu und geaendert) – ein Schritt zum Rückgängigmachen. Danach die
+     * Verbindungen von Hand aus den Dateien (im selben Schritt). Ergebnis: { ok, neu, geaendert, fehler } und – wenn welche
+     * entstanden sind – verbindungen: Anzahl.
+     */
     async function importieren(eintraege) {
       const schritte = [];
       const fehler = [];
+      const uebernommen = []; // { e, id }: Einträge, die jetzt da sind – für ihre Verbindungen
+      const kennung = new Map(); // Kennung laut Vorschau → tatsächliche (ein neuer Eintrag bekommt eine andere, wenn seine vergeben ist)
       const geaenderte = []; // { id, vorher, nachher } – für die Prüfung vor Rückgängig und Wiederholen
       let neu = 0;
       let geaendert = 0;
@@ -1094,7 +1158,7 @@
         if (!e || !e.knoten || (e.art !== "neu" && e.art !== "geaendert")) continue;
         if (e.art === "neu") {
           const r = await anlegen(e.knoten, { grund: "import", id: e.knoten.id, mitUndo: false });
-          if (r.ok) { neu += 1; schritte.push({ zurueck: () => loeschen(r.knoten.id, { mitUndo: false }), tun: () => wiederherstellen(r.knoten.id, { mitUndo: false }) }); } else fehler.push(`${e.knoten.titel}: ${Object.values(r.fehler || { x: "nicht übernommen" })[0]}`);
+          if (r.ok) { neu += 1; uebernommen.push({ e, id: r.knoten.id }); if (e.knoten.id) kennung.set(e.knoten.id, r.knoten.id); schritte.push({ zurueck: () => loeschen(r.knoten.id, { mitUndo: false }), tun: () => wiederherstellen(r.knoten.id, { mitUndo: false }) }); } else fehler.push(`${e.knoten.titel}: ${Object.values(r.fehler || { x: "nicht übernommen" })[0]}`);
         } else {
           const alt = z.knoten.get(e.knoten.id);
           if (!alt) continue;
@@ -1102,19 +1166,33 @@
           const warWeg = alt.geloescht;
           if (warWeg) await wiederherstellen(alt.id, { mitUndo: false });
           const r = await aendern(alt.id, stand(e.knoten), { grund: "import", mitUndo: false });
-          if (r.ok) { geaendert += 1; geaenderte.push({ id: alt.id, vorher, nachher: stand(r.knoten) }); schritte.push({ zurueck: async () => { await aendern(alt.id, vorher, { grund: "rueckgaengig", mitUndo: false }); if (warWeg) await loeschen(alt.id, { mitUndo: false }); }, tun: () => aendern(alt.id, stand(e.knoten), { grund: "import", mitUndo: false }) }); } else fehler.push(`${e.knoten.titel}: ${r.konflikt ? "inzwischen geändert" : Object.values(r.fehler || { x: "nicht übernommen" })[0]}`);
+          if (r.ok) { geaendert += 1; uebernommen.push({ e, id: alt.id }); geaenderte.push({ id: alt.id, vorher, nachher: stand(r.knoten) }); schritte.push({ zurueck: async () => { await aendern(alt.id, vorher, { grund: "rueckgaengig", mitUndo: false }); if (warWeg) await loeschen(alt.id, { mitUndo: false }); }, tun: () => aendern(alt.id, stand(e.knoten), { grund: "import", mitUndo: false }) }); } else fehler.push(`${e.knoten.titel}: ${r.konflikt ? "inzwischen geändert" : Object.values(r.fehler || { x: "nicht übernommen" })[0]}`);
+        }
+      }
+      const eintraegeZahl = schritte.length;
+      // Verbindungen von Hand: erst jetzt, wenn alle Einträge da sind – nur über kanteAnlegen (prüft Art, beide Enden, Doppelte).
+      // Was sich nicht anlegen lässt (Ziel nicht übernommen oder im Papierkorb, Verbindung gibt es schon), entfällt.
+      let verbindungen = 0;
+      for (const { e, id } of uebernommen) {
+        for (const v of Array.isArray(e.verbindungen) ? e.verbindungen : []) {
+          if (!v || typeof v.nach !== "string") continue;
+          const r = await kanteAnlegen(id, kennung.get(v.nach) || v.nach, v.art, { mitUndo: false });
+          if (!r.ok) continue;
+          verbindungen += 1;
+          const kante = r.kante;
+          schritte.push({ zurueck: () => kanteLoeschen(kante.id, { mitUndo: false }), tun: async () => { await ablage.kantenSchreiben([kante]); z.kanten.set(kante.id, kante); melden("kanten"); return { ok: true }; } });
         }
       }
       if (schritte.length) {
         merkeUndo({
-          name: `Import (${schritte.length === 1 ? "1 Eintrag" : `${schritte.length} Einträge`})`,
+          name: `Import (${eintraegeZahl === 1 ? "1 Eintrag" : `${eintraegeZahl} Einträge`})`,
           // Wie beim einzelnen Ändern: Hat ein anderes Fenster seit dem Import einen der geänderten Einträge angefasst, bleibt der
           // ganze Import stehen (ein Schritt – ganz oder gar nicht); sonst läge dessen Fassung nur noch im Verlauf.
           zurueck: async () => { if (geaenderte.some((g) => inzwischenAnders(g.id, g.nachher))) return INZWISCHEN; for (const s of [...schritte].reverse()) await s.zurueck(); return { ok: true }; },
           tun: async () => { if (geaenderte.some((g) => inzwischenAnders(g.id, g.vorher))) return INZWISCHEN; for (const s of schritte) await s.tun(); return { ok: true }; },
         });
       }
-      return { ok: true, neu, geaendert, fehler };
+      return { ok: true, neu, geaendert, fehler, ...(verbindungen ? { verbindungen } : {}) };
     }
 
     /** Alles löschen und den Seed neu einspielen (Demo: „Beispieldaten zurücksetzen“). */
@@ -1173,8 +1251,8 @@
       /** Test-Patienten, Notizen und Berichte als schreibgeschützte Knoten einblenden (nur Kürzel und Datum). */
       abgeleitetSetzen(neu) { quellen = { patienten: (neu && neu.patienten) || [], notizen: (neu && neu.notizen) || [], berichte: (neu && neu.berichte) || [] }; abgeleitetBauen(); melden("abgeleitet"); },
       importieren,
-      exportDateien: () => exportDateien(rechnen().eigene),
-      exportEineDatei: () => exportEineDatei(rechnen().eigene),
+      exportDateien: () => exportDateien(rechnen().eigene, rechnen().kanten),
+      exportEineDatei: () => exportEineDatei(rechnen().eigene, rechnen().kanten),
       beiAenderung(h) { hoerer.add(h); return () => hoerer.delete(h); },
       get nummer() { return nummer; },
     };

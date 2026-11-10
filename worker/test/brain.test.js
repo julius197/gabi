@@ -1816,12 +1816,16 @@ describe("Export und Import", () => {
     await brain.loeschen(weg.id);
     const dateien = brain.exportDateien();
     expect(dateien.map((d) => d.name)).toEqual(["alpha.md", "beta.md", "gamma.md"]);
-    expect(dateien[1].text).toBe(`---\nid: s-beta\ntitel: "Beta"\nart: praxiswissen\nstatus: bestaetigt\ntags: []\nquelle: "Test"\nerstellt: ${new Date(T0).toISOString()}\ngeaendert: ${new Date(T0).toISOString()}\n---\n\nBeta v1. Siehe [[Alpha]].\n`);
+    // Beta hängt im Test-Seed von Hand an Alpha (sk-beta): Die Verbindung steht im Kopf des Ausgangsknotens (Prüfrunde 1, Fund 3)
+    const betaOhne = `---\nid: s-beta\ntitel: "Beta"\nart: praxiswissen\nstatus: bestaetigt\ntags: []\nquelle: "Test"\nerstellt: ${new Date(T0).toISOString()}\ngeaendert: ${new Date(T0).toISOString()}\n---\n\nBeta v1. Siehe [[Alpha]].\n`;
+    expect(dateien[1].text).toBe(betaOhne.replace("\n---\n\n", "\nverbindungen: [gehoert_zu:s-alpha]\n---\n\n"));
+    expect(dateien[0].text).not.toMatch(/verbindungen/); // ohne Verbindung von Hand keine Zeile
     expect(JSON.stringify(dateien)).not.toMatch(/TP-01|Gelöscht|Kernregeln/);
     const mitPapierkorb = [...brain.knoten(), ...brain.papierkorb().map((x) => x.knoten)];
     expect(mitPapierkorb.some((k) => k.titel === "Gelöscht")).toBe(true);
-    expect(B.exportDateien(mitPapierkorb)).toEqual(dateien); // auch wenn man alles hineinreicht: nur Eigenes, nichts aus dem Papierkorb
-    expect(B.exportEineDatei(mitPapierkorb)).toBe(brain.exportEineDatei());
+    expect(B.exportDateien(mitPapierkorb, brain.kanten())).toEqual(dateien); // auch wenn man alles hineinreicht: nur Eigenes, nichts aus dem Papierkorb
+    expect(B.exportEineDatei(mitPapierkorb, brain.kanten())).toBe(brain.exportEineDatei());
+    expect(B.exportDateien(mitPapierkorb)[1].text).toBe(betaOhne); // ohne Kanten hineingereicht: die Datei wie bisher
     // gleiche Dateinamen werden durchnummeriert
     expect(B.exportDateien([{ id: "a1", art: "praxiswissen", titel: "Preise!", inhalt: "" }, { id: "a2", art: "praxiswissen", titel: "Preise?", inhalt: "" }, { id: "a3", art: "praxiswissen", titel: "???", inhalt: "" }]).map((d) => d.name)).toEqual(["eintrag.md", "preise.md", "preise-2.md"]);
     // eine Datei: alle Einträge, getrennt
@@ -1861,20 +1865,162 @@ describe("Export und Import", () => {
     const vergleich = B.importVergleichen(ziel.brain.knoten(), B.importLesen(quelle.brain.exportDateien()).knoten);
     expect(new Set(vergleich.map((v) => v.art))).toEqual(new Set(["neu"]));
     const r = await ziel.brain.importieren(vergleich);
-    expect(r).toEqual({ ok: true, neu: 44, geaendert: 0, fehler: [] });
+    // Prüfrunde 1, Fund 3: auch die Verbindungen von Hand (hier die aus dem Seed) und „zuletzt geändert“ kommen mit
+    expect(vonHand(quelle.brain)).toHaveLength(SEED.kanten.length);
+    expect(r).toEqual({ ok: true, neu: 44, geaendert: 0, fehler: [], verbindungen: SEED.kanten.length });
+    expect(vonHand(ziel.brain)).toEqual(vonHand(quelle.brain));
     for (const k of quelle.brain.eigene()) {
       const neuK = ziel.brain.hol(k.id);
-      expect(neuK, k.titel).toMatchObject({ titel: k.titel, inhalt: k.inhalt, tags: k.tags, art: k.art, quelle: k.quelle || "", erstellt: k.erstellt, geschuetzt: false });
+      expect(neuK, k.titel).toMatchObject({ titel: k.titel, inhalt: k.inhalt, tags: k.tags, art: k.art, quelle: k.quelle || "", erstellt: k.erstellt, geaendert: k.geaendert, geschuetzt: false });
       expect(neuK.status).toBe((k.art === "regel" || k.art === "persona") && k.status === "bestaetigt" ? "entwurf" : k.status);
     }
+    expect(ziel.brain.gesundheit().veraltet).toBe(quelle.brain.gesundheit().veraltet); // „veraltet“ verschwindet durch den Umzug nicht
     expect(ziel.brain.fehlende()).toEqual([]);
     expect(ziel.brain.regelTexte()).toEqual([]); // importierte Regeln wirken noch nicht
     expect(ziel.brain.personaText()).toBe("");
-    // ein Schritt zurück nimmt den ganzen Import wieder weg
+    // ein Schritt zurück nimmt den ganzen Import wieder weg – samt den Verbindungen
     expect(await ziel.brain.rueckgaengig()).toEqual({ ok: true, name: "Import (44 Einträge)" });
     expect(ziel.brain.eigene()).toEqual([]);
+    expect((await ziel.ablage.laden()).kanten).toEqual([]);
     await ziel.brain.wiederholen();
     expect(ziel.brain.eigene()).toHaveLength(44);
+    expect(vonHand(ziel.brain)).toEqual(vonHand(quelle.brain));
+  });
+
+  // ---- Prüfrunde 1, Fund 3: Verbindungen von Hand und „zuletzt geändert“ überstehen Export → Import ----
+  const vonHand = (brain) => brain.kanten().filter((k) => !k.auto).map((k) => `${k.von}>${k.nach}>${k.art}`).sort();
+  /** Vorschau wie in der Oberfläche: Bestand samt Papierkorb, dazu die vorhandenen Verbindungen. */
+  const vorschau = (brain, dateien) => B.importVergleichen([...brain.eigene(), ...brain.papierkorb().map((p) => p.knoten)], B.importLesen(dateien).knoten, { kanten: brain.kanten() });
+
+  it("Export: Verbindungen von Hand stehen im Kopf des Ausgangsknotens – nur zwischen exportierten Einträgen (nie Test-Patient, Kernregeln, Papierkorb)", async () => {
+    const { brain } = await neu({ seed: miniSeed("v1") });
+    brain.abgeleitetSetzen({ patienten: [{ id: "pid", kuerzel: "TP-01" }] });
+    const wlan = await lege(brain, "WLAN");
+    const gast = await lege(brain, "Gastzugang");
+    const weg = await lege(brain, "Wird gelöscht");
+    expect((await brain.kanteAnlegen(gast.id, wlan.id, "gehoert_zu")).ok).toBe(true);
+    expect((await brain.kanteAnlegen(gast.id, "s-alpha", "verweis")).ok).toBe(true);
+    expect((await brain.kanteAnlegen(gast.id, "p-pid", "verweis")).ok).toBe(true); // geht von Hand – gehört aber in keine Datei
+    expect((await brain.kanteAnlegen(gast.id, weg.id, "verweis")).ok).toBe(true);
+    await brain.loeschen(weg.id);
+    const kopf = (name) => brain.exportDateien().find((d) => d.name === name).text.split("\n---\n")[0];
+    expect(kopf("gastzugang.md").split("\n").pop()).toBe(`verbindungen: [${[`gehoert_zu:${wlan.id}`, "verweis:s-alpha"].sort().join(", ")}]`);
+    expect(kopf("wlan.md")).not.toMatch(/verbindungen/); // steht nur beim Ausgangsknoten
+    expect(kopf("beta.md")).toMatch(/\nverbindungen: \[gehoert_zu:s-alpha\]$/); // die Seed-Verbindung
+    const alles = `${brain.exportEineDatei()}\n${JSON.stringify(brain.exportDateien())}`;
+    expect(alles).not.toMatch(/p-pid|TP-01|kernregeln/);
+    expect(alles).not.toContain(weg.id);
+    // Verweise aus dem Text bleiben, was sie sind: Text – keine Zeile im Kopf
+    expect(kopf("beta.md")).not.toMatch(/verweis:/);
+    // die eine Datei trägt dieselben Köpfe
+    expect(brain.exportEineDatei()).toContain(`verbindungen: [${[`gehoert_zu:${wlan.id}`, "verweis:s-alpha"].sort().join(", ")}]`);
+  });
+
+  it("Export → frisches Brain → Import: die selbst gezogenen Verbindungen und „zuletzt geändert“ sind wieder da (Dateien, eine Datei, ZIP)", async () => {
+    // Quelle: Seed-Brain vor 120 Tagen, zwei eigene Einträge, zwei Verbindungen von Hand (wie im Fund nachgestellt)
+    const zeit = { jetzt: T0 - 120 * TAG };
+    const quelle = await neu({ seed: SEED, zeit });
+    const wlan = await lege(quelle.brain, "WLAN für Patienten", { inhalt: "Netz: Gast." });
+    zeit.jetzt = T0 - 10 * TAG;
+    const gast = await lege(quelle.brain, "Gastzugang", { inhalt: "Kennwort am Empfang." });
+    expect((await quelle.brain.kanteAnlegen(gast.id, wlan.id, "gehoert_zu")).ok).toBe(true);
+    expect((await quelle.brain.kanteAnlegen(wlan.id, "s-kontakt", "verweis")).ok).toBe(true);
+    const dateien = quelle.brain.exportDateien();
+    const wege = { dateien, "eine Datei": [{ name: "gabi-brain.md", text: quelle.brain.exportEineDatei() }], zip: await B.zipLesen(B.zipSchreiben(dateien)) };
+    for (const [name, eingabe] of Object.entries(wege)) {
+      const ziel = await neu({ seed: SEED }); // neues Gerät: frischer Seed, heute
+      const v = vorschau(ziel.brain, eingabe);
+      expect(v.filter((x) => x.art !== "gleich").map((x) => [x.knoten.titel, x.art]), name).toEqual([["Gastzugang", "neu"], ["WLAN für Patienten", "neu"]]);
+      expect(v.find((x) => x.knoten.titel === "Gastzugang").verbindungen, name).toEqual([{ art: "gehoert_zu", nach: wlan.id, titel: "WLAN für Patienten" }]);
+      expect(v.find((x) => x.knoten.titel === "WLAN für Patienten").verbindungen, name).toEqual([{ art: "verweis", nach: "s-kontakt", titel: "Kontakt" }]);
+      expect(await ziel.brain.importieren(v), name).toEqual({ ok: true, neu: 2, geaendert: 0, fehler: [], verbindungen: 2 });
+      expect(vonHand(ziel.brain), name).toEqual(vonHand(quelle.brain));
+      expect(ziel.brain.verbindungen(gast.id).map((x) => [x.kante.art, x.knoten.titel]), name).toEqual([["gehoert_zu", "WLAN für Patienten"]]);
+      // „zuletzt geändert“ der neuen Einträge stammt aus der Datei – nicht von heute
+      expect(ziel.brain.hol(wlan.id), name).toMatchObject({ erstellt: T0 - 120 * TAG, geaendert: T0 - 120 * TAG });
+      expect(ziel.brain.hol(gast.id), name).toMatchObject({ erstellt: T0 - 10 * TAG, geaendert: T0 - 10 * TAG });
+      expect(S.istVeraltet(ziel.brain.hol(wlan.id), T0), name).toBe(true);
+      // was es hier schon gab, behält seinen eigenen Stand (der Import hat es nicht angefasst)
+      expect(ziel.brain.hol("s-kontakt"), name).toMatchObject({ rev: 1, geaendert: T0 });
+      // EIN Schritt zurück: Einträge und Verbindungen sind wieder weg – und kommen mit „Wiederholen“ zurück
+      expect(await ziel.brain.rueckgaengig(), name).toEqual({ ok: true, name: "Import (2 Einträge)" });
+      expect(vonHand(ziel.brain).filter((k) => k.includes(wlan.id)), name).toEqual([]);
+      expect((await ziel.ablage.laden()).kanten.filter((k) => k.von === wlan.id || k.von === gast.id), name).toEqual([]);
+      expect(ziel.brain.kannRueckgaengig, name).toBe(false);
+      expect((await ziel.brain.wiederholen()).ok, name).toBe(true);
+      expect(vonHand(ziel.brain), name).toEqual(vonHand(quelle.brain));
+      // ein zweiter Start (anderer Tab) sieht dieselben Verbindungen: sie sind gespeichert
+      const zweiter = await neu({ seed: SEED, dokument: ziel.dokument });
+      expect(vonHand(zweiter.brain), name).toEqual(vonHand(quelle.brain));
+    }
+  });
+
+  it("Vorschau zeigt neue Verbindungen: ein sonst gleicher Eintrag gilt dann als geändert; Vorhandenes kommt nicht doppelt; das Ziel wird auch über den Titel gefunden", async () => {
+    const { brain } = await neu({ seed: miniSeed("v1") });
+    const dateien = brain.exportDateien();
+    // der eigene Export, nichts geändert: alles gleich, keine neue Verbindung
+    expect(vorschau(brain, dateien).map((v) => [v.art, v.verbindungen])).toEqual([["gleich", []], ["gleich", []], ["gleich", []]]);
+    // die Verbindung Beta → Alpha hier von Hand entfernt: der Import bringt sie zurück – sichtbar in der Vorschau
+    await brain.kanteLoeschen("sk-beta");
+    const v = vorschau(brain, dateien);
+    expect(v.map((x) => [x.knoten.titel, x.art, x.felder])).toEqual([["Alpha", "gleich", []], ["Beta", "geaendert", []], ["Gamma?", "gleich", []]]);
+    expect(v[1].verbindungen).toEqual([{ art: "gehoert_zu", nach: "s-alpha", titel: "Alpha" }]);
+    expect(await brain.importieren(v)).toEqual({ ok: true, neu: 0, geaendert: 1, fehler: [], verbindungen: 1 });
+    expect(vonHand(brain)).toEqual(["s-beta>s-alpha>gehoert_zu"]);
+    expect(brain.hol("s-beta")).toMatchObject({ rev: 1, geaendert: T0 }); // der Eintrag selbst blieb, wie er war
+    expect(await brain.rueckgaengig()).toEqual({ ok: true, name: "Import (1 Eintrag)" });
+    expect(vonHand(brain)).toEqual([]);
+    await brain.wiederholen();
+    expect(vonHand(brain)).toEqual(["s-beta>s-alpha>gehoert_zu"]);
+    // noch einmal dieselben Dateien: nichts mehr zu tun
+    expect(vorschau(brain, dateien).every((x) => x.art === "gleich" && !x.verbindungen.length)).toBe(true);
+    // ohne die vorhandenen Verbindungen (reiner Vergleich der Felder) bleibt der Eintrag „gleich“ – importieren legt trotzdem nichts doppelt an
+    const ohne = B.importVergleichen(brain.eigene(), B.importLesen(dateien).knoten);
+    expect(ohne.map((x) => x.art)).toEqual(["gleich", "gleich", "gleich"]);
+    expect(await brain.importieren(ohne.map((x) => ({ ...x, art: "geaendert" })))).toEqual({ ok: true, neu: 0, geaendert: 3, fehler: [] });
+    expect(vonHand(brain)).toEqual(["s-beta>s-alpha>gehoert_zu"]);
+    // anderes Gerät: „Alpha“ gibt es dort mit eigener Kennung (von Hand angelegt) – die Verbindung findet ihr Ziel über die Dateien
+    const dort = await neu();
+    const alphaDort = await lege(dort.brain, "Alpha", { inhalt: "Alpha v1", tags: ["a"] });
+    const vDort = vorschau(dort.brain, dateien);
+    expect(vDort.map((x) => [x.knoten.titel, x.art])).toEqual([["Alpha", "gleich"], ["Beta", "neu"], ["Gamma?", "neu"]]);
+    expect(vDort[1].verbindungen).toEqual([{ art: "gehoert_zu", nach: alphaDort.id, titel: "Alpha" }]);
+    expect(await dort.brain.importieren(vDort)).toMatchObject({ neu: 2, verbindungen: 1 });
+    expect(vonHand(dort.brain)).toEqual([`s-beta>${alphaDort.id}>gehoert_zu`]);
+  });
+
+  it("fremde Datei: nur die zwei Arten von Hand, nur gültige Kennungen gespeicherter Einträge, begrenzt – was sich nicht anlegen lässt, entfällt", async () => {
+    const { brain } = await neu({ seed: miniSeed("v1") });
+    brain.abgeleitetSetzen({ patienten: [{ id: "123456", kuerzel: "TP-01" }] });
+    const viele = Array.from({ length: 60 }, (_, i) => `verweis:kZiel${String(i).padStart(4, "0")}`).join(", ");
+    const r = B.importLesen([
+      { name: "a.md", text: "---\nid: kEigenerEintrag01\ntitel: Eigener\nverbindungen: [gehoert_zu:s-alpha, gehoert_zu:s-alpha, verweis:s-beta, verweis:kernregeln, verweis:p-123456, notiz_von:n-1234, bericht_zu:s-alpha, verweis:<script>alert(1)</script>, verweis:kEigenerEintrag01, verweis:gibtEsNicht99, __proto__:x, verweis:, :s-alpha, verweis:s-gamma:extra]\n---\n\nText" },
+      { name: "b.md", text: "---\ntitel: Liste\nverbindungen:\n  - gehoert_zu:s-alpha\n  - \"verweis:s-gamma\"\n---\n\nText" },
+      { name: "c.md", text: `---\ntitel: Viele\nverbindungen: [${viele}]\n---\n\nText` },
+      { name: "d.md", text: "---\ntitel: Ohne\nverbindungen: \n---\n\nText" },
+      { name: "e.md", text: "---\ntitel: Skalar\nverbindungen: verweis:s-alpha, gehoert_zu:s-beta\n---\n\nText" },
+    ]);
+    expect(r.fehler).toEqual([]);
+    expect(r.knoten[0].verbindungen).toEqual([{ art: "gehoert_zu", nach: "s-alpha" }, { art: "verweis", nach: "s-beta" }, { art: "verweis", nach: "gibtEsNicht99" }]);
+    expect(r.knoten[1].verbindungen).toEqual([{ art: "gehoert_zu", nach: "s-alpha" }, { art: "verweis", nach: "s-gamma" }]);
+    expect(r.knoten[2].verbindungen).toHaveLength(B.GRENZEN.importVerbindungen);
+    expect(r.knoten[3].verbindungen).toBeUndefined();
+    expect(r.knoten[4].verbindungen).toEqual([{ art: "verweis", nach: "s-alpha" }, { art: "gehoert_zu", nach: "s-beta" }]);
+    expect(B.hatHtml(JSON.stringify(r.knoten))).toBe(false);
+    const v = B.importVergleichen(brain.eigene(), r.knoten, { kanten: brain.kanten() });
+    // Ziele, die es weder im Import noch hier gibt, stehen gar nicht erst in der Vorschau
+    expect(v[0].verbindungen).toEqual([{ art: "gehoert_zu", nach: "s-alpha", titel: "Alpha" }, { art: "verweis", nach: "s-beta", titel: "Beta" }]);
+    expect(v[2].verbindungen).toEqual([]);
+    const ergebnis = await brain.importieren(v);
+    expect(ergebnis).toEqual({ ok: true, neu: 5, geaendert: 0, fehler: [], verbindungen: 6 });
+    expect(vonHand(brain).filter((k) => /kernregeln|p-123456|n-1234|gibtEsNicht/.test(k))).toEqual([]);
+    expect(brain.kanten().filter((k) => !k.auto).every((k) => B.KANTEN_EIGEN.includes(k.art))).toBe(true);
+    // wird das Ziel in der Vorschau abgewählt (hier: gar nicht mitgegeben), entsteht der Eintrag ohne diese Verbindung
+    const paar = B.importLesen([{ name: "x.md", text: "---\nid: kPaarEins0001\ntitel: Paar eins\nverbindungen: [verweis:kPaarZwei0002]\n---\n\nx" }, { name: "y.md", text: "---\nid: kPaarZwei0002\ntitel: Paar zwei\n---\n\ny" }]);
+    const vPaar = B.importVergleichen(brain.eigene(), paar.knoten, { kanten: brain.kanten() });
+    expect(vPaar[0].verbindungen).toEqual([{ art: "verweis", nach: "kPaarZwei0002", titel: "Paar zwei" }]);
+    expect(await brain.importieren([vPaar[0]])).toEqual({ ok: true, neu: 1, geaendert: 0, fehler: [] });
+    expect(brain.verbindungen("kPaarEins0001")).toEqual([]);
   });
 
   it("geänderte bestätigte Regel → „geändert“ und kommt als Entwurf an; neue Regel/Persona immer als Entwurf", async () => {
