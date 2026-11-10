@@ -776,7 +776,10 @@
       let frisch = false;
       if (seed && Array.isArray(seed.knoten)) {
         if (!z.knoten.size && z.meta.seed === undefined) { await seedEinspielen(); frisch = true; uebernehmen(await ablage.laden()); }
-        else if (z.meta.seed !== undefined && z.meta.seed !== String(seed.version || "1")) { await beimStart(seedNachziehen); uebernehmen(await ablage.laden()); }
+        // Nachziehen auch OHNE Seed-Marke, wenn schon Einträge da sind: So ein Stand entsteht, wenn das Brain-Wissen beim
+        // Abmelden gelöscht wurde und ein noch offener Tab danach etwas angelegt hat – sonst bliebe das Brain für immer ohne
+        // das Praxiswissen. Nachziehen ergänzt nur Fehlendes (Demo-Beispiele und Beispiel-Lücken gibt es nur beim Einspielen).
+        else if (z.meta.seed !== String(seed.version || "1")) { await beimStart(seedNachziehen); uebernehmen(await ablage.laden()); }
       }
       // Papierkorb: nach 30 Tagen endgültig weg
       const grenze = jetzt() - GRENZEN.papierkorbTage * TAG_MS;

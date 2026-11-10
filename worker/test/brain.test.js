@@ -1495,6 +1495,71 @@ describe.each([
   });
 });
 
+describe("Prüfrunde 1 · Fund 6: Brain-Wissen gelöscht, ein noch offener Tab legt danach etwas an", () => {
+  it("der nächste Start zieht den Seed trotzdem nach – das Brain besteht nicht für immer aus diesem einen Eintrag", async () => {
+    const { falscherSpeicher } = await import("./hilfen-idb.js");
+    const u = { indexedDB: falscheIndexedDB(), localStorage: falscherSpeicher(), sessionStorage: falscherSpeicher() };
+    const tab = async () => {
+      const ablage = await SP.oeffnen({ umgebung: u, zeitlimit: 500 });
+      const brain = B.erstelle({ ablage, seed: SEED, jetzt: () => T0 });
+      const info = await brain.laden();
+      return { brain, ablage, info };
+    };
+    const a = await tab();
+    const b = await tab();
+    expect(b.brain.eigene()).toHaveLength(SEED.knoten.length);
+    // Tab A: Abmelden mit Häkchen „Brain-Wissen auf diesem Gerät auch löschen“
+    a.ablage.schliessen();
+    expect(await SP.resteLoeschen({ umgebung: u, zeitlimit: 500 })).toBe(true);
+    expect(u.indexedDB.inhalt("gabi-brain", "knoten")).toEqual([]);
+    expect(u.indexedDB.inhalt("gabi-brain", "meta")).toEqual([]); // auch die Seed-Marke ist weg
+    // Tab B ist noch offen (hat die Nachricht nicht bekommen oder noch nicht verarbeitet) und legt etwas an
+    expect((await b.brain.anlegen(eintrag("Nach dem Löschen angelegt"))).ok).toBe(true);
+    expect(u.indexedDB.inhalt("gabi-brain", "knoten").map((k) => k.titel)).toEqual(["Nach dem Löschen angelegt"]);
+    expect(u.indexedDB.inhalt("gabi-brain", "meta").some((m) => m.schluessel === "seed")).toBe(false);
+    b.ablage.schliessen();
+    // neu anmelden: das Praxiswissen ist wieder da – und der eine Eintrag auch
+    const c = await tab();
+    expect(c.info).toEqual({ art: "indexeddb", frisch: false });
+    expect(c.brain.eigene()).toHaveLength(SEED.knoten.length + 1);
+    expect(c.brain.findeTitel("Nach dem Löschen angelegt")).not.toBeNull();
+    expect(c.brain.kanten().filter((k) => !k.auto)).toHaveLength(SEED.kanten.length);
+    expect(c.brain.kontextFuer("Wie erreiche ich euch telefonisch?").knoten.map((k) => k.id)).toContain("s-telefonzeiten"); // Gabi antwortet wieder
+    expect(u.indexedDB.inhalt("gabi-brain", "meta").find((m) => m.schluessel === "seed").wert).toBe(String(SEED.version));
+    c.ablage.schliessen();
+    // der Start danach findet die Marke: nichts wird noch einmal angefasst
+    const d = await tab();
+    expect(d.brain.eigene()).toHaveLength(SEED.knoten.length + 1);
+    expect(d.brain.eigene().every((k) => k.rev === 1)).toBe(true);
+  });
+
+  it("Demo-Betrieb: nachgezogen wird das Praxiswissen; Demo-Beispiele und Beispiel-Lücken kommen erst mit „Beispieldaten zurücksetzen“ wieder", async () => {
+    const eins = await neu({ seed: SEED, demo: true });
+    expect(eins.brain.eigene()).toHaveLength(SEED.knoten.length + SEED.demo.knoten.length);
+    await eins.ablage.leeren(); // das Demo-Brain wird beim Abmelden mit Häkchen mit gelöscht
+    expect((await eins.brain.anlegen(eintrag("Nach dem Löschen angelegt"))).ok).toBe(true); // der offene Demo-Tab arbeitet weiter
+    const zwei = await neu({ seed: SEED, demo: true, dokument: eins.dokument });
+    expect(zwei.info.frisch).toBe(false);
+    expect(zwei.brain.eigene()).toHaveLength(SEED.knoten.length + 1);
+    expect(zwei.brain.eigene().filter((k) => k.quelle === "Demo")).toEqual([]);
+    expect(zwei.brain.luecken()).toEqual([]);
+    expect((await zwei.brain.zuruecksetzen()).frisch).toBe(true);
+    expect(zwei.brain.eigene()).toHaveLength(SEED.knoten.length + SEED.demo.knoten.length);
+    expect(zwei.brain.luecken()).toHaveLength(SEED.demo.luecken.length);
+  });
+
+  it("ein bewusst geleertes Brain (alles gelöscht, Papierkorb geleert) bleibt leer – dort steht die Seed-Marke", async () => {
+    const eins = await neu({ seed: miniSeed("v1") });
+    for (const k of eins.brain.eigene()) await eins.brain.loeschen(k.id);
+    await eins.brain.papierkorbLeeren();
+    const zwei = await neu({ seed: miniSeed("v1"), dokument: eins.dokument });
+    expect(zwei.brain.eigene()).toEqual([]);
+    const eigener = await lege(zwei.brain, "Nur dieser");
+    const drei = await neu({ seed: miniSeed("v1"), dokument: eins.dokument });
+    expect(drei.brain.eigene().map((k) => k.id)).toEqual([eigener.id]); // kein Seed dazu: die Praxis hat ihn bewusst gelöscht
+  });
+});
+
 // ==========================================================================
 describe("Gesundheit", () => {
   it("jede Kennzahl zählt nur eigene, nicht gelöschte Knoten; Prozent = bestätigt von allen", async () => {
