@@ -48,6 +48,7 @@
     const statusName = (id) => (B.STATUS.find((s) => s.id === id) || { name: id }).name;
     const vorsatz = () => (z.demo ? "gabi.demo." : "gabi.");
     const schmal = window.matchMedia("(max-width: 479.98px)");
+    const grob = window.matchMedia("(pointer: coarse)"); // Touch-Gerät: Fokus nie von selbst in ein Textfeld (klappte die Tastatur auf)
     const PROBE_KNOTEN = Math.min(5000, Math.max(0, Math.floor(Number(new URLSearchParams(location.search).get("brainknoten")) || 0)));
     const lokal = {
       lesen(k) { try { return JSON.parse(localStorage.getItem(vorsatz() + k) || "null"); } catch { return null; } },
@@ -207,6 +208,37 @@
       return true;
     }
 
+    // ---------- Fokus führen und ansagen ----------
+    // Wo eine Aktion das bediente Element entfernt (Zeile gelöscht, Detail neu gebaut, Menü zu), fiele der Fokus sonst auf
+    // body: Tastatur und Screenreader stünden wieder am Seitenanfang. Gesetzt wird er über app.fokusSetzen (nach Tippen
+    // ohne Ring, per Tastatur mit).
+    /** Für Screenreader ansagen – über eine Live-Region, die schon dasteht (ein frisch eingesetztes role=status wird nicht
+        zuverlässig vorgelesen): im Graphen die des Graphen, sonst die eigene am Ende der Ansicht. Kein Toast, kein Bild. */
+    function melden(text) {
+      const ziel = $(z.reiter === "graph" ? "#brain-ansage" : "#brain-meldung");
+      if (ziel) ziel.textContent = text;
+    }
+    const listenZeilen = () => [...wurzel.querySelectorAll("#brain-liste a.brain-zeile")];
+    /** An welcher Stelle der Liste ein Eintrag steht (−1 = nicht in der Liste) – gemerkt, bevor er verschwindet. */
+    const zeilenPlatz = (id) => listenZeilen().findIndex((a) => a.getAttribute("href") === `#/brain/${id}`);
+    /** Das Detail ist zu oder sein Eintrag ist weg: in der Liste auf seine Zeile (sie wird beim Zeichnen neu gebaut, also
+        erst jetzt suchen) – gibt es sie nicht mehr, auf die Zeile an ihrer Stelle; im Graphen in die Zeichenfläche. */
+    function fokusNachDetail(id, platz = -1) {
+      let ziel = null;
+      if (z.reiter === "liste") {
+        const zeilen = listenZeilen();
+        ziel = zeilen.find((a) => a.getAttribute("href") === `#/brain/${id}`) || (platz >= 0 ? zeilen[Math.min(platz, zeilen.length - 1)] : null);
+      } else if (z.reiter === "graph") ziel = wurzel.querySelector(".brain-graph-flaeche");
+      app.fokusSetzen(ziel || wurzel.querySelector('.brain-reiter-knopf[aria-selected="true"]'));
+    }
+    /** Einmaliger Wunsch einer Aktion: (detail) → Element, das nach dem nächsten Zeichnen des Details den Fokus bekommt. */
+    let detailFokus = null;
+    function zeichnenMitFokus(wunsch) {
+      detailFokus = wunsch;
+      zeichnen();
+      detailFokus = null;
+    }
+
     function geruest() {
       if (z.gebaut) return;
       z.gebaut = true;
@@ -266,6 +298,7 @@
           </div>
         </div>
         <input type="file" id="brain-datei" class="unsichtbar" tabindex="-1" aria-hidden="true" multiple accept=".md,.markdown,.txt,.zip,text/markdown,text/plain,application/zip">
+        <p class="unsichtbar" id="brain-meldung" role="status"></p>
         <datalist id="brain-quellen"><option value="Philipp"></option><option value="Julius"></option><option value="physio-works.de"></option></datalist>
         <datalist id="brain-titel-liste"></datalist>`;
       if (app.laptop.matches) $("#brain-legende").open = true;
@@ -569,7 +602,7 @@
       mitFokus($("#brain-luecken"), liste.length ? `
         <div class="brain-abschnitt-kopf"><h2>Wissenslücken</h2><p>Fragen, die Gabi nicht aus dem Brain beantworten konnte. Sie liegen nur auf diesem Gerät.</p></div>
         <ul class="brain-karten">${liste.map((l) => `
-          <li class="karte brain-luecke">
+          <li class="karte brain-luecke" tabindex="-1">
             <div class="brain-luecke-text"><strong>${esc(l.frage)}</strong><span class="stumm">${l.anzahl === 1 ? "1× gefragt" : `${l.anzahl}× gefragt`} · zuletzt ${esc(tagWann(l.zuletzt))}</span></div>
             <div class="knopf-reihe links">
               <button class="knopf primaer klein" type="button" data-brain="luecke-eintragen" data-id="${esc(l.id)}">${symbol("plus")}Ins Brain eintragen</button>
@@ -634,10 +667,17 @@
       const k = !b && z.auswahl ? z.brain.hol(z.auswahl) : null;
       const zeigen = Boolean(b || k) && (z.reiter === "graph" || z.reiter === "liste");
       const warZu = d.hidden;
+      const fokusDrin = !warZu && d.contains(document.activeElement); // merken, bevor das Detail versteckt oder neu gebaut wird
       d.hidden = !zeigen;
       d.classList.toggle("gross", z.blattGross);
       wurzel.classList.toggle("mit-detail", zeigen);
-      if (!zeigen) { d.classList.remove("oeffnet"); return; }
+      if (!zeigen) {
+        d.classList.remove("oeffnet");
+        // Das Detail ging zu, während der Fokus darin stand (Rückgängig nahm den Eintrag weg, Zurück-Taste …): nicht auf body
+        // fallen lassen. Erst nach der laufenden Aktion – setzt sie den Fokus selbst (Schließen, Löschen), bleibt es dabei.
+        if (fokusDrin) queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body) fokusNachDetail(d.dataset.knoten || ""); });
+        return;
+      }
       // nur beim Aufgehen gleitet das Blatt einmal herein – nie bei einem Neuzeichnen
       if (warZu && !app.wenigBewegung.matches) {
         d.classList.add("oeffnet");
@@ -692,18 +732,30 @@
         const verlauf = k.geschuetzt ? "" : `<details class="brain-verlauf" id="brain-verlauf"${z.verlaufVon === k.id ? " open" : ""}><summary>${symbol("uhr", "klein")}Versionsverlauf</summary><div id="brain-verlauf-inhalt">${z.verlaufVon === k.id ? verlaufHtml(k) : ""}</div></details>`;
         rumpf = status + aktionen + inhalt + meta + verweise + rueck + verbindungen + verlauf;
       }
+      // Wird derselbe Eintrag nur neu gezeichnet (Status, Verbindung, Fassung …), bleibt die Leseposition – sonst spränge
+      // das Detail an den Anfang. Ein anderer Eintrag (und die Ansicht nach dem Bearbeiten) beginnt oben.
+      const rumpfAlt = warZu ? null : d.querySelector(".brain-detail-rumpf:not(.brain-form)");
+      const lage = rumpfAlt && d.dataset.knoten === k.id ? rumpfAlt.scrollTop : 0;
       const neu = mitFokus(d, `${kopf}<div class="brain-detail-rumpf">${rumpf}</div>`);
+      d.dataset.knoten = k.id;
       if (neu) {
         const liste = wurzel.querySelector("#brain-titel-liste");
         if (liste) ersetzen(liste, z.brain.knoten().filter((x) => x.id !== k.id).slice(0, 600).map((x) => `<option value="${esc(x.titel)}"></option>`).join(""));
         const v = d.querySelector("#brain-verlauf");
         if (v) v.addEventListener("toggle", () => { if (v.open) verlaufLaden(k.id); else { z.verlaufVon = ""; z.verlauf = null; } });
+        if (lage) d.querySelector(".brain-detail-rumpf").scrollTop = lage;
       }
       if (warZu || z.fokusAufDetail) {
         const titel = d.querySelector("#brain-detail-titel");
         if (z.fokusAufDetail && titel) app.fokusSetzen(titel);
         z.fokusAufDetail = false;
         d.scrollTop = 0;
+      } else {
+        // Fokus nach dem Neuaufbau: wohin die Aktion ihn wünscht (neue Verbindung, nächste Zeile …) – sonst, stand er im
+        // Detail und ist jetzt weg (das bediente Element gibt es nicht mehr), auf den Titel
+        const wunsch = detailFokus ? detailFokus(d) : null;
+        if (wunsch) app.fokusSetzen(wunsch);
+        else if (neu && fokusDrin && !d.contains(document.activeElement)) app.fokusSetzen(d.querySelector("#brain-detail-titel"));
       }
     }
 
@@ -730,15 +782,23 @@
 
     // ---------- Versionsverlauf ----------
     async function verlaufLaden(id) {
+      // Wird der offene Verlauf nur aufgefrischt (nach „Wiederherstellen“), bleibt die Liste stehen, bis die neue da ist:
+      // kein Platzhalter-Blinken, und der Fokus bleibt auf dem Knopf, statt mit ihm zu verschwinden
+      const frisch = z.verlaufVon !== id || !z.verlauf;
       z.verlaufVon = id;
-      z.verlauf = null;
       const ziel = () => wurzel.querySelector("#brain-verlauf-inhalt");
-      if (ziel()) ersetzen(ziel(), '<div class="skelett brain-skelett-zeile"></div>');
+      if (frisch) {
+        z.verlauf = null;
+        if (ziel()) ersetzen(ziel(), '<div class="skelett brain-skelett-zeile"></div>');
+      }
       const liste = await z.brain.verlauf(id);
       if (z.verlaufVon !== id) return;
       z.verlauf = liste;
       const k = z.brain.hol(id);
-      if (ziel() && k) ersetzen(ziel(), verlaufHtml(k));
+      if (!ziel() || !k) return;
+      const fokusDrin = ziel().contains(document.activeElement);
+      mitFokus(ziel(), verlaufHtml(k));
+      if (fokusDrin && !ziel().contains(document.activeElement)) app.fokusSetzen(wurzel.querySelector("#brain-verlauf summary")); // die Fassung gibt es nicht mehr (nur die letzten 20)
     }
     function verlaufHtml(k) {
       if (!z.verlauf) return '<div class="skelett brain-skelett-zeile"></div>';
@@ -1007,13 +1067,20 @@
     }
     async function detailZu() {
       if (!(await verlassenOk())) return;
-      const zurueck = z.reiter === "liste" ? wurzel.querySelector(`a.brain-zeile[href="#/brain/${CSS.escape(z.auswahl)}"]`) : null;
+      const id = z.auswahl;
       z.auswahl = "";
       z.blattGross = false;
       app.adresseSetzen(reiterHash(), { ersetzen: true });
       zeichnen();
-      const ziel = zurueck && zurueck.isConnected ? wurzel.querySelector(`a.brain-zeile[href="${zurueck.getAttribute("href")}"]`) : z.reiter === "graph" ? wurzel.querySelector(".brain-graph-flaeche") : null;
-      if (ziel) app.fokusSetzen(ziel);
+      fokusNachDetail(id); // Liste: zurück auf die Zeile des Eintrags, Graph: in die Zeichenfläche
+    }
+    /** Bearbeiten beenden (Esc, „Abbrechen“, X) – bei ungespeicherten Änderungen erst nach der Rückfrage. Danach steht
+        der Fokus auf dem Titel des Eintrags; war es ein neuer Eintrag ohne offenes Detail, wieder auf „Neu“. */
+    async function bearbeitenBeenden() {
+      if (!(await verlassenOk())) return;
+      zeichnen();
+      const titel = $("#brain-detail-titel");
+      app.fokusSetzen(titel && !$("#brain-detail").hidden ? titel : $('.brain-werkzeuge [data-brain="neu"]'));
     }
     async function rueckgaengig() {
       const r = await z.brain.rueckgaengig();
@@ -1048,7 +1115,7 @@
       if (!m || m.hidden) return;
       m.hidden = true;
       $("#brain-mehr").setAttribute("aria-expanded", "false");
-      if (fokus) $("#brain-mehr").focus();
+      if (fokus) app.fokusSetzen($("#brain-mehr"));
     }
 
     async function klick(e) {
@@ -1059,7 +1126,9 @@
       }
       const aktion = ziel.dataset.brain;
       const wert = ziel.dataset.wert || "";
-      if (aktion !== "mehr") menueSchliessen();
+      // ein Menüpunkt: Menü zu und Fokus auf „Mehr“ – der Punkt selbst ist gleich versteckt; ein Dialog, der jetzt aufgeht
+      // (Papierkorb, Tastenkürzel, Import), gibt den Fokus beim Schließen dorthin zurück
+      if (aktion !== "mehr") menueSchliessen(Boolean(ziel.closest("#brain-menue")));
       const k = z.auswahl ? z.brain.hol(z.auswahl) : null;
       switch (aktion) {
         case "reiter": if (wert !== z.reiter && (await verlassenOk())) location.hash = `#/brain/${wert}`; break;
@@ -1073,7 +1142,8 @@
           break;
         }
         case "filter-sonder": z.filter[wert] = !z.filter[wert]; zeichnen(); break;
-        case "filter-weg": z.filter = { arten: [], status: [], tag: "", zuKlaeren: false, veraltet: false, nieVerwendet: false, verwendet: false }; zeichnen(); break;
+        // der Knopf verschwindet mit den Filtern: Fokus auf „Filter“ (angesagt wird der neue Stand, siehe standZeichnen)
+        case "filter-weg": z.filter = { arten: [], status: [], tag: "", zuKlaeren: false, veraltet: false, nieVerwendet: false, verwendet: false }; zeichnen(); app.fokusSetzen($("#brain-filter-knopf")); break;
         case "tag": z.filter.tag = wert; z.filterOffen = true; zeichnen(); break;
         case "kennzahl": {
           if (wert === "luecken") { location.hash = "#/brain/luecken"; break; }
@@ -1095,7 +1165,7 @@
         case "blatt": z.blattGross = !z.blattGross; zeichnen(); break;
         case "neu": if (await verlassenOk()) bearbeitenStarten(null); break;
         case "bearbeiten": if (k && !k.geschuetzt) bearbeitenStarten(k); break;
-        case "bearbeiten-abbrechen": if (await verlassenOk()) { zeichnen(); const t = wurzel.querySelector("#brain-detail-titel"); if (t && !$("#brain-detail").hidden) app.fokusSetzen(t); } break;
+        case "bearbeiten-abbrechen": bearbeitenBeenden(); break;
         case "vorschau": {
           const b = z.bearbeitung;
           if (!b) break;
@@ -1116,27 +1186,61 @@
         case "loeschen": {
           if (!k || k.geschuetzt) break;
           if (!(await frage("Eintrag löschen?", `„${k.titel}“ kommt in den Papierkorb und lässt sich 30 Tage lang wiederherstellen.`, { ja: "Löschen", gefahr: true }))) break;
+          const platz = zeilenPlatz(k.id);
           const r = await z.brain.loeschen(k.id);
           if (!r.ok) { toast(fehlerText(r), { art: "warn" }); break; }
           z.auswahl = "";
           app.adresseSetzen(reiterHash(), { ersetzen: true });
           zeichnen();
+          fokusNachDetail("", platz); // Liste: die Zeile, die jetzt an seiner Stelle steht – Graph: die Zeichenfläche
           toast("In den Papierkorb gelegt.", { aktion: { text: "Rückgängig", tun: rueckgaengig } });
           break;
         }
         case "fehlend": if (await verlassenOk()) bearbeitenStarten(null, { felder: { titel: wert }, geaendert: true }); break;
-        case "kante-weg": { const r = await z.brain.kanteLoeschen(ziel.dataset.id); if (!r.ok) toast(fehlerText(r), { art: "warn" }); break; }
+        case "kante-weg": {
+          const zeile = ziel.closest("li");
+          const platz = zeile ? [...zeile.parentNode.children].indexOf(zeile) : 0;
+          const name = zeile && zeile.querySelector("a") ? zeile.querySelector("a").textContent : "";
+          const r = await z.brain.kanteLoeschen(ziel.dataset.id);
+          if (!r.ok) { toast(fehlerText(r), { art: "warn" }); break; }
+          // die Zeile ist weg: Fokus auf die Verbindung, die jetzt an ihrer Stelle steht (ihr Link, nicht ihr „Entfernen“ –
+          // ein zweites Enter soll nicht noch eine löschen); gibt es keine mehr, ins Feld (Touch: auf den Titel)
+          zeichnenMitFokus((d) => {
+            const rest = [...d.querySelectorAll(".brain-verbindungen a")];
+            return rest[Math.min(platz, rest.length - 1)] || d.querySelector(grob.matches ? "#brain-detail-titel" : "#brain-kante-ziel");
+          });
+          melden(`Verbindung zu „${name}“ entfernt.`);
+          break;
+        }
         case "notiz-laden": if (k && k.ref) notizLaden(k.ref.id); break;
         case "version-zeigen": z.versionOffen = z.versionOffen === Number(wert) ? 0 : Number(wert); { const v = wurzel.querySelector("#brain-verlauf-inhalt"); if (v && k) mitFokus(v, verlaufHtml(k)); } break;
         case "version-holen": {
           if (!k) break;
           if (!(await frage("Diese Fassung wiederherstellen?", "Die heutige Fassung bleibt im Versionsverlauf erhalten.", { ja: "Wiederherstellen" }))) break;
           const r = await z.brain.versionWiederherstellen(k.id, Number(wert));
-          if (!r.ok) toast(fehlerText(r), { art: "warn" }); else { toast("Fassung wiederhergestellt.", { art: "erfolg", aktion: { text: "Rückgängig", tun: rueckgaengig } }); verlaufLaden(k.id); }
+          if (!r.ok) toast(fehlerText(r), { art: "warn" });
+          else {
+            toast("Fassung wiederhergestellt.", { art: "erfolg", aktion: { text: "Rückgängig", tun: rueckgaengig } });
+            // das Detail wird neu gebaut: Fokus und Leseposition bleiben bei dieser Fassung
+            zeichnenMitFokus((d) => d.querySelector(`[data-brain="version-holen"][data-wert="${Number(wert)}"]`));
+            verlaufLaden(k.id);
+          }
           break;
         }
         case "luecke-eintragen": { const r = await z.brain.lueckeEintragen(ziel.dataset.id); if (!r.ok) toast(fehlerText(r), { art: "warn" }); else { z.reiter = z.letzteHaupt; oeffnen(r.knoten.id, { fokus: true }); toast("Als „zu klären“ eingetragen.", { art: "erfolg" }); } break; }
-        case "luecke-verwerfen": await z.brain.lueckeVerwerfen(ziel.dataset.id); break;
+        case "luecke-verwerfen": {
+          const karte = ziel.closest("li");
+          const platz = karte ? [...karte.parentNode.children].indexOf(karte) : 0;
+          await z.brain.lueckeVerwerfen(ziel.dataset.id);
+          zeichnen();
+          const rest = [...wurzel.querySelectorAll("#brain-luecken .brain-luecke")];
+          if (rest.some((x) => x.querySelector(`[data-id="${CSS.escape(ziel.dataset.id)}"]`))) break; // nicht verworfen (Speicher): alles bleibt, wo es ist
+          // die Karte ist weg: Fokus auf die Karte, die jetzt an ihrer Stelle steht (nicht auf ihr „Verwerfen“ – ein zweites
+          // Enter soll nicht noch eine verwerfen); war es die letzte, auf den Reiter
+          app.fokusSetzen(rest[Math.min(platz, rest.length - 1)] || wurzel.querySelector('.brain-reiter-knopf[aria-selected="true"]'));
+          melden(rest.length ? `Lücke verworfen. Noch ${rest.length} offen.` : "Lücke verworfen. Keine offenen Lücken mehr.");
+          break;
+        }
         case "audit-leeren": if (await frage("Verlauf löschen?", "Die Liste „Zuletzt genutzt“ wird auf diesem Gerät geleert.", { ja: "Löschen", gefahr: true })) await z.brain.auditLeeren(); break;
         case "mehr": { const m = $("#brain-menue"); m.hidden = !m.hidden; ziel.setAttribute("aria-expanded", String(!m.hidden)); if (!m.hidden) { const erster = m.querySelector("button:not(:disabled)"); if (erster) erster.focus(); } break; }
         case "interview": app.interviewStarten(); break;
@@ -1176,8 +1280,24 @@
       document.body.append(d);
       app.dialogAnmelden(d);
       d.addEventListener("click", (e) => { if (e.target === d) d.close(); }); // Tipp neben den Dialog schließt
+      // Fokus nach dem Schließen zurück auf das gemerkte Element (siehe dialogAuf) – nur wenn er sonst verloren wäre und
+      // kein anderer Dialog offen ist (der Papierkorb schließt kurz für seine Rückfrage)
+      d.addEventListener("close", () => setTimeout(() => {
+        const a = document.activeElement;
+        const k = d.zurueck;
+        if (k && k.isConnected && !k.closest("[hidden]") && !document.querySelector("dialog[open]") && (!a || a === document.body || a.closest("dialog:not([open])"))) app.fokusSetzen(k);
+      }, 0));
       dialoge[name] = d;
       return d;
+    }
+    /** Dialog öffnen und merken, wohin der Fokus beim Schließen zurückgeht (aus dem Menü: auf „Mehr“). Das merkt sich
+        nicht der Dialog selbst – Safari gäbe den Fokus nach Tippen oder Klicken mit Ring zurück –, gesetzt wird er oben
+        über app.fokusSetzen (nach Tippen ohne Ring, per Tastatur mit). */
+    function dialogAuf(d) {
+      const a = document.activeElement;
+      d.zurueck = a && a !== document.body && !a.closest("dialog") ? a : null;
+      if (d.zurueck) d.zurueck.blur();
+      d.showModal();
     }
 
     // ---------- Befehlspalette (Cmd/Strg+K) ----------
@@ -1312,7 +1432,7 @@
         const kanten = r.verbindungen || 0;
         toast(`${n === 1 ? "1 Eintrag" : `${n} Einträge`}${kanten ? ` und ${kanten === 1 ? "1 Verbindung" : `${kanten} Verbindungen`}` : ""} übernommen${r.fehler.length ? ` · ${r.fehler.length} nicht` : ""}.`, { art: r.fehler.length ? "warn" : "erfolg", dauer: 6000, ...(n ? { aktion: { text: "Rückgängig", tun: rueckgaengig } } : {}) });
       }, { once: true });
-      d.showModal();
+      dialogAuf(d);
     }
 
     // ---------- Papierkorb ----------
@@ -1351,7 +1471,7 @@
         });
       }
       fuellen();
-      d.showModal();
+      dialogAuf(d);
     }
 
     function tastenZeigen() {
@@ -1373,7 +1493,7 @@
           </dl>
           <div class="dialog-knoepfe"><button class="knopf primaer" value="ok">Verstanden</button></div>
         </form>`;
-      d.showModal();
+      dialogAuf(d);
     }
 
     // ==========================================================
@@ -1397,9 +1517,23 @@
         const ziel = titel ? z.brain.findeTitel(titel) : null;
         if (!ziel) { toast(titel ? `„${titel}“ gibt es im Brain nicht.` : "Bitte einen Eintrag wählen.", { art: "warn" }); e.target.elements.ziel.focus(); return; }
         const r = await z.brain.kanteAnlegen(z.auswahl, ziel.id, e.target.elements.art.value);
-        if (!r.ok) toast(fehlerText(r), { art: "warn" });
+        if (!r.ok) { toast(fehlerText(r), { art: "warn" }); return; }
+        // das Formular wird neu gebaut: Fokus zurück ins (jetzt leere) Feld für die nächste Verbindung – am Touch-Gerät
+        // auf die neue Zeile (das Feld klappte die Tastatur auf). Die Leseposition bleibt, angesagt wird ohne Toast.
+        zeichnenMitFokus((d) => d.querySelector(grob.matches ? `.brain-verbindungen a[href="#/brain/${CSS.escape(ziel.id)}"]` : "#brain-kante-ziel") || d.querySelector("#brain-detail-titel"));
+        melden(`Mit „${ziel.titel}“ verbunden.`);
       }
     });
+    // Liste: eine Zeile aktivieren (Klick, Enter, Screenreader – alle lösen click aus) nimmt den Fokus mit ins Detail,
+    // auf den Titel – wie Enter im Graphen. Sonst läge das Detail hinter der ganzen Liste (53 Tab-Schritte).
+    wurzel.addEventListener("click", (e) => {
+      const zeile = e.target instanceof Element ? e.target.closest("#brain-liste a.brain-zeile") : null;
+      if (!zeile || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // neuer Tab oder neues Fenster: hier ändert sich nichts
+      if (zeile.getAttribute("href") !== location.hash) { z.fokusAufDetail = true; return; }
+      // dieser Eintrag ist schon offen: die Adresse ändert sich nicht, es wird nicht neu gezeichnet – gleich hin
+      const titel = $("#brain-detail-titel");
+      if (titel && !$("#brain-detail").hidden && !z.bearbeitung) app.fokusSetzen(titel);
+    }, true);
     // Quellen-Chips im Gespräch: die genutzten Knoten leuchten gleich im Graph auf
     document.addEventListener("click", (e) => {
       const chip = e.target.closest && e.target.closest("[data-brain-quellen]");
@@ -1432,7 +1566,9 @@
         return;
       }
       if (e.key === "Escape" && !e.defaultPrevented) {
-        if (z.bearbeitung) { verlassenOk().then((ok) => { if (ok) zeichnen(); }); return; }
+        // preventDefault: Derselbe Tastendruck schlösse die Rückfrage „Änderungen verwerfen?“ sonst gleich wieder (Esc gilt
+        // dem Browser als „Dialog abbrechen“) – nur hier, wo wirklich bearbeitet wird
+        if (z.bearbeitung) { e.preventDefault(); bearbeitenBeenden(); return; }
         if (z.fokus) { z.fokus = null; zeichnen(); if (z.graph) z.graph.einpassen({ verdeckt: verdeckt() }); return; }
         if (!$("#brain-detail").hidden) { detailZu(); return; }
       }
