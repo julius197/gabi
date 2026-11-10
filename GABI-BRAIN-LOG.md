@@ -15,18 +15,21 @@ Verträge zwischen den Bausteinen: `BRAIN-BAUPLAN.md`.
 | Schritt | Stand |
 |---|---|
 | 0 Vorab: main geprüft, Branch, Arbeitskopie | ✅ |
-| 1 Bauplan und Log | ✅ |
-| 2 Modell `brain.js`, Suche `brain-suche.js` | ⏳ |
-| 3 Speicher `brain-speicher.js` | ⏳ |
-| 4 Seed (Zerlegung, Generator, `brain-seed.js`) | ⏳ |
-| 5 Graph `brain-graph.js` | ⏳ |
-| 6 Worker (Kontext, Quellen/Lücken, Register, Staging, Supabase-Entwurf) | ⏳ |
-| 7 Ansicht `brain-ansicht.js`, `brain.css`, Einbau in `index.html`/`app.js` | ⏳ |
-| 8 Interview, Chat-Befehle, Fähigkeiten-Ansicht, Demo-Assistent | ⏳ |
-| 9 Doku (README, Roadmap, Vorlage) | ⏳ |
-| 10 Tests (Unit, Browser), Leistung, Gegenprobe | ⏳ |
+| 1 Bauplan und Log | ✅ `c1ae874` |
+| 2 Modell `brain.js`, Suche `brain-suche.js`, Interview-Hilfen `brain-interview.js` | ✅ gebaut (`d39f887`), Unit-Tests dazu in Arbeit (Fork E) |
+| 3 Speicher `brain-speicher.js` | ✅ `98fb09f` (112 Tests) |
+| 4 Seed (Zerlegung, Generator, `brain-seed.js`) | ✅ `e4185de` (35 Tests) |
+| 5 Graph `brain-graph.js` | ⏳ Fork A arbeitet noch (Datei da, läuft schon in der Ansicht) |
+| 6 Worker (Kontext, Quellen/Lücken, Register, Staging, Supabase-Entwurf) | ✅ `072ecdf` (104 neue Tests, Probe-Build sauber) |
+| 7 Ansicht `brain-ansicht.js`, `brain.css`, Einbau in `index.html`/`app.js` | ✅ gebaut (`d39f887`) |
+| 8 Interview, Chat-Befehle, Fähigkeiten-Ansicht, Demo-Assistent (`brain-gespraech.js`, `demo.js`) | ✅ gebaut (`d39f887`) |
+| 9 Doku (README, Roadmap, Vorlage) | ✅ README ergänzt; Roadmap und Vorlage `e4185de` |
+| 10 Tests: `tests/brain.mjs` (Browser), `tests/brain-leistung.mjs`, Unit, Gegenprobe | ⏳ Browser-Tests laufen in Chromium und WebKit durch; voller Lauf, Leistung und `tests/v2.mjs` (ohne Schalter) stehen aus |
 | 11 Prüfrunden (höchstens zwei), Korrekturen | ⏳ |
 | 12 Screenshots, Abschlusslauf, Kurzbericht | ⏳ |
+
+Testserver während der Arbeit (nur eigene Ports): 8791 = `PORT=8791 GABI_BRAIN=1 node dev/lokal.mjs` (Brain an),
+8792 = `PORT=8792 node dev/lokal.mjs` (ohne Schalter, für `tests/v2.mjs`). 8788 gehört Julius' Vorschau.
 
 Arbeitsordner: **`~/Desktop/gabi-brain`** (Git-Arbeitskopie des Repos `~/Desktop/gabi`, Branch `gabi-brain`).
 Tests: `cd ~/Desktop/gabi-brain/worker && npm test`. Lokaler Brain-Server: `npm run brain` (Port 8790).

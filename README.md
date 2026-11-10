@@ -19,6 +19,14 @@ abgeschnitten (Chromium und Safari); jetzt 18 px Innenabstand im Textfeld selbst
 eindeutig passendem Fachbegriff (sonst „(unklar)“, jede Korrektur unter „Bitte prüfen“), und Gabi ergänzt nie Geschlecht,
 Alter oder andere Merkmale, die nicht in der Notiz stehen.
 
+**v2.2.0-brain (Prototyp, nur auf dem Branch `gabi-brain`, nicht live):** Gabi bekommt ein **Gedächtnis** – das
+**Brain**, ein sichtbarer, bearbeitbarer Wissensgraph der Praxis (Bereich „Brain“, `#/brain`). Praxisfragen beantwortet
+Gabi dann **nur aus dem Brain**, zeigt die Quellen als Chips, merkt sich Lücken und füllt sie im Interview („Brain
+füllen“) – gespeichert wird immer erst nach Tipp auf „Übernehmen“. Das Brain steckt **hinter einem Schalter** (im Code
+AUS): ohne ihn lädt die App keine einzige Brain-Datei und verhält sich wie v2.1.2. Alles dazu im Abschnitt
+[Brain](#brain-prototyp-hinter-schalter), Protokoll: `GABI-BRAIN-LOG.md`, Verträge der Bausteine: `BRAIN-BAUPLAN.md`,
+der Weg zum Assistenten: `ASSISTENT-ROADMAP.md`.
+
 > **Testversion – nur Testdaten.** Keine Klarnamen, keine echten Patientendaten. Kürzel brauchen deshalb eine Ziffer (z. B. `TP-01`).
 > Gabi stellt keine Diagnosen und gibt keine Therapieempfehlungen; sie antwortet nur aus gespeicherten Notizen und der Wissensdatei.
 
@@ -26,7 +34,8 @@ Adresse: **https://gabi.automatilabs.de** (Branch `main`, v2 seit 08.11.2026, v2
 
 > **Neue Version veröffentlichen:** in `index.html` die Kennung `?v=…` an `style.css` und allen eigenen Skripten (auch `gespraeche.js`) hochzählen
 > und `VERSION` oben in `app.js` gleich setzen (ein Test prüft das) – GitHub Pages lässt Dateien 10 Minuten im Browser-Cache;
-> passen Seite und Skript nicht zusammen, lädt die App einmal neu.
+> passen Seite und Skript nicht zusammen, lädt die App einmal neu. Die Brain-Dateien stehen nicht in `index.html`: `app.js`
+> lädt sie mit `?v=VERSION` nach (Liste `BRAIN_DATEIEN`).
 > Pages liefert nur die App aus: Notizen, Worker, Tests und Screenshots stehen in `_config.yml` unter `exclude` –
 > neue Dateien oder Ordner, die nicht zur App gehören, dort ergänzen.
 
@@ -40,7 +49,16 @@ kern.js                         reine Hilfen: sicherer Text (Markdown-Ersatz), N
 aufnahme.js                     Aufnahme: MediaRecorder → WAV 16 kHz mono, Mikrofon-Hilfe je Gerät, Wake Lock
 demo.js                         Demo-Modus: Fake-API, Demo-Assistent ohne KI, erfundene Testdaten (Quelle für seed_test.sql)
 pdf.js                          PDF: Behandlungsnotiz und Bericht (Browser und Node)
-config.js                       öffentliche API-Adresse (kein Geheimnis)
+config.js                       öffentliche API-Adresse (kein Geheimnis) und der Brain-Schalter (brain: false)
+brain.js                        Brain-Modell: Knoten, [[Verweise]], Versionen, Papierkorb, Rückgängig, Prüfung, Markdown, Import/Export
+brain-suche.js                  deutsche Normalisierung, Rangfolge, Filter, Kontext-Auswahl für Gabi, Demo-Antwort aus dem Kontext
+brain-speicher.js               Ablage des Brains: IndexedDB → localStorage → Arbeitsspeicher; API-Ablage (Supabase-Entwurf); zwei Tabs, Notfall-Kopie
+brain-seed.js                   erzeugt (node dev/brain_seed_erzeugen.mjs): Seed-Knoten, Kernregeln-Texte, Fähigkeiten-Register
+brain-graph.js                  Wissensgraph: eigenes Kraft-Layout (Barnes-Hut, im Web Worker), Canvas, Bedienung, Minimap – ohne Bibliothek
+brain-interview.js              Interview und Chat-Befehle: erkennen, Vorschläge ohne KI (Demo)
+brain-ansicht.js, brain.css     Bereich „Brain“: Graph, Liste, Detail/Editor, Suche/Filter, Lücken, Fähigkeiten, Import/Export, Befehlspalette
+brain-gespraech.js              Brücke zum Gespräch: Kontext je Frage, Quellen-Chips, Lücken, Vorschlagskarten, Interview-Ablauf
+knowledge/brain_zerlegung.mjs   Plan: welcher Punkt der Wissensdatei wird welcher Knoten (jeder „TODO prüfen“-Punkt eine Frage)
 knowledge/physioworks.md        Wissen über die Praxis (von physio-works.de, Unklares als „TODO prüfen“)
 vendor/jspdf.umd.min.js         PDF-Erzeugung im Browser (jsPDF 4.2.1, MIT)
 assets/                         Symbole, Schrift Inter (OFL, lokal)
@@ -56,13 +74,27 @@ worker/                         Cloudflare Worker = einzige Stelle mit Schlüsse
   dev/lokal.mjs                 lokaler Modus ohne Konten (Demo-Assistent, wenn kein KI-Schlüssel da ist)
   dev/vorschau.mjs              Oberfläche lokal gegen den echten Worker (zum Testen eines Branches)
   dev/seed_erzeugen.mjs         schreibt supabase/seed_test.sql und supabase/reset_test.sql aus demo.js
+  dev/brain_seed_erzeugen.mjs   schreibt brain-seed.js aus knowledge/physioworks.md, kernregeln.js, faehigkeiten.js, Roadmap
+  src/kernregeln.js             Kernregeln von Gabi (eine Quelle; über das Brain nicht änderbar)
+  src/brain.js                  brainKontext prüfen/bereinigen, Prompt-Bausteine im Brain-Modus, Filter für Quellen und Lücken, Vorschläge
+  src/brain_vorschlag.js        Brain-Interview: Vorschlag aus einer Antwort (Claude, JSON-Schema)
+  src/faehigkeiten.js           Fähigkeiten-Register (Stufen, Status, Voraussetzungen, Roadmap-Phase)
+  src/brain_abruf.js            Entwurf: Brain in Supabase (Routen /api/brain…, serverseitiger Abruf) – Schalter, Standard AUS
+  wrangler.brain.toml           Staging-Worker gabi-api-brain (nicht deployen ohne Freigabe)
   test/*.test.js                Unit-Tests (Vitest)
 supabase/schema.sql             Tabellen patients_test + notes, RLS an (v2 braucht keine neue Tabelle)
 supabase/seed_test.sql          NUR TESTDATEN: 3 erfundene Test-Patienten mit je 2 Notizen
 supabase/reset_test.sql         ⚠️ löscht ALLE Notizen und Test-Patienten, dann Stand von seed_test.sql (nur von Hand, nach OK)
+supabase/migrations/brain.sql   ⚠️ NICHT ausführen ohne Freigabe: Tabellen fürs gemeinsame Brain, RLS, Rollen-Vorlage
 tests/v2.mjs                    Ende-zu-Ende-Tests (Playwright): Handy/Laptop × Hell/Dunkel, Robustheit, echte lokale API, Safari
 tests/eingabefelder.mjs         Eingabefelder ohne Anschnitt (Cursor, Text, Platzhalter per Bildvergleich) – Block 5 von v2.mjs
-screenshots/                    Screenshots aus tests/v2.mjs
+tests/brain.mjs                 Brain Ende-zu-Ende (Playwright): Graph, Liste, Editor, Gespräch, Interview, zwei Tabs, lokale API
+tests/brain-leistung.mjs        Brain-Messung: 100/300/500 Knoten – Bildrate, Layout-Zeit, Speicher
+screenshots/                    Screenshots aus tests/v2.mjs · screenshots/brain/ aus tests/brain.mjs
+ASSISTENT-ROADMAP.md            Weg vom Aufnahme-Tool zum Assistenten in 8 Phasen
+FAEHIGKEIT-VORLAGE.md           Checkliste und Code-Skelett für jede neue Fähigkeit
+BRAIN-BAUPLAN.md                Verträge zwischen den Brain-Bausteinen (Datenformen, Schnittstellen, Protokoll)
+GABI-BRAIN-LOG.md               Protokoll des Brain-Auftrags: Entscheidungen, Messwerte, Prüfrunden
 ```
 
 **Datenfluss Gespräch:** Browser → `POST /api/chat` (Verlauf als Text, Zugangscode) → Worker → Claude mit Werkzeugen
@@ -74,6 +106,160 @@ IndexedDB localStorage): der Worker bekommt pro Frage nur den Verlauf zum Antwor
 Adresse steht nur die Gesprächs-ID, im Seitentitel nichts vom Inhalt (der Titel landet sonst im Browserverlauf und in dessen
 Synchronisierung). Die Aufnahme wird nirgends gespeichert (bis zum Senden nur im Arbeitsspeicher des Tabs).
 
+## Brain (Prototyp, hinter Schalter)
+
+Das Brain ist Gabis Gedächtnis: ein Wissensgraph im Obsidian-Stil. **Knoten** sind Praxiswissen, offene Fragen
+(„zu klären“), Regeln, die Persona und Vorlagen; `[[Verweise]]` im Text werden zu Kanten. Test-Patienten, Notizen und
+Berichte erscheinen als **schreibgeschützte** Knoten – im Graph nur „Datum · Kürzel“, der Inhalt einer Notiz wird erst
+im Detail nach Klick geladen, geändert wird nur im Notizordner. Die **Kernregeln** stehen fest im Worker-Code
+(`worker/src/kernregeln.js`) und werden im Brain nur angezeigt.
+
+**Einschalten:** im Code ist der Schalter AUS (`config.js`: `brain: false`). AN mit `?brain=1` an der Adresse oder
+lokal mit `npm run brain`. Ohne Schalter lädt die App keine Brain-Datei (ein Test prüft das).
+
+```bash
+cd worker && npm run brain     # http://localhost:8790 · Zugangscode: test · Demo mit Brain: http://localhost:8790/?demo=1
+```
+
+**Was es kann:**
+- **Graph** (eigene Umsetzung, keine Bibliothek): Kraft-Layout im Web Worker, Zoomen (Rad, Pinch), Verschieben, Knoten
+  ziehen und fixieren, Klick öffnet das Detail, Doppelklick zentriert, Fokus-Modus (Nachbarn bis Tiefe 1–3), Minimap,
+  Legende (= Filter nach Art). Tastatur: Pfeile springen zum Nachbarn, `/` Suche, ⌘/Strg+K Befehlspalette, Esc schließt.
+  Die Lage der Knoten wird lokal gemerkt – beim Wiederöffnen liegt der Graph ruhig.
+- **Liste** als gleichwertige Alternative (gruppiert, sortierbar) – auch für Handy und Hilfstechnik.
+- **Detail** (Laptop: Spalte rechts, Handy: Blatt von unten): Status-Schalter, Markdown-Vorschau und Editor,
+  `[[`-Vorschläge, Rückverweise, Tags, Quelle, Nutzung durch Gabi, Versionsverlauf (letzte 20) mit Wiederherstellen,
+  Papierkorb (30 Tage), Rückgängig/Wiederholen.
+- **Gesundheit** im Kopf (Anteil bestätigt, zu klären, veraltet > 90 Tage, nie verwendet, Lücken), **Wissenslücken**
+  (Fragen, die Gabi nicht beantworten konnte → per Tipp ein Entwurfsknoten), **Fähigkeiten** (Register mit Stufe,
+  „Was darf Gabi damit?“, Roadmap-Phase, lokale Nutzungs-Spur ohne Inhalte).
+- **Import/Export:** Markdown mit Frontmatter und `[[Verweisen]]` als ZIP (ohne Bibliothek) oder eine Datei; Import mit
+  Bereinigung (kein HTML/Skript), Grenzen und Vorschau (Vorher/Nachher). Importierte Regeln und Persona kommen immer
+  als Entwurf an.
+- **Im Gespräch:** für jede freie Frage sucht die Oberfläche die besten Knoten (höchstens 8, rund 6 000 Zeichen, nie
+  Patienten oder Notizen) und schickt sie als `brainKontext` mit. Gabi antwortet auf Praxisfragen nur daraus, nennt die
+  Quellen (Chips unter der Antwort, Klick springt in den Graphen) und meldet Lücken („Dazu steht noch nichts im
+  Brain.“). **Chip „Brain füllen“**: Gabi stellt die offenen Fragen nacheinander, macht aus der Antwort einen Vorschlag
+  (Vorher/Nachher) und speichert erst nach „Übernehmen“. Befehle: „Merke dir: …“, „Ändere …“, „Was weißt du über …?“,
+  „Wie vollständig ist mein Brain?“.
+
+**Wo liegt das Brain?** Nur auf diesem Gerät: IndexedDB `gabi-brain` (Demo getrennt: `gabi-brain-demo`), sonst
+localStorage, zur Not nur im Tab (mit Hinweis). Zwei offene Tabs überschreiben sich nicht (jede Änderung prüft den
+Stand; bei Konflikt fragt die Bearbeitung nach, die andere Fassung bleibt im Verlauf). Eine ungespeicherte Bearbeitung
+übersteht ein Neuladen (Notfall-Kopie im Tab). In der Adresse steht nur `#/brain/<id>`, nie Inhalt. Abmelden fragt eigens
+„Brain-Wissen auf diesem Gerät auch löschen“ – **nicht vorbelegt**.
+
+**Wissensdatei und Seed:** `knowledge/physioworks.md` bleibt die Quelle des Seeds (und der Rückfall, wenn das Brain aus
+ist). Beim ersten Start wird sie in 41 Knoten zerlegt eingespielt; jeder „TODO prüfen“-Punkt ist eine offene Frage.
+Nach Änderungen an der Wissensdatei: `cd worker && node dev/wissen_erzeugen.mjs && node dev/brain_seed_erzeugen.mjs`.
+Unberührte Seed-Knoten werden dann aktualisiert, Bearbeitetes bleibt.
+
+## Echten Claude-Weg testen (Staging) – ⚠️ nur nach Freigabe von Julius
+
+Der Brain-Weg mit Claude ist gegen eine nachgebaute Anthropic-API getestet, aber noch nie mit dem echten Modell
+gelaufen. Dafür gibt es einen **eigenen Staging-Worker** – der Live-Worker `gabi-api` wird nicht angefasst:
+
+| | Live (`wrangler.toml`) | Staging (`wrangler.brain.toml`) |
+|---|---|---|
+| Name / Adresse | `gabi-api` | `gabi-api-brain` (eigene Adresse) |
+| Erlaubte Herkunft | gabi.automatilabs.de, localhost:8788 | **nur** localhost:8790 |
+| Zugangscode, KI-Schlüssel | Live-Secrets | **eigene** Secrets (neuer Code!) |
+| Datenbank | Supabase | **keine** – drei Test-Patienten im Arbeitsspeicher |
+| Brain | – | liegt weiter nur im Browser; je Frage gehen höchstens 8 Einträge mit |
+
+**Schritt für Schritt** (jede Zeile einzeln im Terminal, im Ordner `worker`):
+
+1. Staging-Worker anlegen – am Ende zeigt Wrangler die Adresse `https://gabi-api-brain.<konto>.workers.dev`:
+   ```bash
+   cd worker && npx wrangler deploy -c wrangler.brain.toml
+   ```
+2. KI-Schlüssel hinterlegen (Wrangler fragt nach dem Wert – nie in eine Datei schreiben):
+   ```bash
+   npx wrangler secret put ANTHROPIC_API_KEY -c wrangler.brain.toml
+   ```
+3. Einen **neuen** Zugangscode nur fürs Staging setzen (nicht den Live-Code):
+   ```bash
+   npx wrangler secret put GABI_ZUGANGSCODE -c wrangler.brain.toml
+   ```
+4. Im Browser prüfen: `https://gabi-api-brain.<konto>.workers.dev/api/status` zeigt `"version": "2.1.0-brain"`,
+   `"bereit": true` und unter `funktionen` auch `"brain"`.
+5. Oberfläche dieses Branches gegen den Staging-Worker starten (Adresse aus Schritt 1 einsetzen):
+   ```bash
+   GABI_API=https://gabi-api-brain.<konto>.workers.dev npm run brain:staging
+   ```
+   Dann **http://localhost:8790** öffnen und den Staging-Code eingeben. Das Skript liefert nur Dateien aus, trägt die
+   Staging-Adresse in die ausgelieferte `config.js` ein und erlaubt genau diese Herkunft in der ausgelieferten
+   `index.html` – die Dateien im Repo bleiben unverändert. Ohne `GABI_API` oder mit der Live-Adresse startet es nicht.
+
+**Was testen:**
+- eine Praxisfrage, die im Brain steht („Wo ist die Praxis Kieslingstraße?“) → Antwort mit Quellen-Chips
+- eine, die nicht im Brain steht („Habt ihr Parkplätze?“) → genau „Dazu steht noch nichts im Brain.“ und ein Eintrag
+  unter „Lücken“
+- einen Entwurf und einen Zu-klären-Punkt → „laut Entwurf, noch nicht bestätigt“ bzw. „das ist im Brain noch offen“
+- „Merke dir: …“ und „Ändere …“ → Vorschlagskarte, gespeichert wird erst mit „Übernehmen“
+- „Brain füllen“ → Gabi formuliert aus deiner Antwort den Eintrag
+- ein Diktat und eine Frage zu einer Notiz → wie bisher (die drei Test-Patienten sind leer und verschwinden, wenn
+  Cloudflare die Worker-Instanz neu startet – das ist im Staging gewollt)
+- Fehler mitlesen: `npx wrangler tail -c wrangler.brain.toml` (nur Status, Fehlerart, Request-ID – nie Inhalte)
+
+**Aufräumen** (Staging-Worker samt Secrets wieder löschen): `npx wrangler delete -c wrangler.brain.toml`
+
+## Brain in Supabase (Entwurf) – ⚠️ Migration nur nach Freigabe von Julius
+
+Heute liegt das Brain nur im Browser des Geräts. `supabase/migrations/brain.sql` bereitet das **gemeinsame** Brain vor
+(Tabellen `brain_nodes`, `brain_edges`, `brain_versions`, `brain_gaps`, `brain_meta`, eine Zähl-Funktion, RLS an). Die
+Datei wurde **nicht ausgeführt** – auch nicht zur Probe. Der Worker nutzt die Tabellen nur mit den Schaltern unten;
+beide stehen auf AUS.
+
+**Vorher nötig:** Benutzerkonten und Rollen (Admin = Philipp). Mit dem einen gemeinsamen Zugangscode könnte jede Person
+mit dem Code das gemeinsame Brain ändern. Die Vorlage für die Rollen steht auskommentiert am Ende der SQL-Datei.
+
+**Migration in 4 Klicks** (erst nach Freigabe; legt nur neue Tabellen an, `patients_test` und `notes` bleiben wie sie sind):
+1. **supabase.com** → Projekt **gabi** öffnen.
+2. Links **SQL Editor** → **New query**.
+3. Inhalt von `supabase/migrations/brain.sql` einfügen (🤖 Claude: „Kopier mir brain.sql.“).
+4. **Run**.
+
+✅ Fertig, wenn unter *Table Editor* die fünf Tabellen `brain_…` stehen (alle leer, bei jeder „RLS enabled“).
+Rückweg: die drei Zeilen unter „RÜCKWEG“ am Ende der SQL-Datei (löscht das gemeinsame Brain wieder).
+
+**Danach einschalten** (zwei getrennte Schalter in `wrangler.toml` unter `[vars]`, dann neu deployen):
+
+| Schalter | Wirkung |
+|---|---|
+| `BRAIN_SPEICHER = "supabase"` | Der Worker bietet die Routen `/api/brain…` an (laden, Knoten schreiben mit Stand-Prüfung, Verlauf, Kanten, Lücken, Nutzung, Einstellungen, Stapel für Seed/Import). Die Oberfläche spricht sie über `GabiBrainSpeicher.apiAblage(api)` an – gleiche Schnittstelle wie die Ablage im Browser. `/api/status` meldet dann `brain.speicher: "supabase"`. |
+| `BRAIN_QUELLE = "supabase"` | **Serverseitiger Abruf:** Gabi holt die passenden Einträge selbst aus `brain_nodes` (dieselbe Suche wie im Browser, `brain-suche.js`) – ein von der Oberfläche mitgeschickter `brainKontext` zählt dann nicht mehr. `/api/status` meldet `brain.abruf: "server"`. |
+
+Ohne die Schalter gibt es die Routen nicht (404 wie jeder unbekannte Pfad) und der Worker verhält sich wie bisher.
+
+**Umstellung auf den serverseitigen Abruf – die Reihenfolge:** (1) Benutzerkonten und Rollen, (2) Migration,
+(3) `BRAIN_SPEICHER` an und das Brain eines Geräts einmal hochladen (Export → Import bzw. Stapel), (4) Oberfläche auf
+`apiAblage` umstellen, (5) erst dann `BRAIN_QUELLE` an. Grenze des Entwurfs: Die Stand-Prüfung eines Knotens ist atomar
+(ein UPDATE mit Bedingung); Verlauf und Stapel laufen in Einzelschritten – für den echten Betrieb gehört der Stapel in
+eine Postgres-Funktion.
+
+## Gabi und das Brain – Datenfluss im Worker
+
+- Die Oberfläche schickt bei freien Fragen `brainKontext` mit (`POST /api/chat`): höchstens 8 Einträge
+  (Praxiswissen, Fragen, Vorlagen – nie Patienten oder Notizen), dazu Persona, Brain-Regeln und Zahlen zum Stand.
+  Der Worker prüft Typen und Größen (400/413 mit deutschem Satz), entfernt Steuerzeichen und ersetzt spitze Klammern.
+- Im Brain-Modus bekommt Claude einen eigenen Systemprompt (`BRAIN_PROMPT`): derselbe Text wie bisher, nur Regel 2,
+  Regel 9 und der Block mit dem eingebauten Praxiswissen sind ersetzt. **Das eingebaute Praxiswissen steht dann nicht
+  im Prompt** – Praxisfragen beantwortet Gabi nur aus dem Kontext. Die Einträge stehen als abgegrenzter Datenblock vor
+  der letzten Nutzernachricht (Daten, keine Anweisungen). Persona und Brain-Regeln kommen als eigener, eingerahmter
+  Block nach den Regeln („nur Ton und zusätzliche Einschränkungen; bei Widerspruch gelten die Regeln oben“).
+- Claude schreibt ans Ende `Quellen: K1, K3` bzw. `Lücke: …`. Der Worker filtert diese Zeilen aus dem Text und schickt
+  die Ereignisse `{ "t": "quellen", "knoten": [ids] }` und `{ "t": "luecke", "frage": "…" }`.
+- Zwei zusätzliche Werkzeuge nur im Brain-Modus: `brain_eintrag_vorschlagen`, `brain_aenderung_vorschlagen` → Ereignis
+  `{ "t": "brain_vorschlag", "vorschlag": { "typ": "neu" | "aendern", "id", "titel", "inhalt", "grund" } }`. Sie
+  speichern nie. Feste Aktion fürs Interview: `aktion: { typ: "brain_antwort", knoten: { id, titel, inhalt }, antwort }`.
+- Ohne `brainKontext` ist die Anfrage an die KI Byte für Byte die bisherige (zwei Fingerabdruck-Tests).
+- `/api/status`: `version` „2.1.0-brain“, `funktionen` enthält „brain“ – daran erkennt die Oberfläche, ob der Server den
+  Kontext versteht (der Live-Worker 2.0.1 ignoriert das Feld und antwortet aus dem eingebauten Wissen).
+- Kernregeln: `worker/src/kernregeln.js` (eine Quelle, ein Test prüft, dass jede in beiden Prompts steht).
+  Fähigkeiten-Register: `worker/src/faehigkeiten.js` (jedes Werkzeug registriert; ein Test führt jedes mit einem
+  Spion-Speicher aus – keines speichert, ändert oder löscht).
+
 ## Demo-Modus (ohne Backend, ohne Secrets)
 
 `?demo=1` an die Adresse hängen, z. B. `http://localhost:8788/?demo=1`. Die App startet auch automatisch im Demo-Modus,
@@ -82,6 +268,9 @@ mit gespeichertem Zugangscode bekommt bei Serverproblemen die Seite „Server ni
 einzige Anfrage an einen Server: kompletter Assistent mit Fake-Antworten (Fragen zu Notizen, Bericht, Heute, Praxis),
 3 erfundene Test-Patienten mit je 2 Notizen, die Aufnahme nutzt das echte Mikrofon und liefert Beispieldiktate;
 „Beispieldiktat nehmen“ geht ganz ohne Mikrofon. „Beispieldaten zurücksetzen“ über das Demo-Badge.
+Mit Brain (`?demo=1&brain=1` oder `npm run brain` → `/?demo=1`): das komplette Brain mit Beispieldaten – Praxiswissen
+aus der Wissensdatei, 3 Test-Patienten mit Notizen, 7 Zu-klären-Punkte, Beispiel-Lücken, Nutzungszähler – und ein
+Demo-Assistent, der Praxisfragen nur aus dem Brain beantwortet (wörtlich aus den Knoten, ohne KI).
 
 ## Lokal ausprobieren
 
@@ -127,7 +316,13 @@ node dev/wissen_erzeugen.mjs               # src/wissen.js neu schreiben, wenn k
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/v2.mjs [diktat.wav] [screenshots/]
 # nur die Eingabefelder (Chromium + WebKit, 320/390/1440, Hell/Dunkel; einzeln: GABI_MOTOREN=chromium GABI_BREITEN=320):
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/eingabefelder.mjs [screenshots/eingabefelder] [http://localhost:8788]
+# Brain (npm run brain muss laufen, Port 8790; Chromium + WebKit, Handy/Laptop, Hell/Dunkel, reduzierte Bewegung):
+PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/brain.mjs [screenshots/brain] [http://localhost:8790]
+PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/brain-leistung.mjs [http://localhost:8790]   # 100/300/500 Knoten
+node dev/brain_seed_erzeugen.mjs           # brain-seed.js neu schreiben (Wissensdatei, Kernregeln, Register, Roadmap geändert)
+npx wrangler deploy --dry-run -c wrangler.brain.toml   # Staging-Worker baut (ohne Deploy)
 ```
+Die bisherigen Ende-zu-Ende-Tests (`tests/v2.mjs`) laufen gegen einen Server **ohne** Brain-Schalter (`npm run lokal`).
 
 ## Einrichtung (einmalig)
 
@@ -170,6 +365,11 @@ Prüfen: `https://gabi-api.<konto>.workers.dev/api/status` zeigt `"bereit": true
 | `ANTHROPIC_MODELL` | `wrangler.toml` [vars] | Modell, Standard `claude-opus-5-5` |
 | `ANTHROPIC_EFFORT` | `wrangler.toml` [vars] | Denktiefe, Standard `low` (schnell) |
 | `GABI_ZUGANGSCODE`, `ANTHROPIC_API_KEY`, `GABI_WHISPER_CMD`, `GABI_AUDIO_ABLAGE`, `PORT` | nur lokal | lokaler Modus |
+| `GABI_BRAIN=1` | nur lokal (`npm run brain`, `npm run brain:staging`) | Brain-Prototyp AN: `config.js` meldet `brain: true` |
+| `GABI_API=<adresse>` | nur lokal (`npm run brain:staging`) | Adresse des Staging-Workers für die Vorschau |
+| `GABI_SPEICHER = "arbeitsspeicher"` | `wrangler.brain.toml` [vars] | Staging ohne Datenbank: drei Test-Patienten im Arbeitsspeicher |
+| `BRAIN_SPEICHER = "supabase"` | `wrangler.toml` [vars], Standard AUS | Routen `/api/brain…` (Brain in Supabase, Entwurf) |
+| `BRAIN_QUELLE = "supabase"` | `wrangler.toml` [vars], Standard AUS | serverseitiger Abruf statt Kontext aus der Oberfläche |
 
 ## Datenschutz der Testversion
 - Nur Testdaten. Kürzel ohne Ziffer werden abgelehnt (Schutz vor Klarnamen); Beschreibung höchstens 60 Zeichen, fiktiv.
@@ -186,6 +386,12 @@ Prüfen: `https://gabi-api.<konto>.workers.dev/api/status` zeigt `"bereit": true
   „Speichern“ nur Teil des Gesprächs auf dem Gerät.
 - Die App schickt nie eine Anfrage ohne Zugangscode an den Worker (er zählte sie als Fehlversuch) – v2.1.1.
 - Gabi hat kein Werkzeug zum Speichern, Ändern oder Löschen – das macht nur die Therapeutin per Knopf.
+- **Brain (Prototyp):** liegt nur auf diesem Gerät (IndexedDB bzw. localStorage, Demo getrennt), nie in Supabase oder im
+  Worker. An die KI gehen je Frage höchstens 8 Einträge Praxiswissen – nie Patienten, Notizen oder Berichte. Der Worker
+  behandelt Brain-Inhalte als Daten (geprüft, bereinigt, abgegrenzt), die Kernregeln stehen im Code und lassen sich über
+  das Brain nicht ändern; Regeln und Persona aus dem Brain können Gabi nur zusätzlich einschränken oder ihren Ton
+  ergänzen. Lücken, Nutzungszähler und die Spur „Zuletzt genutzt“ (nur was und wann, nie Inhalte) bleiben lokal.
+  Patienten erscheinen im Brain nur als Kürzel, Notizen nur als „Datum · Kürzel“.
 - Worker: nur Anfragen von gabi.automatilabs.de (und localhost zum Testen), Rate-Limit je IP (300/min, Spracherkennung
   und KI je 120/10 min, Gespräch 120 Nachrichten/10 min), Sperre nach 20 falschen Zugangscodes für 15 Minuten,
   Größenlimits (Aufnahme ≤ 5 Minuten, JSON ≤ 300 KB, Gespräch ≤ 40 Nachrichten, höchstens 6 Werkzeug-Runden),
