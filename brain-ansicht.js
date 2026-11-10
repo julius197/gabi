@@ -341,14 +341,18 @@
       if (wurzel.hidden) return;
       geruest();
       const zustand = $("#brain-zustand");
+      wurzel.classList.toggle("fehler", !z.brain && Boolean(z.fehler));
       if (!z.brain) {
-        // Laden oder Fehler: Platzhalter in der Höhe der Bühne – nichts springt, wenn der Inhalt kommt
+        // Laden oder Fehler: alles steht schon an seinem Platz und in seiner Höhe – die Reiter echt, Kopf, Arten-Zeile und
+        // Bühne als Platzhalter mit demselben Aufbau. Nichts springt, wenn der Inhalt kommt. Der Fehler wird angesagt.
         for (const id of ["brain-graph", "brain-liste", "brain-luecken", "brain-faehigkeiten", "brain-detail"]) $(`#${id}`).hidden = true;
         zustand.hidden = false;
         ersetzen(zustand, z.fehler
-          ? `<div class="leer"><div class="kachel warn">${symbol("warn")}</div><h2>${esc(z.fehler)}</h2><p>${esc(z.fehlerText || "Bitte versuch es noch einmal. Deine Notizen und Gespräche sind davon nicht betroffen.")}</p><button class="knopf primaer" type="button" data-brain="neu-laden">${symbol("zuruecksetzen")}${esc(z.fehlerKnopf || "Nochmal versuchen")}</button></div>`
+          ? `<div class="leer" role="alert"><div class="kachel warn">${symbol("warn")}</div><h2>${esc(z.fehler)}</h2><p>${esc(z.fehlerText || "Bitte versuch es noch einmal. Deine Notizen und Gespräche sind davon nicht betroffen.")}</p><button class="knopf primaer" type="button" data-brain="neu-laden">${symbol("zuruecksetzen")}${esc(z.fehlerKnopf || "Nochmal versuchen")}</button></div>`
           : '<div class="skelett brain-skelett" aria-label="Das Brain lädt"></div>');
         kopfZeichnen();
+        leisteGrund();
+        filterPlatzhalter();
         return;
       }
       zustand.hidden = true;
@@ -369,9 +373,15 @@
     }
 
     // ---------- Kopf: Gesundheit ----------
+    /** Platzhalter für den Kopf: derselbe Aufbau wie die echte Gesundheit (Ring, fünf Kennzahlen, „Brain füllen“) – also
+        dieselbe Höhe und derselbe Umbruch bei jeder Breite. Die Texte sind unsichtbar und halten nur den Platz. */
+    const KOPF_PLATZHALTER = `
+        <div class="brain-ring-block" aria-hidden="true"><span class="skelett brain-skelett-ring"></span><div class="brain-ring-text skelett"><strong class="zahl">00 %</strong><span>bestätigt</span></div></div>
+        <div class="brain-kennzahlen" aria-hidden="true">${["Einträge", "zu klären", "veraltet", "nie verwendet", "Lücken"].map((t) => `<span class="brain-kennzahl skelett"><strong class="zahl">00</strong><span>${t}</span></span>`).join("")}</div>
+        <span class="knopf klein brain-fuellen skelett" aria-hidden="true">${symbol("funke")}Brain füllen</span>`;
     function kopfZeichnen() {
       const ziel = $("#brain-gesundheit");
-      if (!z.brain) { ersetzen(ziel, '<div class="skelett brain-skelett-kopf"></div>'); $("#brain-hinweis").hidden = true; return; }
+      if (!z.brain) { ersetzen(ziel, KOPF_PLATZHALTER); $("#brain-hinweis").hidden = true; return; }
       const g = z.brain.gesundheit();
       const umfang = 2 * Math.PI * 18;
       const voll = (umfang * g.prozent) / 100;
@@ -403,16 +413,23 @@
     }
 
     // ---------- Leiste: Reiter, Suche, Menü ----------
-    function leisteZeichnen() {
-      const offen = z.brain.luecken().length;
-      mitFokus($("#brain-reiter"), REITER.map(([id, name, sym]) => `<button class="brain-reiter-knopf" type="button" role="tab" data-brain="reiter" data-wert="${id}" aria-label="${name}${id === "luecken" && offen ? ` (${offen})` : ""}" aria-selected="${z.reiter === id}" aria-controls="brain-${id}"${z.reiter === id ? "" : ' tabindex="-1"'}>${symbol(sym)}<span>${name}</span>${id === "luecken" && offen ? `<span class="badge warn zahl">${offen}</span>` : ""}</button>`).join(""));
-      const leer = $("#brain-suche-leer");
-      leer.hidden = !z.suche;
+    /** Der Teil der Leiste, der ohne Brain auskommt – er steht schon beim Laden da (der Lücken-Zähler kommt mit den Daten).
+        Solange das Brain lädt, sieht alles aus wie immer und bleibt bedienbar: ein Tipp wirkt, sobald es da ist (siehe
+        klick). Sichtbar gesperrt wird erst im Fehlerzustand – beim Laden gäbe das nur ein kurzes Aufblitzen. */
+    function leisteGrund() {
+      const offen = z.brain ? z.brain.luecken().length : 0;
+      const zu = !z.brain && Boolean(z.fehler);
+      mitFokus($("#brain-reiter"), REITER.map(([id, name, sym]) => `<button class="brain-reiter-knopf" type="button" role="tab" data-brain="reiter" data-wert="${id}" aria-label="${name}${id === "luecken" && offen ? ` (${offen})` : ""}" aria-selected="${z.reiter === id}" aria-controls="brain-${id}"${z.reiter === id ? "" : ' tabindex="-1"'}${zu ? " disabled" : ""}>${symbol(sym)}<span>${name}</span>${id === "luecken" && offen ? `<span class="badge warn zahl">${offen}</span>` : ""}</button>`).join(""));
+      $("#brain-suche-leer").hidden = !z.suche;
       $("#brain-suche").placeholder = schmal.matches ? "Suchen …" : "Im Brain suchen …";
       const tief = z.reiter === "luecken" || z.reiter === "faehigkeiten"; // dort gibt es nichts zu suchen oder zu filtern
-      wurzel.querySelector(".brain-suche").classList.toggle("aus", tief);
-      $("#brain-filter-knopf").disabled = tief;
-      $("#brain-suche").disabled = tief;
+      wurzel.querySelector(".brain-suche").classList.toggle("aus", tief || zu);
+      $("#brain-filter-knopf").disabled = tief || zu;
+      $("#brain-suche").disabled = tief || zu;
+      for (const k of wurzel.querySelectorAll('.brain-werkzeuge [data-brain="neu"], #brain-mehr')) k.disabled = zu;
+    }
+    function leisteZeichnen() {
+      leisteGrund();
       const papierkorb = z.brain.papierkorb().length;
       ersetzen($("#brain-menue"), [
         ["interview", "funke", "Brain füllen (Interview)", !z.brain.gesundheit().zuKlaeren],
@@ -427,6 +444,14 @@
     }
 
     // ---------- Filterzeile: Arten (= Legende) und weitere Filter ----------
+    /** Platzhalter für die Arten-Zeile, solange das Brain lädt: Chips mit den echten Namen (unsichtbar) – gleiche Höhe und
+        gleicher Umbruch wie danach. Berichte fehlen: die Art gibt es erst, wenn ein Gespräch einen Bericht hat. */
+    function filterPlatzhalter() {
+      const ziel = $("#brain-filter");
+      const aus = z.reiter === "luecken" || z.reiter === "faehigkeiten";
+      ziel.hidden = aus;
+      if (!aus) ersetzen(ziel, `<div class="brain-filter-arten" aria-hidden="true">${B.ARTEN.filter((a) => a.id !== "bericht").map((a) => `<span class="chip brain-art-chip skelett"><span class="brain-punkt"></span>${esc(a.mehrzahl)}<span class="stumm zahl">00</span></span>`).join("")}</div>`);
+    }
     function filterZeichnen() {
       const ziel = $("#brain-filter");
       const aus = z.reiter === "luecken" || z.reiter === "faehigkeiten";
@@ -1167,10 +1192,43 @@
       if (fokus) app.fokusSetzen($("#brain-mehr"));
     }
 
+    /** „Nochmal versuchen“: neu laden. Der Knopf verschwindet dabei – der Fokus geht auf den gewählten Reiter (die Reiter
+        stehen sofort da); scheitert es wieder, zurück auf den neuen Knopf. */
+    function neuLaden() {
+      z.laedt = null;
+      z.fehler = "";
+      z.fehlerText = "";
+      z.fehlerKnopf = "";
+      zeichnen();
+      app.fokusSetzen(wurzel.querySelector('.brain-reiter-knopf[aria-selected="true"]'));
+      bereit().then(() => abgeleitetAuffrischen(true)).catch(() => requestAnimationFrame(() => {
+        const a = document.activeElement;
+        if (!a || a === document.body || wurzel.contains(a)) app.fokusSetzen($('[data-brain="neu-laden"]'));
+      }));
+    }
+
+    let wartenderTipp = null; // ein Tipp, während das Brain noch lädt (der letzte zählt)
+    /** Lädt das Brain noch, geht ein Tipp auf Reiter, „Neu“, „Filter“ oder „Mehr“ nicht verloren: Er wirkt, sobald es da
+        ist. Deshalb sehen die Knöpfe beim Laden aus wie immer (kein kurzes Ausgrauen). */
+    function tippMerken(ziel) {
+      const erster = !wartenderTipp;
+      wartenderTipp = { brain: ziel.dataset.brain, wert: ziel.dataset.wert || "", id: ziel.dataset.id || "" };
+      if (!erster) return;
+      z.laedt.then(() => {
+        const t = wartenderTipp;
+        wartenderTipp = null;
+        if (!t || !z.brain || wurzel.hidden) return;
+        zeichnen(); // die Reiter können neu gebaut sein (Lücken-Zähler): das Element frisch suchen
+        const knopf = [...wurzel.querySelectorAll(`[data-brain="${t.brain}"]`)].find((x) => (x.dataset.wert || "") === t.wert && (x.dataset.id || "") === t.id);
+        if (knopf && !knopf.disabled) knopf.click();
+      }, () => { wartenderTipp = null; });
+    }
     async function klick(e) {
       const ziel = e.target.closest("[data-brain]");
       if (!ziel || !wurzel.contains(ziel) || !z.brain) {
-        if (ziel && ziel.dataset.brain === "neu-laden") { z.laedt = null; z.fehler = ""; z.fehlerText = ""; z.fehlerKnopf = ""; zeichnen(); bereit().then(() => abgeleitetAuffrischen(true)).catch(() => {}); }
+        if (!ziel || !wurzel.contains(ziel)) return;
+        if (ziel.dataset.brain === "neu-laden") neuLaden();
+        else if (z.laedt && !z.fehler) tippMerken(ziel);
         return;
       }
       const aktion = ziel.dataset.brain;

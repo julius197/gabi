@@ -103,7 +103,15 @@
 .brain-kennzahl.warn strong { color: var(--warn-text); }
 .brain-fuellen { grid-column: 2; grid-row: 1; }
 .brain-hinweis .hinweis-box { font-size: 14px; }
-.brain-skelett-kopf { width: min(420px, 100%); height: 52px; }
+/* Platzhalter beim Laden: derselbe Aufbau wie der echte Kopf und die echte Arten-Zeile (Ring, Kennzahlen, „Brain füllen“,
+   Chips) – also dieselbe Höhe und derselbe Umbruch bei jeder Breite. Die Texte sind unsichtbar und halten nur den Platz. */
+.brain-gesundheit .skelett, .brain-filter .chip.skelett { color: transparent; background: var(--fuell); box-shadow: none; -webkit-user-select: none; user-select: none; }
+.brain-gesundheit .skelett *, .brain-filter .chip.skelett * { visibility: hidden; }
+.brain-skelett-ring { flex: none; width: 44px; height: 44px; border-radius: 50%; }
+.brain-ring-text.skelett { border-radius: var(--r-s); }
+.brain-fuellen.skelett, .brain-filter .chip.skelett { border-radius: var(--rund); }
+/* Fehlerzustand: nichts lädt mehr – die Platzhalter stehen still */
+.brain.fehler .skelett::after { content: none; }
 
 /* 3 Leiste und Filter -------------------------------------------------------- */
 .brain-leiste { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
@@ -119,6 +127,8 @@
 .brain-reiter-knopf[aria-selected="true"] { background: var(--flaeche); color: var(--text); box-shadow: var(--schatten); }
 .brain-reiter-knopf[aria-selected="true"] .symbol { color: var(--akzent-ton); }
 .brain-reiter-knopf .badge { height: 18px; padding: 0 6px; font-size: 11px; }
+/* nur im Fehlerzustand gesperrt (beim Laden bleibt alles, wie es ist – kein kurzes Ausgrauen) */
+.brain-reiter-knopf:disabled, .brain-werkzeuge .rund-knopf:disabled { opacity: 0.5; cursor: default; }
 .brain-suche input { height: 44px; }
 .brain-suche input:placeholder-shown { padding-right: 14px; } /* leer: kein Knopf rechts, mehr Platz für den Text */
 /* Platzhalter der Brain-Felder mit --text-3: ≥ 4,5:1 in Hell und Dunkel (die Vorgabe --text-4 aus style.css hat 2,6:1) */
