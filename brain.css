@@ -467,6 +467,15 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border-radius: 6
   .brain .knopf.klein, .brain .chip, .brain-reiter-knopf, .brain-status button, .brain-menue-punkt, .brain-vorschlag, .brain-kennzahl,
   dialog.brain-import .knopf.klein, dialog.brain-papierkorb .knopf.klein, .brain-karte .knopf.klein, .brain-luecke-hinweis .knopf.klein, .brain-start-hinweis .knopf.klein { min-height: 44px; }
   .brain-reiter-knopf, .brain-status button { height: 44px; }
+  /* Brain-Bedienelemente im Gespräch: Quellen-Chips, Interview („Überspringen“, „Später“), „Ansehen“ nach dem Eintragen,
+     „Hinweis ausblenden“ – und die Leiste über dem Eingabefeld: mit dem fünften Chip „Brain füllen“ sind alle fünf 44 px hoch */
+  .quelle.brain-quelle, .chip[data-aktion^="brain-"], .chips-leiste.mit-brain .chip, .karte-zustand .knopf.klein[href^="#/brain"] { min-height: 44px; }
+  .brain-start-hinweis .rund-knopf.klein { width: 44px; height: 44px; }
+  .brain-fokus-tiefe .chip { min-width: 44px; }
+  /* Aus v2.1 mitbenutzt („Rückgängig“/„Ansehen“ im Hinweis, „Modus beenden“ an der Interview-Pille): Trefferfläche 44 px.
+     Hinweis und Pille bleiben so groß wie bisher – der Knopf ragt mit negativem Rand in ihren Innenabstand. */
+  .toast .knopf { min-height: 44px; margin-block: -6px; }
+  .modus-pill .rund-knopf { width: 44px; height: 44px; margin: -5px -9px; }
   .brain .rund-knopf, .brain .rund-knopf.klein, dialog.brain-papierkorb .rund-knopf.klein, .brain-graph-knoepfe .rund-knopf { width: 44px; height: 44px; }
   .brain .quelle, button.brain-tag, .brain-verlauf summary, .brain-legende summary, .brain-diff summary { min-height: 44px; display: inline-flex; align-items: center; }
   .brain .quelle, .quelle.brain-quelle { border-radius: 22px; } /* = halbe Mindesthöhe: einzeilig weiter die Pille */
