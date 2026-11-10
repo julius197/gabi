@@ -11,7 +11,7 @@
 :root {
   /* Knoten nach Art – gedeckt, je ≥ 3:1 zur Bühne (ein Test rechnet nach) */
   --brain-praxiswissen: #2f8a45;
-  --brain-frage: #b3621a;
+  --brain-frage: #a85a14;
   --brain-regel: #4f6b8f;
   --brain-persona: #7a5aa6;
   --brain-vorlage: #a3567d;
@@ -23,10 +23,10 @@
   --brain-g-platte: rgba(255, 255, 255, 0.88);
   --brain-g-text: #1f2a2c;
   --brain-g-text-leise: #626e71;
-  --brain-g-kante: rgba(31, 42, 44, 0.2);
-  --brain-g-kante-stark: rgba(31, 42, 44, 0.62);
+  --brain-g-kante: rgba(75, 88, 91, 0.34);
+  --brain-g-kante-stark: #3b484a;
   --brain-g-akzent: #28773d;
-  --brain-g-warn: #c8600a;
+  --brain-g-warn: #a85a14;
   --brain-detail-b: min(420px, 44%);
 }
 @media (prefers-color-scheme: dark) {
@@ -43,10 +43,10 @@
     --brain-g-platte: rgba(20, 28, 30, 0.88);
     --brain-g-text: #e7eeef;
     --brain-g-text-leise: #8d999b;
-    --brain-g-kante: rgba(231, 238, 239, 0.2);
-    --brain-g-kante-stark: rgba(231, 238, 239, 0.66);
+    --brain-g-kante: rgba(179, 190, 192, 0.3);
+    --brain-g-kante-stark: #d5dfe0;
     --brain-g-akzent: #6cc471;
-    --brain-g-warn: #ffb057;
+    --brain-g-warn: #f0a35a;
   }
 }
 
@@ -170,11 +170,11 @@
   background: var(--brain-g-hintergrund); box-shadow: var(--schatten);
 }
 .brain-graph-flaeche-rahmen { position: absolute; inset: 0; }
-.brain-graph-flaeche { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; border-radius: inherit; }
+.brain-graph-flaeche { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; border-radius: inherit; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 .brain-graph-flaeche:active { cursor: grabbing; }
 .brain-graph-flaeche:focus-visible { outline: 2px solid var(--akzent-ton); outline-offset: -3px; }
 .brain-graph-karte {
-  position: absolute; right: 10px; bottom: 10px; width: 112px; height: 76px; border-radius: var(--r-m);
+  position: absolute; right: 10px; bottom: 10px; display: block; border-radius: var(--r-m); /* Größe setzt brain-graph.js: 168 × 112, schmal 112 × 76 */
   background: var(--flaeche-2); box-shadow: 0 0 0 1px var(--ring), 0 8px 22px -12px rgba(0, 0, 0, 0.3); touch-action: none; cursor: pointer;
 }
 .brain-graph-knoepfe {
@@ -265,7 +265,12 @@ button.brain-tag:hover { background: var(--akzent-hell-2); }
 .brain-detail .badge .symbol { width: 12px; height: 12px; }
 .brain-detail > h2 { flex: none; padding: 2px 18px 0; font-size: 21px; letter-spacing: -0.025em; overflow-wrap: anywhere; }
 .brain-detail > h2:focus-visible { outline: none; }
-.brain-detail-rumpf { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 16px; align-content: start; padding: 14px 18px calc(22px + env(safe-area-inset-bottom)); }
+.brain-detail-rumpf {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 16px; align-content: start;
+  padding: 14px 18px calc(22px + env(safe-area-inset-bottom));
+  /* Gescrolltes läuft unter dem Titel weich aus (der Inhalt beginnt erst nach dem Innenabstand – in Ruhe ist nichts verdeckt) */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12px); mask-image: linear-gradient(to bottom, transparent, #000 12px);
+}
 .brain-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 3px; border-radius: var(--rund); background: var(--fuell); }
 .brain-status button { height: 36px; padding: 0 6px; border: 0; border-radius: var(--rund); background: transparent; color: var(--text-2); font-size: 13.5px; font-weight: 500; white-space: nowrap; }
 .brain-status button[aria-checked="true"] { background: var(--flaeche); color: var(--text); box-shadow: var(--schatten); }
@@ -418,7 +423,6 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border-radius: 6
   .brain-reiter-knopf { padding: 0 14px; }
   .brain-werkzeuge .knopf span { display: inline; }
   .brain-karten.zwei { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .brain-graph-karte { width: 168px; height: 112px; }
   .brain-vorher-nachher, .brain-diff-paar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .brain-kante-form { grid-template-columns: minmax(0, 1fr) auto auto; }
   .brain-kante-form .eingabefeld { grid-column: auto; }

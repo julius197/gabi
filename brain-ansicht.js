@@ -409,7 +409,8 @@
       const fokusOk = z.fokus && z.brain.hol(z.fokus.id);
       if (z.fokus && !fokusOk) z.fokus = null;
       z.graph.fokus(z.fokus ? z.fokus.id : null, z.fokus ? z.fokus.tiefe : 1);
-      z.graph.auswaehlen(z.auswahl && z.brain.hol(z.auswahl) ? z.auswahl : null, { zentrieren: false });
+      // Sprung aus dem Gespräch (Quellen-Chip): den Knoten in den Blick holen – sonst bleibt der Ausschnitt, wie er ist
+      z.graph.auswaehlen(z.auswahl && z.brain.hol(z.auswahl) ? z.auswahl : null, { zentrieren: Boolean(z.leuchten.length && z.auswahl) });
       if (erstes) z.graph.einpassen({ verdeckt: verdeckt() });
       fokusLeiste();
       if (z.leuchten.length) {
@@ -454,7 +455,7 @@
       teile.push(grad === 1 ? "1 Verbindung" : `${grad} Verbindungen`);
       if (n.anzahl) teile.push(`${n.anzahl}× von Gabi verwendet`);
       return `<li><a class="brain-zeile${k.id === z.auswahl ? " aktiv" : ""}" href="#/brain/${esc(k.id)}"${k.id === z.auswahl ? ' aria-current="true"' : ""}>
-        <span class="brain-punkt" data-art="${k.art}" data-status="${k.status}"></span>
+        <span class="brain-punkt" data-art="${esc(k.art)}" data-status="${esc(k.status)}"></span>
         <span class="brain-zeile-text"><strong>${esc(k.titel)}</strong><span class="stumm">${esc(teile.join(" · "))}${(k.tags || []).slice(0, 3).map((t) => ` <span class="brain-tag">#${esc(t)}</span>`).join("")}</span></span>
         ${k.geschuetzt ? `<span class="brain-schloss" title="Geschützt">${symbol("schloss", "klein")}<span class="unsichtbar">Geschützt</span></span>` : ""}
         ${k.status !== "bestaetigt" ? `<span class="badge ${k.status === "zu_klaeren" ? "warn" : ""}">${esc(statusName(k.status))}</span>` : ""}
@@ -584,11 +585,11 @@
       const aus = z.brain.verweise(k.id);
       const ein = z.brain.rueckverweise(k.id);
       const hand = z.brain.verbindungen(k.id);
-      const chip = (x) => `<a class="quelle" href="#/brain/${esc(x.id)}"><span class="brain-punkt" data-art="${x.art}"></span>${esc(x.titel)}</a>`;
+      const chip = (x) => `<a class="quelle" href="#/brain/${esc(x.id)}"><span class="brain-punkt" data-art="${esc(x.art)}"></span>${esc(x.titel)}</a>`;
       const kopf = `
         <div class="brain-detail-kopf">
           <button class="brain-griff" type="button" data-brain="blatt" aria-label="${z.blattGross ? "Verkleinern" : "Vergrößern"}"><span></span></button>
-          <span class="brain-art"><span class="brain-punkt" data-art="${k.art}"></span>${esc(artName(k.art))}</span>
+          <span class="brain-art"><span class="brain-punkt" data-art="${esc(k.art)}"></span>${esc(artName(k.art))}</span>
           ${k.geschuetzt ? `<span class="badge">${symbol("schloss", "klein")}Nur lesen</span>` : ""}
           <span class="brain-platz"></span>
           <button class="rund-knopf" type="button" data-brain="detail-zu" aria-label="Details schließen" title="Schließen (Esc)">${symbol("x")}</button>
@@ -853,7 +854,7 @@
       if (!kandidaten.length) { ziel.hidden = true; return; }
       vorschlagAktiv = Math.min(vorschlagAktiv, kandidaten.length - 1);
       ziel.hidden = false;
-      ziel.innerHTML = kandidaten.map((k, i) => `<button class="brain-vorschlag" type="button" role="option" id="brain-vorschlag-${i}" aria-selected="${i === vorschlagAktiv}" data-brain="vorschlag" data-wert="${esc(k.titel)}"><span class="brain-punkt" data-art="${k.art}"></span>${esc(k.titel)}</button>`).join("");
+      ziel.innerHTML = kandidaten.map((k, i) => `<button class="brain-vorschlag" type="button" role="option" id="brain-vorschlag-${i}" aria-selected="${i === vorschlagAktiv}" data-brain="vorschlag" data-wert="${esc(k.titel)}"><span class="brain-punkt" data-art="${esc(k.art)}"></span>${esc(k.titel)}</button>`).join("");
       feld.setAttribute("aria-activedescendant", `brain-vorschlag-${vorschlagAktiv}`);
     }
     function vorschlagNehmen(feld, titel) {
@@ -891,7 +892,7 @@
     // ==========================================================
     // 8 Aktionen
     // ==========================================================
-    const reiterHash = () => (z.reiter === "graph" ? "#/brain" : `#/brain/${z.reiter}`);
+    const reiterHash = () => `#/brain/${z.reiter}`;
     function oeffnen(id, { fokus = false } = {}) {
       z.fokusAufDetail = fokus;
       const ziel = `#/brain/${id}`;
@@ -955,7 +956,7 @@
       if (aktion !== "mehr") menueSchliessen();
       const k = z.auswahl ? z.brain.hol(z.auswahl) : null;
       switch (aktion) {
-        case "reiter": if (wert !== z.reiter && (await verlassenOk())) { location.hash = wert === "graph" ? "#/brain" : `#/brain/${wert}`; if (wert === "graph" || wert === "liste") { z.reiter = wert; z.letzteHaupt = wert; lokal.schreiben("brain.ansicht", { reiter: wert, sortierung: z.sortierung, gruppierung: z.gruppierung }); } } break;
+        case "reiter": if (wert !== z.reiter && (await verlassenOk())) location.hash = `#/brain/${wert}`; break;
         case "suche-leer": $("#brain-suche").value = ""; z.suche = ""; suchen(); zeichnen(); $("#brain-suche").focus(); break;
         case "filter-auf": z.filterOffen = !z.filterOffen; zeichnen(); break;
         case "filter-art": case "filter-status": {
@@ -972,16 +973,16 @@
           if (wert === "luecken") { location.hash = "#/brain/luecken"; break; }
           z.filter = { arten: [], status: [], tag: "", zuKlaeren: wert === "zuKlaeren", veraltet: wert === "veraltet", nieVerwendet: wert === "nieVerwendet", verwendet: false };
           z.filterOffen = wert !== "alle";
-          if (z.reiter === "luecken" || z.reiter === "faehigkeiten") location.hash = z.letzteHaupt === "liste" ? "#/brain/liste" : "#/brain";
+          if (z.reiter === "luecken" || z.reiter === "faehigkeiten") location.hash = `#/brain/${z.letzteHaupt}`;
           zeichnen();
           break;
         }
         case "zoom": if (z.graph) z.graph.zoomen(wert === "rein" ? 1.3 : 1 / 1.3); break;
         case "einpassen": if (z.graph) z.graph.einpassen({ verdeckt: verdeckt() }); break;
-        case "fokus-an": if (k) { z.fokus = { id: k.id, tiefe: (z.fokus && z.fokus.id === k.id ? z.fokus.tiefe : 1) }; if (z.reiter !== "graph") { z.reiter = "graph"; z.letzteHaupt = "graph"; } zeichnen(); } break;
+        case "fokus-an": if (k) { z.fokus = { id: k.id, tiefe: (z.fokus && z.fokus.id === k.id ? z.fokus.tiefe : 1) }; hauptSetzen("graph"); zeichnen(); } break;
         case "fokus-tiefe": if (z.fokus) { z.fokus.tiefe = Number(wert) || 1; zeichnen(); } break;
         case "fokus-aus": z.fokus = null; zeichnen(); if (z.graph) z.graph.einpassen({ verdeckt: verdeckt() }); break;
-        case "im-graph": z.reiter = "graph"; z.letzteHaupt = "graph"; zeichnen(); if (z.graph && k) z.graph.zentrieren(k.id); break;
+        case "im-graph": hauptSetzen("graph"); zeichnen(); if (z.graph && k) z.graph.zentrieren(k.id); break;
         case "detail-zu": detailZu(); break;
         case "blatt": z.blattGross = !z.blattGross; zeichnen(); break;
         case "neu": if (await verlassenOk()) bearbeitenStarten(null); break;
@@ -1076,11 +1077,11 @@
     function befehle() {
       return [
         { name: "Neuer Eintrag", sym: "plus", tun: () => bearbeitenStarten(null) },
-        { name: "Ansicht: Graph", sym: "graph", tun: () => { location.hash = "#/brain"; z.reiter = "graph"; z.letzteHaupt = "graph"; } },
+        { name: "Ansicht: Graph", sym: "graph", tun: () => { location.hash = "#/brain/graph"; } },
         { name: "Ansicht: Liste", sym: "liste", tun: () => { location.hash = "#/brain/liste"; } },
         { name: "Ansicht: Wissenslücken", sym: "frage", tun: () => { location.hash = "#/brain/luecken"; } },
         { name: "Ansicht: Fähigkeiten", sym: "funke", tun: () => { location.hash = "#/brain/faehigkeiten"; } },
-        { name: "Zu klären anzeigen", sym: "warn", tun: () => { z.filter = { arten: [], status: [], tag: "", zuKlaeren: true, veraltet: false, nieVerwendet: false, verwendet: false }; z.filterOffen = true; location.hash = "#/brain/liste"; zeichnenBald(); } },
+        { name: "Zu klären anzeigen", sym: "warn", tun: () => { z.filter = { arten: [], status: [], tag: "", zuKlaeren: true, veraltet: false, nieVerwendet: false, verwendet: false }; z.filterOffen = true; if (location.hash === "#/brain/liste") { z.auswahl = ""; zeichnenBald(); } else location.hash = "#/brain/liste"; } },
         { name: "Brain füllen (Interview)", sym: "funke", tun: () => app.interviewStarten() },
         { name: "Exportieren (ZIP)", sym: "pdf", tun: () => exportieren("zip") },
         { name: "Importieren …", sym: "hoch", tun: () => $("#brain-datei").click() },
@@ -1110,7 +1111,7 @@
         const vorn = qn ? b.filter((x) => S.normal(x.name).startsWith(qn)) : [];
         paletteListe = [...vorn, ...kn, ...b.filter((x) => !vorn.includes(x))].slice(0, 14);
         paletteAktiv = Math.min(paletteAktiv, Math.max(0, paletteListe.length - 1));
-        liste.innerHTML = paletteListe.length ? paletteListe.map((x, i) => `<button class="brain-palette-punkt" type="button" role="option" id="brain-palette-${i}" data-palette="${i}" aria-selected="${i === paletteAktiv}">${x.art === "knoten" ? `<span class="brain-punkt" data-art="${x.knoten.art}"></span>` : symbol(x.sym)}<span>${esc(x.name)}</span><span class="stumm">${x.art === "knoten" ? esc(artName(x.knoten.art)) : "Befehl"}</span></button>`).join("") : '<p class="stumm brain-palette-leer">Nichts gefunden.</p>';
+        liste.innerHTML = paletteListe.length ? paletteListe.map((x, i) => `<button class="brain-palette-punkt" type="button" role="option" id="brain-palette-${i}" data-palette="${i}" aria-selected="${i === paletteAktiv}">${x.art === "knoten" ? `<span class="brain-punkt" data-art="${esc(x.knoten.art)}"></span>` : symbol(x.sym)}<span>${esc(x.name)}</span><span class="stumm">${x.art === "knoten" ? esc(artName(x.knoten.art)) : "Befehl"}</span></button>`).join("") : '<p class="stumm brain-palette-leer">Nichts gefunden.</p>';
         feld.setAttribute("aria-activedescendant", paletteListe.length ? `brain-palette-${paletteAktiv}` : "");
       };
       const nehmen = async (i) => {
@@ -1287,7 +1288,7 @@
     // Quellen-Chips im Gespräch: die genutzten Knoten leuchten gleich im Graph auf
     document.addEventListener("click", (e) => {
       const chip = e.target.closest && e.target.closest("[data-brain-quellen]");
-      if (chip) { z.leuchten = String(chip.dataset.brainQuellen || "").split(",").filter(Boolean); z.reiter = "graph"; z.letzteHaupt = "graph"; z.fokusAufDetail = true; }
+      if (chip) { z.leuchten = String(chip.dataset.brainQuellen || "").split(",").filter(Boolean); hauptSetzen("graph"); z.fokusAufDetail = true; }
       const m = $("#brain-menue");
       if (m && !m.hidden && !e.target.closest(".brain-mehr")) menueSchliessen();
     }, true);
@@ -1342,13 +1343,21 @@
     // ==========================================================
     // 11 Für app.js: Adresse, Zeigen, Abmelden
     // ==========================================================
-    /** #/brain · #/brain/liste · #/brain/luecken · #/brain/faehigkeiten · #/brain/<id> */
+    /** Graph oder Liste als Hauptansicht wählen und merken (#/brain öffnet die zuletzt genutzte). */
+    function hauptSetzen(reiter) {
+      z.reiter = reiter;
+      if (z.letzteHaupt === reiter) return;
+      z.letzteHaupt = reiter;
+      lokal.schreiben("brain.ansicht", { reiter, sortierung: z.sortierung, gruppierung: z.gruppierung });
+    }
+    /** #/brain (zuletzt genutzte Hauptansicht) · #/brain/graph · /liste · /luecken · /faehigkeiten · #/brain/<id> */
     function route(hash) {
-      const teil = decodeURIComponent(String(hash || "").split("/")[2] || "").trim();
-      if (REITER.some(([r]) => r === teil)) { z.reiter = teil; z.auswahl = ""; if (teil === "graph" || teil === "liste") z.letzteHaupt = teil; } else if (teil && B.ID_MUSTER.test(teil)) {
+      let teil = "";
+      try { teil = decodeURIComponent(String(hash || "").split("/")[2] || "").trim(); } catch { teil = ""; }
+      if (REITER.some(([r]) => r === teil)) { z.auswahl = ""; if (teil === "graph" || teil === "liste") hauptSetzen(teil); else z.reiter = teil; } else if (teil && B.ID_MUSTER.test(teil)) {
         z.auswahl = teil;
         if (z.reiter !== "graph" && z.reiter !== "liste") z.reiter = z.letzteHaupt;
-      } else { z.auswahl = ""; z.reiter = "graph"; z.letzteHaupt = "graph"; }
+      } else { z.auswahl = ""; z.reiter = z.letzteHaupt; }
       z.verlaufVon = ""; z.verlauf = null; z.versionOffen = 0;
       if (z.brain && z.auswahl && !z.brain.hol(z.auswahl)) {
         // Abgeleitete Knoten (Notizen, Patienten) kommen erst nach dem Auffrischen – einmal nachsehen, bevor es „gibt es nicht“ heißt
