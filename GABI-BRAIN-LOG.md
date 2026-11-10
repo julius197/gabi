@@ -16,7 +16,7 @@ Verträge zwischen den Bausteinen: `BRAIN-BAUPLAN.md`.
 |---|---|
 | 0 Vorab: main geprüft, Branch, Arbeitskopie | ✅ |
 | 1 Bauplan und Log | ✅ `c1ae874` |
-| 2 Modell `brain.js`, Suche `brain-suche.js`, Interview-Hilfen `brain-interview.js` | ✅ gebaut (`d39f887`), Unit-Tests dazu in Arbeit (Fork E, Dateien `worker/test/brain*.test.js` noch nicht committet) |
+| 2 Modell `brain.js`, Suche `brain-suche.js`, Interview-Hilfen `brain-interview.js` | ✅ gebaut (`d39f887`), Unit-Tests `9f81b8f`, Antwortlogik umgebaut `f6f75c8` |
 | 3 Speicher `brain-speicher.js` | ✅ `98fb09f` (112 Tests) |
 | 4 Seed (Zerlegung, Generator, `brain-seed.js`) | ✅ `e4185de` (35 Tests) |
 | 5 Graph `brain-graph.js` | ✅ `805c38d` (41 Tests) |
@@ -24,7 +24,7 @@ Verträge zwischen den Bausteinen: `BRAIN-BAUPLAN.md`.
 | 7 Ansicht `brain-ansicht.js`, `brain.css`, Einbau in `index.html`/`app.js` | ✅ gebaut (`d39f887`) |
 | 8 Interview, Chat-Befehle, Fähigkeiten-Ansicht, Demo-Assistent (`brain-gespraech.js`, `demo.js`) | ✅ gebaut (`d39f887`) |
 | 9 Doku (README, Roadmap, Vorlage) | ✅ README ergänzt; Roadmap und Vorlage `e4185de` |
-| 10 Tests: `tests/brain.mjs` (Browser), `tests/brain-leistung.mjs`, Unit, Gegenprobe | ⏳ Unit: 618 grün (16:01). Browser-Tests liefen in Chromium und WebKit durch; voller Lauf mit Screenshots, Leistung und `tests/v2.mjs` (ohne Schalter, gegen 8792) stehen aus |
+| 10 Tests: `tests/brain.mjs` (Browser), `tests/brain-leistung.mjs`, Unit, Gegenprobe | ⏳ Stand `f6f75c8`: Unit 735 grün · Browser-Kurzlauf Chromium 110/110 · bisherige Browser-Tests `tests/v2.mjs` ohne Schalter 564/564 (vor dem Umbau der Antwortlogik) · Leistung gemessen (unten). Offen: Abschlusslauf aller Tests nach der Prüfrunde, Screenshots nach `screenshots/brain/` |
 | 11 Prüfrunden (höchstens zwei), Korrekturen | ⏳ |
 | 12 Screenshots, Abschlusslauf, Kurzbericht | ⏳ |
 
@@ -85,6 +85,32 @@ Tests: `cd ~/Desktop/gabi-brain/worker && npm test`. Lokaler Brain-Server: `npm 
     zuletzt genutzte Hauptansicht (beim ersten Mal den Graphen). So funktionieren Zurück-Taste und Links.
 14. **Brain-Server lokal auf Port 8790** (`npm run brain`), getrennt von `npm run lokal`/`vorschau` (8788) – so kann
     Julius' Vorschau der Live-Version weiterlaufen, während er das Brain ansieht.
+
+## Leistung des Graphen (gemessen am 10.11., `tests/brain-leistung.mjs`)
+
+MacBook (Apple Silicon), Playwright headless, erfundener Graph über `?brainknoten=N` (das Brain selbst bleibt unberührt).
+Laptop = 1440 × 900 bei 2-facher Pixeldichte, Handy = 390 × 844 bei 3-facher. Ziel laut Auftrag: flüssig mit 500 Knoten,
+60 Bilder/s.
+
+| Engine | Gerät | Knoten | Kanten | Layout bis zur Ruhe | Bilder/s im Layout | Bilder/s beim Verschieben und Zoomen | längstes Bild (95 %) | Zeichnen je Bild (Median / 95 %) | Bilder in Ruhe | JS-Speicher |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Chromium | Laptop | 100 | 119 | 1,77 s (244 Schritte, Worker) | 60 | 60 | 16,7 ms | 0,2 / 0,3 ms | 0 | 4,3 MB |
+| Chromium | Laptop | 300 | 369 | 1,76 s (244 Schritte, Worker) | 60 | 60 | 16,8 ms | 0,2 / 0,4 ms | 0 | 4,5 MB |
+| Chromium | Laptop | 500 | 613 | 1,77 s (244 Schritte, Worker) | 60 | 60 | 16,7 ms | 0,3 / 0,5 ms | 0 | 4,5 MB |
+| Chromium | Handy | 500 | 613 | 1,77 s (244 Schritte, Worker) | 60 | 60 | 16,7 ms | 0,3 / 0,4 ms | 0 | 4,5 MB |
+| WebKit | Laptop | 100 | 119 | 1,75 s (244 Schritte, Worker) | 60 | 59,9 | 18 ms | 1 / 2 ms | 0 | – |
+| WebKit | Laptop | 300 | 369 | 1,77 s (244 Schritte, Worker) | 60 | 60 | 17 ms | 1 / 2 ms | 0 | – |
+| WebKit | Laptop | 500 | 613 | 1,77 s (244 Schritte, Worker) | 60 | 60 | 18 ms | 1 / 2 ms | 0 | – |
+| WebKit | Handy | 500 | 613 | 1,77 s (244 Schritte, Worker) | 60,1 | 60 | 18 ms | 1 / 2 ms | 0 | – |
+
+Lesehilfe:
+- **Layout bis zur Ruhe** ist die sichtbare, bewusst weiche Einschwingzeit (244 Schritte, je Bild einer). Das reine
+  Rechnen im Web Worker dauert laut Messung von Fork A 25–83 ms (100–500 Knoten); mit „Bewegung reduzieren“ erscheint
+  gleich das fertige Bild. Beim Wiederöffnen liegen die Knoten sofort an ihrem gemerkten Platz.
+- **Bilder in Ruhe = 0:** Der Graph zeichnet nur bei Bedarf – kein Dauerlauf, kein Akkuverbrauch im Stillstand.
+- **JS-Speicher:** belegter Heap der ganzen Seite nach erzwungener Speicherbereinigung (nur Chromium messbar);
+  der Unterschied zwischen 100 und 500 Knoten liegt bei 0,2 MB.
+- WebKit nennt Zeichenzeiten nur auf ganze Millisekunden genau.
 
 ## Antwortqualität ohne KI – Umbau am 10.11. (vor der Prüfrunde)
 

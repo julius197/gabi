@@ -87,10 +87,12 @@ async function messung(browser, motor, knoten, { handy = false } = {}) {
   let heap = null;
   if (motor === "chromium") {
     const cdp = await ctx.newCDPSession(page);
+    await cdp.send("Performance.enable");
     await cdp.send("HeapProfiler.enable");
     await cdp.send("HeapProfiler.collectGarbage");
     const { metrics } = await cdp.send("Performance.getMetrics");
-    heap = (metrics.find((x) => x.name === "JSHeapUsedSize") || {}).value / 1048576;
+    const wert = (metrics.find((x) => x.name === "JSHeapUsedSize") || {}).value;
+    heap = Number.isFinite(wert) ? wert / 1048576 : null;
   }
   await ctx.close();
   return {
