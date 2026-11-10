@@ -762,6 +762,14 @@
       if (undo.length > GRENZEN.undo) undo.shift();
       redo.length = 0;
     }
+    /**
+     * Rückgängig und Wiederholen schreiben einen ganzen gemerkten Stand. Hat inzwischen ein anderes Fenster den Eintrag
+     * geändert (und dieser Tab kennt die neue Fassung schon – dann meldet die Ablage keinen Konflikt mehr), würde der Schritt
+     * sie still überschreiben. Deshalb vorher: Sieht der Eintrag noch so aus, wie dieser Tab ihn hinterlassen hat?
+     * true = jemand hat ihn seither angefasst. Gibt es ihn gar nicht mehr, entscheidet die Aktion selbst.
+     */
+    const inzwischenAnders = (id, soll) => { const k = z.knoten.get(id); return Boolean(k) && !INHALT_FELDER.every((f) => gleichesFeld(k, soll, f)); };
+    const INZWISCHEN = { fehler: { allgemein: "Der Eintrag wurde inzwischen geändert." } }; // rueckgaengig()/wiederholen() machen daraus ihren Satz
 
     async function anlegen(daten, { grund = "neu", id = "", mitUndo = true } = {}) {
       const p = pruefen(daten, { alle: eigeneListe() });
@@ -808,11 +816,16 @@
         merkeUndo({
           name: `Änderung an „${r.knoten.titel}“`,
           zurueck: async () => {
+            if (inzwischenAnders(id, nachher)) return INZWISCHEN; // nichts schreiben – die Oberfläche sagt es
+            // Mit umbenannte Einträge bekommen Zeichen für Zeichen ihren alten Text zurück – aber nur, wenn sie seither niemand
+            // angefasst hat. Das muss VOR dem Zurückbenennen feststehen (es schreibt die Verweise selbst um). Inzwischen
+            // Bearbeitetes behält seinen Text; dort folgt nur der Verweis dem alten Titel.
+            const unberuehrt = umbenannt.filter((u) => { const k = z.knoten.get(u.id); return Boolean(k) && !k.geloescht && k.inhalt === u.nachher; });
             const x = await aendern(id, vorher, { grund: "rueckgaengig", mitUndo: false });
-            for (const u of umbenannt) await aendern(u.id, { inhalt: u.vorher }, { grund: "rueckgaengig", mitUndo: false });
+            if (x.ok) for (const u of unberuehrt) await aendern(u.id, { inhalt: u.vorher }, { grund: "rueckgaengig", mitUndo: false });
             return x;
           },
-          tun: () => aendern(id, nachher, { grund: "wiederholt", mitUndo: false }),
+          tun: () => (inzwischenAnders(id, vorher) ? INZWISCHEN : aendern(id, nachher, { grund: "wiederholt", mitUndo: false })),
         });
       }
       melden("knoten", [id, ...umbenannt.map((u) => u.id)]);
@@ -1074,6 +1087,7 @@
     async function importieren(eintraege) {
       const schritte = [];
       const fehler = [];
+      const geaenderte = []; // { id, vorher, nachher } – für die Prüfung vor Rückgängig und Wiederholen
       let neu = 0;
       let geaendert = 0;
       for (const e of Array.isArray(eintraege) ? eintraege : []) {
@@ -1088,14 +1102,16 @@
           const warWeg = alt.geloescht;
           if (warWeg) await wiederherstellen(alt.id, { mitUndo: false });
           const r = await aendern(alt.id, stand(e.knoten), { grund: "import", mitUndo: false });
-          if (r.ok) { geaendert += 1; schritte.push({ zurueck: async () => { await aendern(alt.id, vorher, { grund: "rueckgaengig", mitUndo: false }); if (warWeg) await loeschen(alt.id, { mitUndo: false }); }, tun: () => aendern(alt.id, stand(e.knoten), { grund: "import", mitUndo: false }) }); } else fehler.push(`${e.knoten.titel}: ${r.konflikt ? "inzwischen geändert" : Object.values(r.fehler || { x: "nicht übernommen" })[0]}`);
+          if (r.ok) { geaendert += 1; geaenderte.push({ id: alt.id, vorher, nachher: stand(r.knoten) }); schritte.push({ zurueck: async () => { await aendern(alt.id, vorher, { grund: "rueckgaengig", mitUndo: false }); if (warWeg) await loeschen(alt.id, { mitUndo: false }); }, tun: () => aendern(alt.id, stand(e.knoten), { grund: "import", mitUndo: false }) }); } else fehler.push(`${e.knoten.titel}: ${r.konflikt ? "inzwischen geändert" : Object.values(r.fehler || { x: "nicht übernommen" })[0]}`);
         }
       }
       if (schritte.length) {
         merkeUndo({
           name: `Import (${schritte.length === 1 ? "1 Eintrag" : `${schritte.length} Einträge`})`,
-          zurueck: async () => { for (const s of [...schritte].reverse()) await s.zurueck(); return { ok: true }; },
-          tun: async () => { for (const s of schritte) await s.tun(); return { ok: true }; },
+          // Wie beim einzelnen Ändern: Hat ein anderes Fenster seit dem Import einen der geänderten Einträge angefasst, bleibt der
+          // ganze Import stehen (ein Schritt – ganz oder gar nicht); sonst läge dessen Fassung nur noch im Verlauf.
+          zurueck: async () => { if (geaenderte.some((g) => inzwischenAnders(g.id, g.nachher))) return INZWISCHEN; for (const s of [...schritte].reverse()) await s.zurueck(); return { ok: true }; },
+          tun: async () => { if (geaenderte.some((g) => inzwischenAnders(g.id, g.vorher))) return INZWISCHEN; for (const s of schritte) await s.tun(); return { ok: true }; },
         });
       }
       return { ok: true, neu, geaendert, fehler };

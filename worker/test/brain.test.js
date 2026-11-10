@@ -1367,6 +1367,134 @@ describe("Prüfrunde 1 · Fund 5: Speicher voll, nur lesen, neuere Fassung – d
   });
 });
 
+describe.each([
+  ["Arbeitsspeicher", () => { const dokument = SP.neuesDokument(); return async () => { const a = SP.speicherAblage(dokument); await a.bereit(); return a; }; }],
+  ["IndexedDB (Nachbau)", () => { const idb = falscheIndexedDB(); return async () => { const a = SP.idbAblage("gabi-brain", idb, { zeitlimit: 500 }); await a.bereit(); return a; }; }],
+])("Prüfrunde 1 · Fund 2: Rückgängig überschreibt nichts aus dem anderen Tab – %s", (_name, fabrik) => {
+  const NICHT_ZURUECK = { fehler: { allgemein: "Das ließ sich nicht rückgängig machen – der Eintrag wurde inzwischen geändert." } };
+  const NICHT_VOR = { fehler: { allgemein: "Das ließ sich nicht wiederholen – der Eintrag wurde inzwischen geändert." } };
+  /** Tab A und Tab B auf derselben Ablage; „kennt“ = der Tab hat neu geladen (das tut die Oberfläche nach jeder Nachricht des anderen). */
+  async function zwei() {
+    const oeffne = fabrik();
+    const tab = async () => { const ablage = await oeffne(); const brain = B.erstelle({ ablage, jetzt: () => T0 }); await brain.laden(); return { brain, ablage }; };
+    const a = await tab();
+    const b = await tab();
+    return { a: a.brain, b: b.brain, ablage: a.ablage };
+  }
+
+  it("eine Änderung zurücknehmen: hat der andere Tab den Eintrag danach geändert – und dieser Tab kennt das schon –, bleibt dessen Fassung stehen", async () => {
+    const { a, b, ablage } = await zwei();
+    const k = await lege(a, "Termine", { inhalt: "Termine per Telefon.", tags: ["kontakt"] });
+    expect((await a.aendern(k.id, { inhalt: "A: Termine per Telefon und E-Mail." })).ok).toBe(true);
+    await b.neuLaden();
+    expect((await b.aendern(k.id, { inhalt: "B: Termine per Telefon, E-Mail und neu auch online.", tags: ["kontakt", "online"] })).knoten.rev).toBe(3);
+    await a.neuLaden(); // Tab A hat die Nachricht von B bekommen und kennt die neue Fassung (rev 3)
+    expect(a.hol(k.id).rev).toBe(3);
+    expect(await a.rueckgaengig()).toEqual(NICHT_ZURUECK);
+    const gespeichert = (await ablage.laden()).knoten.find((x) => x.id === k.id);
+    expect(gespeichert).toMatchObject({ inhalt: "B: Termine per Telefon, E-Mail und neu auch online.", tags: ["kontakt", "online"], rev: 3 }); // nichts geschrieben
+    expect(a.hol(k.id).inhalt).toBe("B: Termine per Telefon, E-Mail und neu auch online.");
+    expect((await a.verlauf(k.id)).map((v) => v.grund)).toEqual(["bearbeitet", "bearbeitet"]); // kein „Rückgängig gemacht“ im Verlauf
+    await b.neuLaden();
+    expect(b.hol(k.id)).toMatchObject({ inhalt: "B: Termine per Telefon, E-Mail und neu auch online.", rev: 3 });
+    // auch eine reine Status- oder Tag-Änderung des anderen Tabs zählt als „inzwischen geändert“
+    const s = await lege(a, "Parken", { inhalt: "eins" });
+    await a.aendern(s.id, { inhalt: "zwei" });
+    await b.neuLaden();
+    await b.statusSetzen(s.id, "zu_klaeren");
+    await a.neuLaden();
+    expect(await a.rueckgaengig()).toEqual(NICHT_ZURUECK);
+    expect(a.hol(s.id)).toMatchObject({ inhalt: "zwei", status: "zu_klaeren" });
+  });
+
+  it("Wiederholen: hat der andere Tab den Eintrag nach dem Zurücknehmen geändert, bleibt dessen Fassung stehen", async () => {
+    const { a, b } = await zwei();
+    const k = await lege(a, "Termine", { inhalt: "eins" });
+    await a.aendern(k.id, { inhalt: "zwei" });
+    expect((await a.rueckgaengig()).ok).toBe(true);
+    await b.neuLaden();
+    await b.aendern(k.id, { inhalt: "drei (anderer Tab)" });
+    await a.neuLaden();
+    expect(await a.wiederholen()).toEqual(NICHT_VOR);
+    expect(a.hol(k.id).inhalt).toBe("drei (anderer Tab)");
+    expect((await a.verlauf(k.id)).some((v) => v.grund === "wiederholt")).toBe(false);
+  });
+
+  it("ohne den anderen Tab bleibt alles beim Alten: Ändern, Status und Umbenennen gehen zurück und wieder vor", async () => {
+    const { a } = await zwei();
+    const k = await lege(a, "Parken", { inhalt: "eins" });
+    const v = await lege(a, "Anfahrt", { inhalt: "Siehe [[parken]]." });
+    await a.aendern(k.id, { inhalt: "zwei" });
+    await a.statusSetzen(k.id, "entwurf");
+    await a.aendern(k.id, { titel: "Parkplätze" });
+    expect(a.hol(v.id).inhalt).toBe("Siehe [[Parkplätze]].");
+    for (const erwartet of [{ titel: "Parken", status: "entwurf" }, { status: "bestaetigt", inhalt: "zwei" }, { inhalt: "eins" }]) {
+      expect((await a.rueckgaengig()).ok).toBe(true);
+      expect(a.hol(k.id)).toMatchObject(erwartet);
+    }
+    expect(a.hol(v.id).inhalt).toBe("Siehe [[parken]]."); // Zeichen für Zeichen wie vorher
+    for (const erwartet of [{ inhalt: "zwei" }, { status: "entwurf" }, { titel: "Parkplätze" }]) {
+      expect((await a.wiederholen()).ok).toBe(true);
+      expect(a.hol(k.id)).toMatchObject(erwartet);
+    }
+    expect(a.hol(v.id).inhalt).toBe("Siehe [[Parkplätze]].");
+  });
+
+  it("Umbenennen zurücknehmen: ein verweisender Eintrag, den der andere Tab danach bearbeitet hat, behält seinen Text – nur der Verweis folgt", async () => {
+    const { a, b } = await zwei();
+    const kontakt = await lege(a, "Kontakt", { inhalt: "Telefon 0911." });
+    const termine = await lege(a, "Termine", { inhalt: "Termine über [[kontakt|uns]] ausmachen." });
+    const anfahrt = await lege(a, "Anfahrt", { inhalt: "Fragen? Siehe [[KONTAKT]]." });
+    expect(await a.aendern(kontakt.id, { titel: "Kontakt und Zeiten" })).toMatchObject({ ok: true, umbenannt: 2 });
+    await b.neuLaden();
+    const ausB = "Termine über [[Kontakt und Zeiten|uns]] ausmachen.\n\nNEU von B: auch per Fax.";
+    expect((await b.aendern(termine.id, { inhalt: ausB })).ok).toBe(true);
+    await a.neuLaden();
+    expect(await a.rueckgaengig()).toEqual({ ok: true, name: "Änderung an „Kontakt und Zeiten“" });
+    expect(a.hol(kontakt.id).titel).toBe("Kontakt");
+    expect(a.hol(termine.id).inhalt).toBe("Termine über [[Kontakt|uns]] ausmachen.\n\nNEU von B: auch per Fax."); // der Zusatz von B bleibt, der Verweis zeigt wieder aufs Ziel
+    expect(a.hol(anfahrt.id).inhalt).toBe("Fragen? Siehe [[KONTAKT]]."); // unberührt: Zeichen für Zeichen wie vor dem Umbenennen
+    expect(a.verweise(termine.id)).toEqual([{ titel: "Kontakt", id: kontakt.id, fehlt: false }]);
+    expect(a.fehlende()).toEqual([]);
+    await b.neuLaden();
+    expect(b.hol(termine.id).inhalt).toContain("NEU von B: auch per Fax.");
+    // hat der andere Tab dagegen den umbenannten Eintrag selbst geändert, bleibt alles stehen – auch die Verweise
+    await a.aendern(kontakt.id, { titel: "Erreichbarkeit" });
+    await b.neuLaden();
+    await b.aendern(kontakt.id, { inhalt: "Telefon 0911 – von B ergänzt." });
+    await a.neuLaden();
+    const vorher = [termine.id, anfahrt.id].map((id) => a.hol(id).inhalt);
+    expect(await a.rueckgaengig()).toEqual(NICHT_ZURUECK);
+    expect(a.hol(kontakt.id)).toMatchObject({ titel: "Erreichbarkeit", inhalt: "Telefon 0911 – von B ergänzt." });
+    expect([termine.id, anfahrt.id].map((id) => a.hol(id).inhalt)).toEqual(vorher);
+    expect(a.fehlende()).toEqual([]);
+  });
+
+  it("Import zurücknehmen und wiederholen: hat der andere Tab einen der geänderten Einträge angefasst, bleibt der ganze Import stehen", async () => {
+    const { a, b } = await zwei();
+    const beta = await lege(a, "Beta", { inhalt: "Beta alt" });
+    const datei = [{ name: "n.md", text: "---\ntitel: Neu dazu\n---\n\nx" }, { name: "b.md", text: `---\nid: ${beta.id}\ntitel: Beta\nquelle: Test\nstatus: bestaetigt\n---\n\nBeta aus der Datei` }];
+    const importiere = async () => a.importieren(B.importVergleichen([...a.eigene(), ...a.papierkorb().map((p) => p.knoten)], B.importLesen(datei).knoten));
+    expect(await importiere()).toMatchObject({ neu: 1, geaendert: 1, fehler: [] });
+    await b.neuLaden();
+    await b.aendern(beta.id, { inhalt: "Beta – von B nach dem Import korrigiert" });
+    await a.neuLaden();
+    expect(await a.rueckgaengig()).toEqual(NICHT_ZURUECK);
+    expect(a.hol(beta.id).inhalt).toBe("Beta – von B nach dem Import korrigiert");
+    expect(a.findeTitel("Neu dazu")).not.toBeNull(); // ein Schritt: ganz oder gar nicht
+    // Gegenstück beim Wiederholen: Import, zurück (geht), dann ändert B den Eintrag – Wiederholen überschreibt ihn nicht
+    const gamma = await lege(a, "Gamma", { inhalt: "Gamma alt" });
+    expect(await a.importieren(B.importVergleichen(a.eigene(), B.importLesen([{ name: "g.md", text: `---\nid: ${gamma.id}\ntitel: Gamma\nquelle: Test\nstatus: bestaetigt\n---\n\nGamma aus der Datei` }]).knoten))).toMatchObject({ geaendert: 1 });
+    expect(await a.rueckgaengig()).toEqual({ ok: true, name: "Import (1 Eintrag)" });
+    expect(a.hol(gamma.id).inhalt).toBe("Gamma alt");
+    await b.neuLaden();
+    await b.aendern(gamma.id, { inhalt: "Gamma – von B" });
+    await a.neuLaden();
+    expect(await a.wiederholen()).toEqual(NICHT_VOR);
+    expect(a.hol(gamma.id).inhalt).toBe("Gamma – von B");
+  });
+});
+
 // ==========================================================================
 describe("Gesundheit", () => {
   it("jede Kennzahl zählt nur eigene, nicht gelöschte Knoten; Prozent = bestätigt von allen", async () => {
