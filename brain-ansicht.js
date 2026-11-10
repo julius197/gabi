@@ -56,7 +56,7 @@
     };
 
     const z = {
-      brain: null, ablage: null, kanal: null, notfall: null, demo: null, laedt: null, fehler: "",
+      brain: null, ablage: null, kanal: null, notfall: null, demo: null, laedt: null, fehler: "", fehlerText: "", fehlerKnopf: "",
       reiter: "graph", letzteHaupt: "graph", auswahl: "", bearbeitung: null, vorschau: false,
       suche: "", treffer: null,
       filter: { arten: [], status: [], tag: "", zuKlaeren: false, veraltet: false, nieVerwendet: false, verwendet: false },
@@ -81,7 +81,7 @@
       if (z.kanal) z.kanal.schliessen();
       if (z.ablage && z.ablage.schliessen) { try { z.ablage.schliessen(); } catch { /* schon zu */ } }
       if (z.graph) { z.graph.zerstoeren(); z.graph = null; }
-      Object.assign(z, { brain: null, ablage: null, kanal: null, notfall: null, laedt: null, fehler: "", auswahl: "", bearbeitung: null, treffer: null, suche: "", fokus: null, graphSignatur: "", verlauf: null, verlaufVon: "", abgeleitetAm: 0, wiederherstellbar: null });
+      Object.assign(z, { brain: null, ablage: null, kanal: null, notfall: null, laedt: null, fehler: "", fehlerText: "", fehlerKnopf: "", auswahl: "", bearbeitung: null, treffer: null, suche: "", fokus: null, graphSignatur: "", verlauf: null, verlaufVon: "", abgeleitetAm: 0, wiederherstellbar: null });
       z.notizInhalt.clear();
     }
 
@@ -124,7 +124,14 @@
         return brain;
       })();
       z.laedt = lauf;
-      lauf.catch(() => { if (z.laedt === lauf) { z.fehler = "Das Brain ließ sich nicht laden."; zeichnenBald(); } });
+      lauf.catch((e) => {
+        if (z.laedt !== lauf) return;
+        // Kennt die Ablage den Grund (Stand von einer neueren Gabi, Verbindung zu …), steht ihr Satz da – sonst der allgemeine
+        const vonAblage = Boolean(e && e.brain && typeof e.message === "string" && e.message);
+        z.fehler = vonAblage ? e.message : "Das Brain ließ sich nicht laden.";
+        z.fehlerText = vonAblage ? "Deine Notizen und Gespräche sind davon nicht betroffen." : "";
+        zeichnenBald();
+      });
       return lauf;
     }
 
@@ -254,7 +261,7 @@
         for (const id of ["brain-graph", "brain-liste", "brain-luecken", "brain-faehigkeiten", "brain-detail"]) $(`#${id}`).hidden = true;
         zustand.hidden = false;
         ersetzen(zustand, z.fehler
-          ? `<div class="leer"><div class="kachel warn">${symbol("warn")}</div><h2>${esc(z.fehler)}</h2><p>Bitte versuch es noch einmal. Deine Notizen und Gespräche sind davon nicht betroffen.</p><button class="knopf primaer" type="button" data-brain="neu-laden">${symbol("zuruecksetzen")}Nochmal versuchen</button></div>`
+          ? `<div class="leer"><div class="kachel warn">${symbol("warn")}</div><h2>${esc(z.fehler)}</h2><p>${esc(z.fehlerText || "Bitte versuch es noch einmal. Deine Notizen und Gespräche sind davon nicht betroffen.")}</p><button class="knopf primaer" type="button" data-brain="neu-laden">${symbol("zuruecksetzen")}${esc(z.fehlerKnopf || "Nochmal versuchen")}</button></div>`
           : '<div class="skelett brain-skelett" aria-label="Das Brain lädt"></div>');
         kopfZeichnen();
         return;
@@ -299,10 +306,14 @@
           ${zahl("luecken", g.luecken, "Lücke", "Lücken", g.luecken ? " warn" : "")}
         </div>
         ${g.zuKlaeren ? `<button class="knopf sekundaer klein brain-fuellen" type="button" data-brain="interview">${symbol("funke")}Brain füllen</button>` : ""}`);
+      // Hinweis, wenn die Ablage gerade nicht (dauerhaft) speichert – die Kennzeichen setzt brain-speicher.js
       const hinweis = $("#brain-hinweis");
-      const fluechtig = z.ablage && z.ablage.art === "speicher";
-      hinweis.hidden = !fluechtig;
-      if (fluechtig) ersetzen(hinweis, `<div class="hinweis-box warn"><div class="hinweis-box-kopf">${symbol("warn")}<span>Dieser Browser speichert das Brain gerade nicht dauerhaft (privates Fenster?). Exportiere wichtige Änderungen, bevor du das Fenster schließt.</span></div></div>`);
+      const a = z.ablage || {};
+      const text = a.schemaFremd ? "Dieses Brain wurde mit einer neueren Gabi angelegt – hier lässt es sich nur ansehen. Bitte lade die Seite neu."
+        : a.nurLesen ? "Das Brain lässt sich gerade nur ansehen – dieser Browser speichert nichts mehr (Speicher voll?). Exportier dein Brain und schaff Platz auf dem Gerät."
+          : a.art === "speicher" ? "Dieser Browser speichert das Brain gerade nicht dauerhaft (privates Fenster?). Exportiere wichtige Änderungen, bevor du das Fenster schließt." : "";
+      hinweis.hidden = !text;
+      if (text) ersetzen(hinweis, `<div class="hinweis-box warn"><div class="hinweis-box-kopf">${symbol("warn")}<span>${esc(text)}</span></div></div>`);
     }
 
     // ---------- Leiste: Reiter, Suche, Menü ----------
@@ -962,7 +973,7 @@
     async function klick(e) {
       const ziel = e.target.closest("[data-brain]");
       if (!ziel || !wurzel.contains(ziel) || !z.brain) {
-        if (ziel && ziel.dataset.brain === "neu-laden") { z.laedt = null; z.fehler = ""; zeichnen(); bereit(); }
+        if (ziel && ziel.dataset.brain === "neu-laden") { z.laedt = null; z.fehler = ""; z.fehlerText = ""; z.fehlerKnopf = ""; zeichnen(); bereit(); }
         return;
       }
       const aktion = ziel.dataset.brain;

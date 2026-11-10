@@ -1220,6 +1220,154 @@ describe.each([
 });
 
 // ==========================================================================
+// Prüfrunde 1 (Gebiet Daten): Störungen des Speichers, Rückgängig bei zwei Tabs, gelöschtes Brain im anderen Tab
+// ==========================================================================
+/** Ein Brain auf der nachgebauten IndexedDB: Ihre Fehler tragen den Satz der Ablage (Kennzeichen „brain“). */
+async function aufIdb({ idb = falscheIndexedDB(), seed = null, demo = false, zeit = { jetzt: T0 } } = {}) {
+  const ablage = SP.idbAblage("gabi-brain", idb, { zeitlimit: 500 });
+  await ablage.bereit();
+  const brain = B.erstelle({ ablage, seed, demo, jetzt: () => zeit.jetzt });
+  const info = await brain.laden();
+  return { brain, ablage, idb, zeit, info };
+}
+
+describe("Prüfrunde 1 · Fund 5: Speicher voll, nur lesen, neuere Fassung – der Grund erreicht die Oberfläche", () => {
+  const VOLL = { fehler: { allgemein: "Der Speicher dieses Browsers ist voll – die Änderung ist nicht gespeichert. Exportier dein Brain und lösch Altes aus dem Papierkorb." } };
+
+  it("Speicher voll: jede Aktion nennt den Satz der Ablage – nicht „noch einmal versuchen“ (das hülfe nie)", async () => {
+    const { brain, idb } = await aufIdb();
+    const a = await lege(brain, "Parken");
+    const b = await lege(brain, "Anfahrt");
+    const weg = await lege(brain, "Im Papierkorb");
+    await brain.loeschen(weg.id);
+    const kante = (await brain.kanteAnlegen(a.id, b.id, "gehoert_zu")).kante;
+    const offen = await brain.lueckeMelden("Gibt es WLAN?");
+    const beantwortet = await brain.lueckeMelden("Wo ist der Aufzug?");
+    await lege(brain, "Wo ist der Aufzug?"); // den Eintrag zur Lücke gibt es schon: „eintragen“ schreibt dann nur die Lücke
+    await brain.auditSchreiben("praxisfragen");
+    const nummer = brain.nummer;
+    idb.schreibenScheitert = true;
+    expect(await brain.anlegen(eintrag("Neu"))).toEqual(VOLL);
+    expect(await brain.aendern(a.id, { inhalt: "anders" })).toEqual(VOLL);
+    expect(await brain.statusSetzen(a.id, "entwurf")).toEqual(VOLL);
+    expect(await brain.loeschen(a.id)).toEqual(VOLL);
+    expect(await brain.wiederherstellen(weg.id)).toEqual(VOLL);
+    expect(await brain.endgueltigLoeschen(weg.id)).toEqual(VOLL);
+    expect(await brain.papierkorbLeeren()).toEqual(VOLL);
+    expect(await brain.kanteAnlegen(b.id, a.id, "verweis")).toEqual(VOLL);
+    expect(await brain.kanteLoeschen(kante.id)).toEqual(VOLL);
+    expect(await brain.lueckeEintragen(offen.id)).toEqual(VOLL); // scheitert beim Anlegen des Eintrags
+    expect(await brain.lueckeEintragen(beantwortet.id)).toEqual(VOLL); // scheitert beim Schreiben der Lücke
+    expect(await brain.lueckeVerwerfen(offen.id)).toEqual(VOLL);
+    expect(await brain.auditLeeren()).toEqual(VOLL);
+    expect((await brain.importieren(B.importVergleichen([], B.importLesen([{ name: "n.md", text: "# Aus Datei\n\nText" }]).knoten))).fehler).toEqual([`Aus Datei: ${VOLL.fehler.allgemein}`]);
+    // nichts davon hat den Stand verändert, niemand wurde über eine Änderung benachrichtigt
+    expect(titel(brain.eigene())).toEqual(["Anfahrt", "Parken", "Wo ist der Aufzug?"]);
+    expect(brain.hol(a.id)).toEqual(a);
+    expect(brain.papierkorb().map((p) => p.knoten.id)).toEqual([weg.id]);
+    expect(brain.kanten().map((k) => k.id)).toEqual([kante.id]);
+    expect(brain.luecken().map((l) => l.id).sort()).toEqual([offen.id, beantwortet.id].sort());
+    expect(brain.nummer).toBe(nummer);
+    // wieder Platz: es geht ohne Neuladen weiter
+    idb.schreibenScheitert = false;
+    expect((await brain.aendern(a.id, { inhalt: "anders" })).knoten).toMatchObject({ inhalt: "anders", rev: 2 });
+  });
+
+  it("Stand von einer neueren Gabi und geschlossene Verbindung: auch diese Sätze kommen an – ein unbekannter Fehler bleibt beim allgemeinen Satz", async () => {
+    const fremd = await aufIdb();
+    const k = await lege(fremd.brain, "Parken");
+    fremd.ablage.schemaFremd = true; // so kennzeichnet die Ablage einen Stand mit höherer Schema-Nummer
+    const FREMD = { fehler: { allgemein: "Dieses Brain wurde mit einer neueren Gabi angelegt. Bitte lade die Seite neu." } };
+    expect(await fremd.brain.aendern(k.id, { inhalt: "anders" })).toEqual(FREMD);
+    expect(await fremd.brain.anlegen(eintrag("Neu"))).toEqual(FREMD);
+    expect(await fremd.brain.kanteAnlegen(k.id, k.id)).toEqual({ fehler: { allgemein: "Beide Einträge müssen vorhanden und verschieden sein." } }); // Prüfungen des Modells gehen vor
+    expect(fremd.brain.hol(k.id).inhalt).toBe(k.inhalt);
+
+    const zu = await aufIdb();
+    const k2 = await lege(zu.brain, "Parken");
+    zu.ablage.schliessen();
+    const ZU = { fehler: { allgemein: "Das Brain ist in diesem Fenster nicht mehr geöffnet. Bitte lade die Seite neu." } };
+    expect(await zu.brain.aendern(k2.id, { inhalt: "anders" })).toEqual(ZU);
+    expect(await zu.brain.loeschen(k2.id)).toEqual(ZU);
+
+    // Fehler ohne Kennzeichen der Ablage (irgendetwas Unerwartetes): der allgemeine Satz – nie ein fremder Fehlertext an die Oberfläche
+    const echt = SP.speicherAblage();
+    await echt.bereit();
+    const kaputt = new Proxy(echt, { get: (ziel, name) => (name === "knotenSchreiben" ? async () => { throw new Error("TypeError: undefined is not a function (intern)"); } : typeof ziel[name] === "function" ? ziel[name].bind(ziel) : ziel[name]) });
+    const b3 = B.erstelle({ ablage: kaputt, jetzt: () => T0 });
+    await b3.laden();
+    expect(await b3.anlegen(eintrag("Neu"))).toEqual({ fehler: { allgemein: "Speichern hat nicht geklappt. Bitte noch einmal versuchen." } });
+  });
+
+  it("Start bei vollem Speicher: das Brain geht auf (lesbar, exportierbar) – auch wenn der Papierkorb aufzuräumen wäre", async () => {
+    const zeit = { jetzt: T0 };
+    const eins = await aufIdb({ zeit });
+    const bleibt = await lege(eins.brain, "Bleibt");
+    const alt = await lege(eins.brain, "Abgelaufen");
+    await eins.brain.loeschen(alt.id);
+    eins.ablage.schliessen();
+    zeit.jetzt = T0 + 31 * TAG; // der Papierkorb-Eintrag ist fällig
+    eins.idb.schreibenScheitert = true; // Gerät voll
+    const zwei = await aufIdb({ idb: eins.idb, zeit });
+    expect(zwei.ablage.nurLesen).toBe(true);
+    expect(zwei.brain.geladen).toBe(true);
+    expect(titel(zwei.brain.eigene())).toEqual(["Bleibt"]);
+    expect(zwei.brain.papierkorb().map((p) => [p.knoten.id, p.tageRest])).toEqual([[alt.id, 0]]); // noch da: das Aufräumen holt der nächste Start nach
+    expect(zwei.brain.exportDateien().map((d) => d.name)).toEqual(["bleibt.md"]);
+    expect(await zwei.brain.aendern(bleibt.id, { inhalt: "anders" })).toEqual(VOLL);
+    zwei.ablage.schliessen();
+    // wieder Platz: der nächste Start räumt auf
+    eins.idb.schreibenScheitert = false;
+    const drei = await aufIdb({ idb: eins.idb, zeit });
+    expect(drei.ablage.nurLesen).toBeUndefined();
+    expect(drei.brain.papierkorb()).toEqual([]);
+    expect(eins.idb.inhalt("gabi-brain", "knoten").map((k) => k.id)).toEqual([bleibt.id]);
+  });
+
+  it("Start bei vollem Speicher mit neuer Seed-Fassung: das Brain geht mit dem alten Stand auf, die neue Fassung kommt beim nächsten Start", async () => {
+    const zeit = { jetzt: T0 };
+    const eins = await aufIdb({ seed: miniSeed("v1"), zeit });
+    eins.ablage.schliessen();
+    eins.idb.schreibenScheitert = true;
+    const v2 = miniSeed("v2", { inhalt: { "s-alpha": "Alpha v2" }, mehr: [{ id: "s-neu", seed: "neu", art: "praxiswissen", titel: "Neu", inhalt: "Neu in v2", tags: [], status: "bestaetigt", quelle: "Test" }] });
+    const zwei = await aufIdb({ idb: eins.idb, seed: v2, zeit });
+    expect(zwei.info).toEqual({ art: "indexeddb", frisch: false });
+    expect(titel(zwei.brain.eigene())).toEqual(["Alpha", "Beta", "Gamma?"]);
+    expect(zwei.brain.hol("s-alpha")).toMatchObject({ inhalt: "Alpha v1", rev: 1 });
+    expect(zwei.brain.kontextFuer("Alpha").knoten.map((k) => k.id)).toContain("s-alpha"); // Gabi kann weiter daraus antworten
+    zwei.ablage.schliessen();
+    eins.idb.schreibenScheitert = false;
+    const drei = await aufIdb({ idb: eins.idb, seed: v2, zeit });
+    expect(drei.brain.hol("s-alpha")).toMatchObject({ inhalt: "Alpha v2", rev: 2 });
+    expect(drei.brain.hol("s-neu")).toMatchObject({ inhalt: "Neu in v2" });
+  });
+
+  it("geschluckt werden beim Start nur Fehler der Ablage; scheitert das Aufräumen mittendrin, zeigt der Papierkorb nichts, was im Speicher schon weg ist", async () => {
+    const zeit = { jetzt: T0 };
+    const eins = await neu({ zeit });
+    const a = await lege(eins.brain, "Bleibt");
+    const b = await lege(eins.brain, "Abgelaufen");
+    await eins.brain.kanteAnlegen(a.id, b.id, "gehoert_zu");
+    await eins.brain.loeschen(b.id);
+    zeit.jetzt = T0 + 31 * TAG;
+    const mit = async (ersatz) => {
+      const echt = SP.speicherAblage(eins.dokument);
+      await echt.bereit();
+      const ablage = new Proxy(echt, { get: (ziel, name) => (ersatz[name] ? ersatz[name] : typeof ziel[name] === "function" ? ziel[name].bind(ziel) : ziel[name]) });
+      const brain = B.erstelle({ ablage, jetzt: () => zeit.jetzt });
+      return { brain, laden: brain.laden() };
+    };
+    // ein Fehler, der nicht von der Ablage stammt, bleibt ein Fehler (nichts wird stillschweigend überdeckt)
+    await expect((await mit({ knotenEntfernen: async () => { throw new Error("Programmfehler"); } })).laden).rejects.toThrow("Programmfehler");
+    // die Knoten sind schon entfernt, dann scheitert das Entfernen der Verbindungen: Laden klappt, der Stand kommt frisch aus dem Speicher
+    const halb = await mit({ kantenEntfernen: async () => { throw Object.assign(new Error("Der Speicher dieses Browsers ist voll."), { brain: true, voll: true }); } });
+    await expect(halb.laden).resolves.toMatchObject({ frisch: false });
+    expect(halb.brain.papierkorb()).toEqual([]);
+    expect(titel(halb.brain.eigene())).toEqual(["Bleibt"]);
+  });
+});
+
+// ==========================================================================
 describe("Gesundheit", () => {
   it("jede Kennzahl zählt nur eigene, nicht gelöschte Knoten; Prozent = bestätigt von allen", async () => {
     const { brain, zeit } = await neu({ seed: miniSeed("v1") }); // Alpha, Beta bestätigt; Gamma? zu klären; dazu die Kernregeln (zählen nicht)

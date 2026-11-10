@@ -503,6 +503,12 @@
   const INHALT_FELDER = ["art", "titel", "inhalt", "tags", "status", "quelle"];
   const stand = (k) => ({ art: k.art, titel: k.titel, inhalt: k.inhalt, tags: [...(k.tags || [])], status: k.status, quelle: k.quelle });
   const SPEICHER_FEHLER = "Speichern hat nicht geklappt. Bitte noch einmal versuchen.";
+  /**
+   * Schreiben ist gescheitert: Kennt die Ablage den Grund (Speicher voll, nur lesen, Stand von einer neueren Gabi, Verbindung
+   * geschlossen – Fehler mit Kennzeichen „brain“ aus brain-speicher.js), kommt IHR Satz an die Oberfläche. „Noch einmal
+   * versuchen“ hülfe dort nie. Alles andere bleibt beim allgemeinen Satz.
+   */
+  const speicherFehler = (e) => ({ fehler: { allgemein: e && e.brain && typeof e.message === "string" && e.message ? e.message : SPEICHER_FEHLER } });
 
   /**
    * Erzeugt ein Brain über einer Ablage (siehe brain-speicher.js).
@@ -702,17 +708,27 @@
       await ablage.metaSchreiben("seed", String(seed.version || "1"));
     }
 
+    /**
+     * Aufräumen und Nachziehen beim Start schreiben. Lässt die Ablage gerade nicht schreiben (Speicher voll, nur lesen, Stand
+     * von einer neueren Gabi), bleibt das Brain trotzdem lesbar und exportierbar – der nächste Start holt es nach. Nur Fehler
+     * der Ablage werden hier geschluckt (Kennzeichen „brain“), alles andere ist ein echter Fehler.
+     */
+    async function beimStart(tun) {
+      try { await tun(); return true; } catch (e) { if (!(e && e.brain)) throw e; return false; }
+    }
+
     async function laden() {
       uebernehmen(await ablage.laden());
       let frisch = false;
       if (seed && Array.isArray(seed.knoten)) {
         if (!z.knoten.size && z.meta.seed === undefined) { await seedEinspielen(); frisch = true; uebernehmen(await ablage.laden()); }
-        else if (z.meta.seed !== undefined && z.meta.seed !== String(seed.version || "1")) { await seedNachziehen(); uebernehmen(await ablage.laden()); }
+        else if (z.meta.seed !== undefined && z.meta.seed !== String(seed.version || "1")) { await beimStart(seedNachziehen); uebernehmen(await ablage.laden()); }
       }
       // Papierkorb: nach 30 Tagen endgültig weg
       const grenze = jetzt() - GRENZEN.papierkorbTage * TAG_MS;
       const alt = [...z.knoten.values()].filter((k) => k.geloescht && k.geloescht < grenze);
-      if (alt.length) { await endgueltigWeg(alt); }
+      // (mittendrin gescheitert: Stand neu holen – sonst zeigte der Papierkorb, was im Speicher schon weg ist)
+      if (alt.length && !(await beimStart(() => endgueltigWeg(alt)))) uebernehmen(await ablage.laden());
       z.geladen = true;
       abgeleitetBauen();
       melden("geladen");
@@ -729,7 +745,7 @@
     const eigeneListe = () => [...z.knoten.values()];
     async function schreiben(knoten, opt) {
       let r;
-      try { r = await ablage.knotenSchreiben(knoten, opt); } catch { return { fehler: { allgemein: SPEICHER_FEHLER } }; }
+      try { r = await ablage.knotenSchreiben(knoten, opt); } catch (e) { return speicherFehler(e); }
       if (r && r.konflikt) {
         if (r.aktuell) z.knoten.set(r.aktuell.id, r.aktuell); else z.knoten.delete(knoten.id);
         abgeleitetBauen();
@@ -851,7 +867,7 @@
       const alt = z.knoten.get(id);
       if (!alt) return { ok: true };
       if (!alt.geloescht) return { fehler: { allgemein: "Erst in den Papierkorb legen, dann endgültig löschen." } };
-      try { await endgueltigWeg([alt]); } catch { return { fehler: { allgemein: SPEICHER_FEHLER } }; }
+      try { await endgueltigWeg([alt]); } catch (e) { return speicherFehler(e); }
       abgeleitetBauen();
       melden("knoten", [id]);
       anAndere("endgueltig");
@@ -860,7 +876,7 @@
     async function papierkorbLeeren() {
       const alle = [...z.knoten.values()].filter((k) => k.geloescht);
       if (!alle.length) return { ok: true, anzahl: 0 };
-      try { await endgueltigWeg(alle); } catch { return { fehler: { allgemein: SPEICHER_FEHLER } }; }
+      try { await endgueltigWeg(alle); } catch (e) { return speicherFehler(e); }
       abgeleitetBauen();
       melden("knoten", alle.map((k) => k.id));
       anAndere("endgueltig");
@@ -889,7 +905,7 @@
       if (!z.knoten.has(von) || z.knoten.get(von).geloescht) return { fehler: { allgemein: "Verbindungen gehen nur von eigenen Einträgen aus." } };
       if (c.kanten.some((k) => k.art === art && ((k.von === von && k.nach === nach) || (k.von === nach && k.nach === von)))) return { fehler: { allgemein: "Diese Verbindung gibt es schon." } };
       const kante = { id: `e${neueId().slice(1)}`, von, nach, art, auto: false };
-      try { await ablage.kantenSchreiben([kante]); } catch { return { fehler: { allgemein: SPEICHER_FEHLER } }; }
+      try { await ablage.kantenSchreiben([kante]); } catch (e) { return speicherFehler(e); }
       z.kanten.set(kante.id, kante);
       if (mitUndo) merkeUndo({ name: "Verbindung angelegt", zurueck: () => kanteLoeschen(kante.id, { mitUndo: false }), tun: async () => { await ablage.kantenSchreiben([kante]); z.kanten.set(kante.id, kante); melden("kanten"); return { ok: true }; } });
       melden("kanten", [von, nach]);
@@ -899,7 +915,7 @@
     async function kanteLoeschen(id, { mitUndo = true } = {}) {
       const kante = z.kanten.get(id);
       if (!kante) return { fehler: { allgemein: "Diese Verbindung steht im Text des Eintrags – dort den [[Verweis]] entfernen." } };
-      try { await ablage.kantenEntfernen([id]); } catch { return { fehler: { allgemein: SPEICHER_FEHLER } }; }
+      try { await ablage.kantenEntfernen([id]); } catch (e) { return speicherFehler(e); }
       z.kanten.delete(id);
       if (mitUndo) merkeUndo({ name: "Verbindung gelöscht", zurueck: async () => { await ablage.kantenSchreiben([kante]); z.kanten.set(kante.id, kante); melden("kanten"); return { ok: true }; }, tun: () => kanteLoeschen(id, { mitUndo: false }) });
       melden("kanten", [kante.von, kante.nach]);
@@ -975,7 +991,7 @@
       const r = vorhanden ? { ok: true, knoten: vorhanden } : await anlegen({ art: "frage", titel: l.frage.replace(/[[\]|]/g, " ").replace(/\s+/g, " ").trim().slice(0, GRENZEN.titelMax), inhalt: "", tags: ["luecke"], status: "zu_klaeren", quelle: "Gespräch" }, { grund: "luecke" });
       if (!r.ok) return r;
       const neu = { ...l, status: "eingetragen", knoten: r.knoten.id };
-      try { await ablage.lueckenSchreiben([neu]); } catch { return { fehler: { allgemein: SPEICHER_FEHLER } }; }
+      try { await ablage.lueckenSchreiben([neu]); } catch (e) { return speicherFehler(e); }
       z.luecken.set(id, neu);
       melden("luecken");
       anAndere("luecke");
@@ -984,7 +1000,7 @@
     async function lueckeVerwerfen(id) {
       const l = z.luecken.get(id);
       if (!l) return { ok: true };
-      try { await ablage.lueckenEntfernen([id]); } catch { return { fehler: { allgemein: SPEICHER_FEHLER } }; }
+      try { await ablage.lueckenEntfernen([id]); } catch (e) { return speicherFehler(e); }
       z.luecken.delete(id);
       melden("luecken");
       anAndere("luecke");
@@ -1014,7 +1030,7 @@
     }
     async function auditLeeren() {
       z.meta.audit = [];
-      try { await ablage.metaSchreiben("audit", []); } catch { return { fehler: { allgemein: SPEICHER_FEHLER } }; }
+      try { await ablage.metaSchreiben("audit", []); } catch (e) { return speicherFehler(e); }
       melden("audit");
       return { ok: true };
     }

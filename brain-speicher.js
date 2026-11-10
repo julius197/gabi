@@ -203,7 +203,15 @@
   function ablageAus(kv, { art, verlaufMax = VERLAUF_MAX }) {
     const lies = (lesen, rechne) => kv.vorgang({ lesen, rechne, schreibend: false });
     // Stand von einer neueren Gabi (schemaFremd): lesen ja, schreiben nein – alter Code soll neuere Daten nicht verbiegen
-    const schreib = (lesen, rechne) => (ablage.schemaFremd ? Promise.reject(fehler(TEXT.fremd, { schemaFremd: true })) : kv.vorgang({ lesen, rechne, schreibend: true }));
+    const schreib = (lesen, rechne) => {
+      if (ablage.schemaFremd) return Promise.reject(fehler(TEXT.fremd, { schemaFremd: true }));
+      if (!ablage.nurLesen) return kv.vorgang({ lesen, rechne, schreibend: true });
+      // „nur lesen“ (beim Öffnen ließ der Speicher nicht schreiben): Sobald wirklich wieder etwas geschrieben ist, gilt das
+      // nicht mehr – der Hinweis der Oberfläche verschwindet ohne Neuladen. Ein Vorgang ohne Schreiben beweist nichts.
+      let geschrieben = false;
+      const merke = (werte) => { const r = rechne(werte) || {}; geschrieben = liste(r.schreiben).length > 0; return r; };
+      return kv.vorgang({ lesen, rechne: merke, schreibend: true }).then((ergebnis) => { if (geschrieben) ablage.nurLesen = false; return ergebnis; });
+    };
     /** Einträge mit Kennung schreiben bzw. per Kennung entfernen (Kanten, Lücken). */
     const ablegen = async (store, eintraege, text) => {
       const sauber = liste(eintraege).map((x) => mitId(x, text));

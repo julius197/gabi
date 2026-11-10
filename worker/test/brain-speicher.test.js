@@ -435,6 +435,27 @@ describe("IndexedDB-Ablage", () => {
     expect(await b.knotenSchreiben(knoten("k-eins", { inhalt: "neu" }), { erwartet: 1 })).toMatchObject({ ok: true, knoten: { rev: 2 } });
   });
 
+  it("„nur lesen“ gilt, bis wirklich wieder etwas geschrieben ist – ein gescheiterter Versuch oder ein Vorgang ohne Schreiben hebt es nicht auf", async () => {
+    const { a, idb } = await neu();
+    await a.knotenSchreiben(knoten("k-eins"), { neu: true });
+    a.schliessen();
+    idb.schreibenScheitert = true;
+    const b = S.idbAblage("gabi-brain", idb, { zeitlimit: 500 });
+    await b.bereit();
+    expect(b.nurLesen).toBe(true);
+    await b.knotenSchreiben(knoten("k-eins", { inhalt: "neu" }), { erwartet: 1 }).catch(() => {});
+    await b.metaSchreiben("ansicht", "liste").catch(() => {});
+    expect(b.nurLesen).toBe(true); // weiter voll
+    idb.schreibenScheitert = false;
+    await b.laden();
+    expect(await b.knotenSchreiben(knoten("k-eins", { inhalt: "neu" }), { erwartet: 7 })).toMatchObject({ konflikt: true }); // Konflikt: nichts geschrieben
+    await b.kantenSchreiben([]);
+    expect(b.nurLesen).toBe(true); // noch kein Beweis, dass Schreiben wieder geht
+    expect(await b.knotenSchreiben(knoten("k-eins", { inhalt: "neu" }), { erwartet: 1 })).toMatchObject({ ok: true, knoten: { rev: 2 } });
+    expect(b.nurLesen).toBe(false); // der Hinweis der Oberfläche kann verschwinden
+    expect((await b.laden()).knoten[0]).toMatchObject({ inhalt: "neu", rev: 2 });
+  });
+
   it("hängt das Öffnen: bereit() gibt nach dem Zeitlimit auf; kommt die Datenbank später doch, wird sie wieder geschlossen", async () => {
     const haengt = falscheIndexedDB();
     haengt.oeffnenHaengt = true;
