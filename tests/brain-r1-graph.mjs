@@ -920,7 +920,8 @@ async function fund5und7(browser, motor) {
       pruefe(nach.unter.length === 0 && nach.aussen === 0, `Fund 5 · ${name}: nach „Alles zeigen“ ebenso (${nach.unter.length}${nach.unter.length ? `: ${nach.unter.slice(0, 4).join(", ")}` : ""})`);
       if (b === 1440 && h === 900) pruefe(m.zoom >= 0.95 && start.legendeOffen, `Fund 5 · ${name}: verschoben statt verkleinert – der Zoom bleibt über 0,95 (${m.zoom}), die Legende ist offen`);
       if (b === 1024 || (b === 1280 && h === 720)) pruefe(!start.legendeOffen, `Fund 5 · ${name}: auf kleiner Fläche startet die Legende geschlossen (vorher deckte sie bis zu einem Viertel des Graphen zu)`);
-      const mindest = { "1440×790": 0.82, "1366×768": 0.7, "1280×720": 0.62, "1024×768": 0.44, "390×844": 0.33, "320×568": 0.25 }[`${b}×${h}`];
+      // 1024×768: seit der Leisten-Korrektur (Handy-Fund 2) steht die Reiter-Zeile über der Suche – die Fläche ist niedriger, daher 0,38 statt 0,44
+      const mindest = { "1440×790": 0.82, "1366×768": 0.7, "1280×720": 0.62, "1024×768": 0.38, "390×844": 0.33, "320×568": 0.25 }[`${b}×${h}`];
       if (mindest) pruefe(m.zoom >= mindest, `Fund 5 · ${name}: das Bild wird dafür nicht winzig (Zoom ${m.zoom}, mindestens ${mindest})`);
       if (b === 1440 && h === 900) {
         // mit offenem Panel: Die Minimap rückt neben das Panel – auch dann liegt nach „Alles zeigen“ nichts darunter
