@@ -1260,6 +1260,7 @@
     const hervor = new Map();   // Index → { start, dauer }
     let pulsBis = 0;
     const labelMerk = new Map();  // id → Platz
+    const labelSeit = new Map();  // id → Zeitpunkt des letzten Zustandswechsels (Haltezeit)
     const labelDeck = new Map();  // id → { a, ziel, x, y, breite, hoehe, text, fett }
     const breiten = new Map();    // „fett|text“ → Breite
     let farbe = FARBEN_STANDARD;
@@ -1479,7 +1480,7 @@
         if (idx(ziehId) < 0) { halteEnde(); if (geste.typ === "knoten") geste = null; else geste.i = -1; } // der Knoten ist weg
         else { geste.i = idx(ziehId); if (mitIds) geste.mit = mitIds.map(idx).filter((i) => i >= 0); }
       }
-      for (const id of [...labelDeck.keys()]) if (!nIndex.has(id)) { labelDeck.delete(id); labelMerk.delete(id); }
+      for (const id of [...labelDeck.keys()]) if (!nIndex.has(id)) { labelDeck.delete(id); labelMerk.delete(id); labelSeit.delete(id); }
 
       const neueSignatur = `${liste.map((k) => k.id).join("\u0001")}\u0002${kanten.map((e) => `${e.a}>${e.b}`).join(",")}`;
       const strukturNeu = neueSignatur !== signatur;
@@ -2046,23 +2047,35 @@
         if (deck[i] < 0.5 || bx[i] < 0 || bx[i] > b || by[i] < 0 || by[i] > h) continue;
         const k = K[i];
         // erzwungen sind nur Auswahl und Hover; Treffer, Gabi-Spur und Nachbarn kommen bevorzugt dazu – ohne Überlappung
-        const erzwungen = i === auswahl || i === hover;
+        // Naben (Schwelle 0) bleiben immer stehen – auch wenn kein freier Platz bleibt, sonst verschwänden sie beim Zoomen im Gedränge
+        const erzwungen = i === auswahl || i === hover || k.schwelle === 0;
         const treffer = Boolean(trefferMenge && trefferMenge.has(i));
         const spur = hervor.has(i);
         const nachbar = Boolean(nahe && nahe[i]);
-        if (!erzwungen && !treffer && !spur && !nachbar && z < k.schwelle) continue;
-        const fett = k.grad >= 6;
         const alt = labelDeck.get(k.id);
-        kandidaten.push({ id: k.id, i, x: bx[i], y: by[i], r: br[i] + (k.status === "zu_klaeren" ? 4 : 0), breite: textBreite(k.kurz, fett), vorrang: k.grad + (alt && alt.ziel === 1 ? 3 : 0) + (treffer ? 1000 : 0) + (spur ? 800 : 0) + (nachbar ? 400 : 0), erzwungen, fett });
+        // Hysterese: ein Label, das schon steht, bleibt bis 15 % unter seiner Schwelle – an der Schwelle kippt nichts hin und her
+        const steht = Boolean(alt && alt.ziel === 1);
+        if (!erzwungen && !treffer && !spur && !nachbar && z < (steht ? k.schwelle * 0.85 : k.schwelle)) continue;
+        const fett = k.grad >= 6;
+        kandidaten.push({ id: k.id, i, x: bx[i], y: by[i], r: br[i] + (k.status === "zu_klaeren" ? 4 : 0), breite: textBreite(k.kurz, fett), vorrang: k.grad + 0 + (treffer ? 1000 : 0) + (spur ? 800 : 0) + (nachbar ? 400 : 0), erzwungen, fett });
       }
       const gesetzt = labelsWaehlen(kandidaten, { breite: b, hoehe: h, merk: labelMerk, max: 140, sperren });
       const nachIdKand = new Map(kandidaten.map((k) => [k.id, k]));
-      for (const l of labelDeck.values()) l.ziel = 0;
+      for (const l of labelDeck.values()) { l.vor = l.ziel; l.ziel = 0; }
       for (const g of gesetzt) {
         const k = nachIdKand.get(g.id);
         let l = labelDeck.get(g.id);
         if (!l) { l = { a: ruhig ? 1 : 0 }; labelDeck.set(g.id, l); }
         l.ziel = 1; l.x = g.x; l.y = g.y; l.breite = g.breite; l.hoehe = g.hoehe; l.text = K[k.i].kurz; l.fett = k.fett; l.i = k.i;
+      }
+      // Mindest-Haltezeit: Ein Label wechselt seinen Zustand höchstens alle 450 ms. Im Gedränge entscheidet die Kollision von
+      // Bild zu Bild anders – ohne Haltezeit blinkt das Label; so bleibt es stehen (oder weg), bis sich die Lage beruhigt hat.
+      // (der Zeitpunkt des letzten Wechsels steht in labelSeit, nicht im Eintrag – der wird nach dem Ausblenden gelöscht)
+      for (const [id, l] of labelDeck) {
+        const vor = l.vor === undefined ? 0 : l.vor;
+        const seit = labelSeit.get(id);
+        if (vor !== l.ziel && seit !== undefined && zeit - seit < 450 && !ruhig) l.ziel = vor;
+        if (vor !== l.ziel) labelSeit.set(id, zeit);
       }
       const schritt = ruhig ? 1 : 1 - Math.exp(-dt / 55);
       ctx.textAlign = "left";
@@ -2672,7 +2685,7 @@
           knoten: K.length, kanten: kanten.length, fest: K.reduce((n, k) => n + (k.fest ? 1 : 0), 0), bilder, zeichnenP50: q(0.5), zeichnenP95: q(0.95),
           fps: lauf >= 8 && spanne > 0 ? Math.round((lauf - 1) / spanne * 10000) / 10 : null,
           layoutMs, ticks: layoutTicks, ruht: !layoutLaeuft, worker: Boolean(treiber && treiber.art === "worker"),
-          zoom: Math.round(kam.zoom * 1000) / 1000, pixel: Math.round(dpr * 100) / 100, breite: cssB, hoehe: cssH, labels: [...labelDeck.values()].filter((l) => l.ziel === 1).length,
+          zoom: Math.round(kam.zoom * 1000) / 1000, pixel: Math.round(dpr * 100) / 100, breite: cssB, hoehe: cssH, labels: [...labelDeck.values()].filter((l) => l.ziel === 1).length, labelIds: [...labelDeck].filter(([, l]) => l.ziel === 1).map(([id]) => id),
           schloesser,
         };
       },

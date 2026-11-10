@@ -283,6 +283,16 @@ Grenze, die bleibt: Der Assistent ohne KI versteht keine Bedeutung, nur Wörter,
 medizinischen Rat sind Muster – sie decken die geprüften Formen ab, nicht jede denkbare. Im Weg mit Claude steht die
 Kernregel im Systemprompt des Workers (dort unverändert); mit dem echten Modell ist das nicht erprobt (kein Schlüssel).
 
+### Bugfix 10.11. abends: Graph-Labels flackerten beim Zoomen
+**Ursache** (`brain-graph.js`, Labels pro Bild neu entschieden): (1) harte Zoom-Schwelle je Label, ohne Hysterese; (2) Naben
+fanden im Gedränge keinen freien Platz und fielen ganz weg, (3) die Kollisionsentscheidung kippte von Bild zu Bild, und
+(4) der Bonus „steht schon“ (+3) ordnete die Reihenfolge je Bild um. **Fix:** Hysterese (ein stehendes Label bleibt bis 15 %
+unter seiner Schwelle), statische Priorität (Verbindungen, dann ID), Naben immer gesetzt, Mindest-Haltezeit 450 ms je Label
+zwischen zwei Zustandswechseln (nicht bei „Bewegung reduzieren“); das Ein-/Ausblenden über Deckkraft gab es schon.
+**Test:** `tests/brain-labels-zoom.mjs` (40 Schritte hinein, 40 heraus, Wechsel je Label gezählt; Chromium + WebKit,
+1440 px, Hell/Dunkel): alter Stand 4/4 rot (6 Labels mit bis zu 3 Wechseln), neuer Stand 4/4 grün. Unit 909, Graph-Checks
+274/274, Brain-Kurzlauf 220/220 grün.
+
 ## Vorkommnisse
 
 **Fehlalarm „Anfrage an den Live-Worker“ (10.11., ca. 15:50) – nachgeprüft, nichts passiert.**
