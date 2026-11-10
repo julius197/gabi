@@ -96,7 +96,12 @@ const antwortFertig = (page, muster, timeout = 20000) => page.waitForFunction((m
   const n = [...document.querySelectorAll("#nachrichten .von-gabi")].pop();
   return !document.querySelector("#senden.stoppt") && !document.querySelector(".von-gabi .tippen") && n && new RegExp(m).test(n.innerText);
 }, muster, { timeout });
-const bild = async (page, name) => { await warte(450); await page.screenshot({ path: join(aus, `${name}.png`) }); };
+// Screenshot erst, wenn keine Rückmeldung (Toast) aus den Schritten davor mehr im Bild steht – sonst verdeckt sie die Antwort
+const bild = async (page, name) => {
+  await page.waitForFunction(() => { const t = document.querySelector("#toasts"); return !t || !t.children.length; }, null, { timeout: 9000 }).catch(() => {});
+  await warte(450);
+  await page.screenshot({ path: join(aus, `${name}.png`) });
+};
 
 // Flackern zählen wie in tests/v2.mjs (2b): pro Bild die sichtbare Ansicht prüfen, jede neu startende Einblend-Animation
 // zählen, Platzhalter zählen. Dazu: wie oft feste Teile (Kopf, Filterzeile) neu aufgebaut werden.
