@@ -617,7 +617,12 @@ Gegenproben:
     kleine Robustheit im neuen Test: Messausschnitt, „webkit“ als Name, keine 0-Prüfungen-Läufe, auch das
     Zugangscode-Fenster stumm.
   - Alle anderen „kann“-Funde stehen unter „Offen“ 14.
-- [DEPLOY]
+- **Worker 2.0.1 deployt** am 10.11.2026 nach den grünen Tests, aus Commit c705813.
+  - Versions-ID `4c13be8c-05a9-4dcf-96bf-9377c18b4abd`, vorher 2.0.0 = `c266d957-e455-4222-a145-06872b19da79`.
+  - Geprüft nur über `/api/status`: version 2.0.1, bereit, alles eingerichtet. Keine Anfrage mit Code.
+  - Rückweg: `cd worker && npx wrangler rollback c266d957-e455-4222-a145-06872b19da79`.
+  - Die Live-Seite bleibt Frontend v2.1, der Branch ist nicht gemergt. Die Worker-Änderungen sind nur Prompt-Texte und
+    die Version, v2.1 liest aus `/api/status` nur „bereit“.
 
 ## Offen
 
