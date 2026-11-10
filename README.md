@@ -22,7 +22,7 @@ Alter oder andere Merkmale, die nicht in der Notiz stehen.
 > **Testversion – nur Testdaten.** Keine Klarnamen, keine echten Patientendaten. Kürzel brauchen deshalb eine Ziffer (z. B. `TP-01`).
 > Gabi stellt keine Diagnosen und gibt keine Therapieempfehlungen; sie antwortet nur aus gespeicherten Notizen und der Wissensdatei.
 
-Adresse: **https://gabi.automatilabs.de** (Branch `main`, v2 seit 08.11.2026) · Protokoll: `GABI-V2-LOG.md`.
+Adresse: **https://gabi.automatilabs.de** (Branch `main`, v2 seit 08.11.2026, v2.1.2 seit 10.11.2026) · Protokoll: `GABI-V2-LOG.md`.
 
 > **Neue Version veröffentlichen:** in `index.html` die Kennung `?v=…` an `style.css` und allen eigenen Skripten (auch `gespraeche.js`) hochzählen
 > und `VERSION` oben in `app.js` gleich setzen (ein Test prüft das) – GitHub Pages lässt Dateien 10 Minuten im Browser-Cache;

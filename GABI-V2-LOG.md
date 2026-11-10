@@ -513,10 +513,11 @@ Die 10 „kann“-Funde stehen unter „Offen“ (Punkt 11).
 - Kein Test hat eine Anfrage an den Live-Worker oder die Live-Seite geschickt. Die Wache „keine Anfrage ohne Code“ blieb
   in allen Teilen leer.
 
-## v2.1.2 – Eingabefeld ohne Anschnitt, Fachwörter für Whisper, kein erfundenes Geschlecht (10.11.2026, Branch `gabi-v2-1-2`)
+## v2.1.2 – Eingabefeld ohne Anschnitt, Fachwörter für Whisper, kein erfundenes Geschlecht (10.11.2026, live seit 10.11.2026)
 
-Drei Aufträge von Julius (09./10.11.2026). Frontend 2.1.2 (`VERSION` und alle `?v=`) – nur auf dem Branch, nicht auf
-`main`, nicht live. Worker 2.0.1 – laut Auftrag nach grünen Tests deployt (siehe „Getestet“).
+Drei Aufträge von Julius (09./10.11.2026). Frontend 2.1.2 (`VERSION` und alle `?v=`) – live seit 10.11.2026 auf sein
+„Ja, live schalten v2.1.2“ (siehe „Live-Gang v2.1.2“). Worker 2.0.1 – laut Auftrag nach grünen Tests deployt (siehe
+„Getestet“).
 
 ### A – Eingabefeld „Frag Gabi oder diktiere …“: Cursor am Zeilenanfang angeschnitten
 
@@ -623,6 +624,22 @@ Gegenproben:
   - Rückweg: `cd worker && npx wrangler rollback c266d957-e455-4222-a145-06872b19da79`.
   - Die Live-Seite bleibt Frontend v2.1, der Branch ist nicht gemergt. Die Worker-Änderungen sind nur Prompt-Texte und
     die Version, v2.1 liest aus `/api/status` nur „bereit“.
+
+### Live-Gang v2.1.2 (10.11.2026, auf „Ja, live schalten v2.1.2“)
+- Worker bleibt 2.0.1 (seit dem Vormittag live), kein neuer Deploy.
+- `main` per Fast-Forward 1a18c05 → edee1ef (v2.1.1, v2.1.2, Log), gepusht. Pages-Build „built“ nach 34 s, ohne Fehler.
+- Dateiabgleich gegen `main`: 16 von 16 App-Dateien byte-gleich. Die Startseite kam auch ohne Zusatz in der Adresse
+  (so lädt sie ein Browser) schon neu (Age 0). Alle 88 internen Dateien liefern 404: Log, README, `tests/` (auch
+  `eingabefelder.mjs`), `worker/`, `supabase/`, `knowledge/`, `screenshots/`, `_config.yml`, `.gitignore`.
+- Live-Prüfung `GABI_LIVE=1 node tests/v2.mjs … https://gabi.automatilabs.de`: **460 von 460 grün**, in Chromium und
+  WebKit. Nur Demo- und Mock-Teile, Block 5 (Eingabefelder) inklusive. Die Zugangsseite wird nur angezeigt (fragt
+  `/api/status`), nie ein Code abgeschickt, also keine Anfrage mit falschem Code an den Live-Worker.
+- Rückweg zu v2.1 (im Klon getestet: danach unterscheidet sich nur das Log vom alten Live-Stand 1a18c05). Worker 2.0.1
+  passt auch zu v2.1; der Worker-Rückweg steht unter „Getestet (v2.1.2)“.
+  ```bash
+  git revert --no-commit 1a18c05..HEAD && git checkout HEAD -- GABI-V2-LOG.md && git commit -m "Zurück zu v2.1" && git push origin main
+  ```
+- Jetzt am echten iPhone möglich: Eingabefeld (Cursor, Platzhalter), Schublade, Abmelden mit Häkchen, Fokus.
 
 ## Offen
 
