@@ -267,8 +267,10 @@ button.brain-tag:hover { background: var(--akzent-hell-2); }
 .brain-detail .badge .symbol { width: 12px; height: 12px; }
 .brain-detail > h2 { flex: none; padding: 2px 18px 0; font-size: 21px; letter-spacing: -0.025em; overflow-wrap: anywhere; }
 .brain-detail > h2:focus-visible { outline: none; }
+/* minmax(0, 1fr): die Spalte ist so breit wie das Detail – nie so breit wie ihr längster Inhalt (sonst schnitte ein
+   langer Titel Status, Text und Meta rechts ab und der Rumpf scrollte seitlich) */
 .brain-detail-rumpf {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 16px; align-content: start;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-content: start;
   padding: 14px 18px calc(22px + env(safe-area-inset-bottom));
   /* Gescrolltes läuft unter dem Titel weich aus (der Inhalt beginnt erst nach dem Innenabstand – in Ruhe ist nichts verdeckt) */
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12px); mask-image: linear-gradient(to bottom, transparent, #000 12px);
@@ -297,10 +299,14 @@ a.brain-verweis:hover { background: var(--akzent-hell-2); }
 .brain-meta div { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 10px; align-items: baseline; }
 .brain-meta dt { color: var(--text-3); font-size: 13px; }
 .brain-meta dd { margin: 0; overflow-wrap: anywhere; }
-.brain-teil { display: grid; gap: 8px; }
+.brain-teil { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+/* Chips im Brain: ein langer Titel (eine offene Frage hat bis zu 120 Zeichen) bricht um, statt die Breite zu sprengen.
+   Radius = halbe Höhe einer Zeile: einzeilig bleibt es die Pille, mehrzeilig wird es ein rundes Rechteck.
+   Steht bewusst VOR Abschnitt 11 – dort heben die Touch-Regeln (gleiche Spezifität) die Mindesthöhe auf 44 px. */
+.brain .quelle, .quelle.brain-quelle { max-width: 100%; height: auto; min-height: 28px; padding-block: 4px; border-radius: 14px; white-space: normal; overflow-wrap: anywhere; }
 .brain .quelle .brain-punkt { width: 8px; height: 8px; }
 .brain .quelle.fehlt, .quelle.fehlt { border: 0; background: transparent; box-shadow: inset 0 0 0 1px var(--linie-2); border-style: dashed; color: var(--text-2); cursor: pointer; outline: 1px dashed var(--text-4); outline-offset: -1px; box-shadow: none; }
-.brain-verbindungen { list-style: none; display: grid; gap: 2px; font-size: 14px; }
+.brain-verbindungen { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; font-size: 14px; }
 .brain-verbindungen li { display: flex; align-items: center; gap: 6px; min-height: 34px; }
 .brain-verbindungen a { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-underline-offset: 2px; }
 .brain-kante-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
@@ -463,9 +469,10 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border-radius: 6
   .brain-reiter-knopf, .brain-status button { height: 44px; }
   .brain .rund-knopf, .brain .rund-knopf.klein, dialog.brain-papierkorb .rund-knopf.klein, .brain-graph-knoepfe .rund-knopf { width: 44px; height: 44px; }
   .brain .quelle, button.brain-tag, .brain-verlauf summary, .brain-legende summary, .brain-diff summary { min-height: 44px; display: inline-flex; align-items: center; }
+  .brain .quelle, .quelle.brain-quelle { border-radius: 22px; } /* = halbe Mindesthöhe: einzeilig weiter die Pille */
   .brain-legende summary { display: flex; }
   .brain-verbindungen li { min-height: 44px; }
-  .brain-verbindungen a { display: flex; align-items: center; min-height: 44px; }
+  .brain-verbindungen a { min-height: 44px; line-height: 44px; } /* als Block mit einer Zeile: 44 px hoch und das „…“ eines langen Titels bleibt */
   .brain-auswahl select { height: 44px; font-size: 16px; }
   .brain-suche input, .brain-kante-form .eingabefeld { font-size: 16px; }
   .brain-import-kopf { min-height: 44px; align-items: center; }
