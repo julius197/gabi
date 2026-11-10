@@ -577,6 +577,37 @@ async function teil2(browser, motor, { geraet, schema, wenigBewegung = false, bi
   await page.click('.nachricht:last-child .brain-karte [data-aktion="brain-verwerfen"]');
   pruefe(!(await knotenMitTitel(page, "Telefonzeiten")).inhalt.includes("15 Uhr"), `${name}: verworfener Vorschlag ändert nichts`);
 
+  // --- Schutz: ein Vorschlag schneidet nichts ab und überschreibt nichts Neueres ---
+  // (1) langer Eintrag: Gabi sieht im Gespräch nur den gekürzten Anfang – ein Änderungsvorschlag ersetzte den ganzen Inhalt
+  const langId = await page.evaluate(async () => {
+    const b = window.GabiBrainAnsicht.aktuell.brain;
+    const inhalt = `${Array.from({ length: 60 }, (_, i) => `Punkt ${i + 1}: Die Hausordnung regelt den Ablauf im Trainingsbereich ausführlich.`).join("\n")}\nLetzter Punkt: Schlusswort der Hausordnung.`;
+    return (await b.anlegen({ art: "praxiswissen", titel: "Hausordnung", inhalt, tags: [], status: "bestaetigt", quelle: "Test" })).knoten.id;
+  });
+  await fragen(page, "Ändere die Hausordnung: Hunde sind erlaubt");
+  await antwortFertig(page, "zu lang");
+  const nachLang = await page.evaluate((id) => {
+    const k = window.GabiBrainAnsicht.aktuell.brain.hol(id);
+    const n = [...document.querySelectorAll("#nachrichten .von-gabi")].pop();
+    return { ende: k.inhalt.endsWith("Schlusswort der Hausordnung."), laenge: k.inhalt.length, karte: Boolean(n.querySelector('[data-aktion="brain-uebernehmen"]')), link: Boolean(n.querySelector(`a[href="#/brain/${id}"]`)) };
+  }, langId);
+  pruefe(nachLang.ende && nachLang.laenge > 3000 && !nachLang.karte && nachLang.link, `${name}: „Ändere …“ bei einem langen Eintrag (${nachLang.laenge} Zeichen): kein Vorschlag, der den Rest abschnitte – Hinweis und Link ins Brain, der Eintrag bleibt ganz`);
+  await page.evaluate(async (id) => { const b = window.GabiBrainAnsicht.aktuell.brain; await b.loeschen(id); await b.endgueltigLoeschen(id); }, langId);
+  // (2) veralteter Vorschlag: der Eintrag wird geändert, nachdem der Vorschlag entstand
+  const telefonVorher = (await knotenMitTitel(page, "Telefonzeiten")).inhalt;
+  await fragen(page, "Ändere die Telefonzeiten: samstags geschlossen");
+  await page.waitForSelector('.nachricht:last-child .brain-karte [data-aktion="brain-uebernehmen"]');
+  await page.evaluate(async () => { const b = window.GabiBrainAnsicht.aktuell.brain; const k = b.findeTitel("Telefonzeiten"); await b.aendern(k.id, { inhalt: `${k.inhalt}\n\nZwischendurch im Brain ergänzt.` }); });
+  pruefe(/Telefonzeiten/.test(await page.textContent(".nachricht:last-child .brain-karte .karte-meta")), `${name}: „Ändere die Telefonzeiten: …“ trifft die Telefonzeiten – auch wenn der neue Inhalt nach einem anderen Eintrag klingt`);
+  await page.click('.nachricht:last-child .brain-karte [data-aktion="brain-uebernehmen"]');
+  await page.waitForSelector(".nachricht:last-child .brain-karte .brain-stand-neu");
+  const standNachVersuch = (await knotenMitTitel(page, "Telefonzeiten")).inhalt;
+  const vorherGezeigt = await page.textContent(".nachricht:last-child .brain-karte .brain-diff-alt");
+  pruefe(/Zwischendurch im Brain ergänzt\./.test(standNachVersuch) && !/samstags geschlossen/.test(standNachVersuch) && /Zwischendurch im Brain ergänzt\./.test(vorherGezeigt),
+    `${name}: ein veralteter Vorschlag überschreibt eine spätere Änderung nicht – „Vorher“ zeigt den neuen Stand, mit Hinweis`);
+  await page.click('.nachricht:last-child .brain-karte [data-aktion="brain-verwerfen"]');
+  await page.evaluate(async (inhalt) => { const b = window.GabiBrainAnsicht.aktuell.brain; await b.aendern(b.findeTitel("Telefonzeiten").id, { inhalt }); }, telefonVorher);
+
   // --- Brain-Interview ---
   const offenVor = (await gesundheit(page)).zuKlaeren;
   await page.click('#chips-leiste [data-brain-start="interview"]');

@@ -936,13 +936,22 @@
       const w = form(text).split(" ");
       return w.some((_, i) => [1, 2, 3].some((n) => kuerzel.has(w.slice(i, i + n).join(""))));
     }
+    /**
+     * Eine eingetragene Lücke, deren Eintrag es nicht mehr gibt (gelöscht, rückgängig gemacht, Papierkorb geleert), ist
+     * wieder offen – sonst tauchte die Frage nie wieder auf.
+     */
+    function lueckeStand(l) {
+      if (!l || l.status !== "eingetragen") return l;
+      const k = l.knoten ? z.knoten.get(l.knoten) : null;
+      return k && !k.geloescht ? l : { ...l, status: "offen", knoten: "" };
+    }
     async function lueckeMelden(frage) {
       const text = einzeilig(frage).slice(0, 200);
       const s = schluessel(text);
       if (s.length < 4 || KUERZEL.test(text) || nenntPatienten(text)) return null;
       const t = jetzt();
       let l = [...z.luecken.values()].find((x) => x.schluessel === s);
-      if (l) l = { ...l, anzahl: (Number(l.anzahl) || 1) + 1, zuletzt: t };
+      if (l) l = { ...lueckeStand(l), anzahl: (Number(l.anzahl) || 1) + 1, zuletzt: t };
       else l = { id: `l${neueId().slice(1)}`, frage: text, schluessel: s, erstmals: t, zuletzt: t, anzahl: 1, status: "offen", knoten: "" };
       try {
         await ablage.lueckenSchreiben([l]);
@@ -981,7 +990,7 @@
       anAndere("luecke");
       return { ok: true };
     }
-    const luecken = ({ alle = false } = {}) => [...z.luecken.values()].filter((l) => alle || l.status === "offen").sort((a, b) => b.anzahl - a.anzahl || b.zuletzt - a.zuletzt);
+    const luecken = ({ alle = false } = {}) => [...z.luecken.values()].map(lueckeStand).filter((l) => alle || l.status === "offen").sort((a, b) => b.anzahl - a.anzahl || b.zuletzt - a.zuletzt);
 
     // ---- Nutzung, Audit ----
     /** Gabi hat diese Knoten für eine Antwort verwendet (kein Inhalt, nur Zähler und Zeit). */
@@ -1017,7 +1026,7 @@
     }
     const regelTexte = () => rechnen().eigene.filter((k) => k.art === "regel" && k.status === "bestaetigt").sort((a, b) => String(a.titel).localeCompare(String(b.titel), "de")).slice(0, 6)
       .map((k) => SUCHE.kuerzen(`${k.titel}: ${SUCHE.ohneVerweise(k.inhalt).replace(/\s+/g, " ")}`, 400));
-    const gesund = () => gesundheit({ knoten: rechnen().eigene, luecken: [...z.luecken.values()], nutzung: z.nutzung, jetzt: jetzt() });
+    const gesund = () => gesundheit({ knoten: rechnen().eigene, luecken: [...z.luecken.values()].map(lueckeStand), nutzung: z.nutzung, jetzt: jetzt() });
     /** Was Gabi für eine Frage mitbekommt (Form: Bauplan §5.1). Nie Patienten, Notizen, Berichte. */
     function kontextFuer(frage) {
       const c = rechnen();

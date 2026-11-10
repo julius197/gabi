@@ -16,10 +16,33 @@
     const artName = (id) => (W.GabiBrain.ARTEN.find((a) => a.id === id) || { name: id }).name;
     const audit = (faehigkeit) => { const b = brain(); if (b) b.auditSchreiben(faehigkeit); };
     let alterServerGesagt = false;
+    // Was der Server von einem Eintrag zu sehen bekam (Kontext der letzten Frage oder die laufende Interview-Frage). Ein
+    // Änderungsvorschlag ersetzt den GANZEN Inhalt: Hat der Server nur den gekürzten Anfang gesehen (der Kontext kürzt lange
+    // Einträge), ginge mit „Übernehmen“ der Rest verloren. Solche Vorschläge werden deshalb nicht angeboten.
+    const gesehen = new Map();
+    const ganzGesehen = (k) => gesehen.has(k.id) && gesehen.get(k.id) === String(k.inhalt || "").trim();
+    const zuLangText = (k) => `**${k.titel}** ist zu lang, um den Eintrag im Gespräch zu ändern – ich sehe hier nur den Anfang und würde den Rest abschneiden. Öffne ihn im Brain und ändere ihn dort.`;
+    const INTERVIEW_MAX = 2000; // so viel vom Inhalt einer offenen Frage geht ans Interview mit
 
     // ==========================================================
     // 1 Kontext für eine Frage
     // ==========================================================
+    /**
+     * Kontext für eine Nachricht. Bei „Ändere X: Y“ steht der Eintrag, der zu X passt, vorn – und ist sicher dabei, auch
+     * wenn der neue Inhalt Y nach etwas anderem klingt („… samstags geschlossen“ ↔ Öffnungszeiten).
+     */
+    function kontextMitZiel(b, text) {
+      const k = b.kontextFuer(text);
+      const befehl = IV.befehlErkennen(text);
+      if (!befehl || befehl.art !== "aendern") return k;
+      const ziel = b.kontextFuer(IV.aendernZiel(befehl.text)).knoten[0];
+      if (!ziel) return k;
+      const knoten = [ziel, ...k.knoten.filter((n) => n.id !== ziel.id)].slice(0, 8);
+      let zeichen = knoten.reduce((n, x) => n + x.titel.length + x.inhalt.length, 0);
+      while (knoten.length > 1 && zeichen > 6000) { const weg = knoten.pop(); zeichen -= weg.titel.length + weg.inhalt.length; }
+      return { ...k, knoten };
+    }
+
     /** Was Gabi für diese Frage aus dem Brain mitbekommt – oder null (Brain nicht bereit, Server kennt es nicht). */
     async function kontext(text) {
       if (!app.serverKannBrain()) {
@@ -28,7 +51,10 @@
       }
       try { await ansicht.bereit(); } catch { return null; }
       const b = brain();
-      return b ? b.kontextFuer(text) : null;
+      const k = b ? kontextMitZiel(b, text) : null;
+      gesehen.clear();
+      for (const n of (k && k.knoten) || []) gesehen.set(n.id, String(n.inhalt || "").trim());
+      return k;
     }
 
     // ==========================================================
@@ -73,11 +99,13 @@
         const typ = v.typ === "aendern" ? "aendern" : "neu";
         const alt = typ === "aendern" && b ? b.hol(String(v.id || "")) : null;
         if (typ === "aendern" && (!alt || alt.geschuetzt)) return true; // Ziel gibt es nicht (mehr) oder ist geschützt: kein Vorschlag
+        if (typ === "aendern" && !ganzGesehen(alt)) { gabi.brainZuLang = { id: alt.id, titel: alt.titel }; return true; } // sonst schnitte „Übernehmen“ den Rest ab
         const m = g === chat.gespraech && chat.modus && chat.modus.typ === "interview" ? chat.modus : null;
         gabi.karten.push({
           typ: "brain-vorschlag", id: app.neueId(), art: typ, knoten: alt ? alt.id : "",
           titel: String(v.titel || (alt ? alt.titel : "")).slice(0, 120), inhalt: String(v.inhalt || "").slice(0, 20000),
           vorher: alt ? { titel: alt.titel, inhalt: alt.inhalt, status: alt.status } : null,
+          rev: alt ? alt.rev : undefined, // der Stand, auf dem der Vorschlag aufbaut
           grund: String(v.grund || "vorschlag").slice(0, 30), ohneKi: Boolean(v.ohneKi),
           interview: Boolean(m && alt && m.reihe[m.index] === alt.id),
         });
@@ -97,6 +125,9 @@
       if (q.length) {
         const alle = q.map((x) => x.id).join(",");
         teile.push(`<div class="quellen brain-quellen"><span class="augenbraue">Aus dem Brain</span>${q.slice(0, 8).map((x) => `<a class="quelle brain-quelle" href="#/brain/${esc(x.id)}" data-brain-quellen="${esc(alle)}"><span class="brain-punkt" data-art="${esc(x.art)}"></span>${esc(x.titel)}</a>`).join("")}</div>`);
+      }
+      if (n.brainZuLang && !n.laeuft) {
+        teile.push(`<div class="brain-luecke-hinweis">${symbol("info")}<span>Kein Vorschlag: „${esc(n.brainZuLang.titel)}“ ist länger als das, was Gabi im Gespräch sieht – beim Übernehmen ginge der Rest verloren.</span><a class="knopf sekundaer klein" href="#/brain/${esc(n.brainZuLang.id)}">${symbol("graph")}Im Brain ändern</a></div>`);
       }
       if (n.luecke && !n.laeuft) {
         teile.push(n.luecke.eingetragen
@@ -158,7 +189,7 @@
             ${neu ? "" : `<div><span class="augenbraue">Vorher</span><div class="brain-diff-alt">${esc((k.vorher && k.vorher.inhalt) || "") || "(noch kein Inhalt)"}</div></div>`}
             <div><span class="augenbraue">${neu ? "Inhalt" : "Nachher"}</span><div class="brain-diff-neu">${esc(inhalt) || "(leer)"}</div></div>
           </div>`;
-      const hinweis = k.ohneKi ? '<p class="karte-meta">Ohne KI formuliert – bitte vor dem Übernehmen anpassen.</p>' : k.interview ? '<p class="karte-meta">Mit „Übernehmen“ gilt der Punkt als geklärt.</p>' : "";
+      const hinweis = `${k.standNeu ? '<p class="karte-meta brain-stand-neu" role="status">Der Eintrag wurde inzwischen geändert – „Vorher“ zeigt den aktuellen Stand. Bitte prüfe den Vorschlag, bevor du ihn übernimmst.</p>' : ""}${k.ohneKi ? '<p class="karte-meta">Ohne KI formuliert – bitte vor dem Übernehmen anpassen.</p>' : k.interview ? '<p class="karte-meta">Mit „Übernehmen“ gilt der Punkt als geklärt.</p>' : ""}`;
       const knoepfe = k.bearbeiten
         ? `<button class="knopf primaer klein" type="button" data-aktion="brain-uebernehmen"${gesperrt}>${symbol("haken")}Übernehmen</button><button class="knopf leise klein" type="button" data-aktion="brain-abbrechen"${gesperrt}>Abbrechen</button>`
         : `<button class="knopf primaer klein" type="button" data-aktion="brain-uebernehmen"${gesperrt}>${k.speichert ? '<span class="drehen"></span>Speichere …' : `${symbol("haken")}Übernehmen`}</button>
@@ -201,7 +232,9 @@
           const alt = b.hol(k.knoten);
           // Interview: der Punkt ist damit geklärt – aus der Frage wird bestätigtes Praxiswissen
           const felder = k.interview ? { inhalt, status: "bestaetigt", art: alt && alt.art === "frage" ? "praxiswissen" : alt ? alt.art : "praxiswissen", quelle: "Interview" } : { inhalt };
-          r = await b.aendern(k.knoten, felder, { grund: k.interview ? "interview" : "vorschlag" });
+          // nur auf dem Stand, den der Vorschlag kannte: wurde der Eintrag inzwischen geändert (im Brain, in einem anderen
+          // Fenster), überschreibt ein alter Vorschlag das nicht stillschweigend
+          r = await b.aendern(k.knoten, felder, { grund: k.interview ? "interview" : "vorschlag", ...(Number.isInteger(k.rev) ? { erwartet: k.rev } : {}) });
         }
       } finally {
         k.speichert = false;
@@ -209,6 +242,11 @@
       if (!r.ok) {
         const text = r.konflikt ? "Der Eintrag wurde inzwischen geändert – bitte den Vorschlag noch einmal prüfen." : Object.values(r.fehler || { x: "Das hat nicht geklappt." })[0];
         if (r.fehler && (r.fehler.titel || r.fehler.inhalt)) k.bearbeiten = true; // gleich zum Anpassen öffnen
+        if (r.konflikt) {
+          // „Vorher“ zeigt ab jetzt den neuen Stand; erst ein zweites, bewusstes „Übernehmen“ gilt dann für diesen Stand
+          const jetzt = b.hol(k.knoten);
+          if (jetzt) { k.vorher = { titel: jetzt.titel, inhalt: jetzt.inhalt, status: jetzt.status }; k.rev = jetzt.rev; k.standNeu = true; delete k.bearbeiten; }
+        }
         app.nachrichtNeuZeichnen(n);
         toast(text, { art: "warn", dauer: 6000 });
         return;
@@ -323,6 +361,16 @@
       if (!k || k.status !== "zu_klaeren") { frageStellen(chat.gespraech); return; }
       // die Knöpfe der Frage sind damit erledigt
       for (const n of chat.nachrichten) for (const karte of n.karten || []) if (karte.typ === "brain-interview" && karte.knoten === k.id && !karte.erledigt) { karte.erledigt = true; app.nachrichtNeuZeichnen(n); }
+      if (String(k.inhalt || "").length > INTERVIEW_MAX) {
+        // der Vorschlag ersetzte den ganzen Eintrag – mit nur einem Teil davon ginge der Rest verloren
+        const g = chat.gespraech;
+        app.nutzerNachricht(text, art);
+        app.lokaleAntwort(`${zuLangText(k)} Ich mache mit der nächsten Frage weiter.`, [{ typ: "brain-treffer", id: app.neueId(), treffer: [{ id: k.id }] }], g, { brain: true });
+        weiter(g, k.id);
+        return;
+      }
+      gesehen.clear();
+      gesehen.set(k.id, String(k.inhalt || "").trim());
       if (!app.serverKannBrain()) {
         // Server ohne Brain (z. B. ältere Live-Version): der Vorschlag entsteht hier, ohne KI
         const g = chat.gespraech;
@@ -335,7 +383,7 @@
         app.gespraechMerken(g);
         return;
       }
-      app.senden({ text, senden: `Antwort auf die offene Frage „${k.titel}“: ${text}`, aktion: { typ: "brain_antwort", knoten: { id: k.id, titel: k.titel, inhalt: String(k.inhalt || "").slice(0, 2000) }, antwort: text.slice(0, 4000) }, art });
+      app.senden({ text, senden: `Antwort auf die offene Frage „${k.titel}“: ${text}`, aktion: { typ: "brain_antwort", knoten: { id: k.id, titel: k.titel, inhalt: String(k.inhalt || "") }, antwort: text.slice(0, 4000) }, art });
     }
 
     // ==========================================================
@@ -367,6 +415,17 @@
         }
         audit("brain-suche");
         return true;
+      }
+      if (befehl.art === "aendern" && app.serverKannBrain()) {
+        // Ziel ist der beste Treffer zur Bitte. Sieht Gabi davon nur den gekürzten Anfang, gibt es keinen Vorschlag.
+        const erster = kontextMitZiel(b, text).knoten[0];
+        const ziel = erster ? b.hol(erster.id) : null;
+        if (ziel && String(ziel.inhalt || "").trim() !== erster.inhalt) {
+          app.nutzerNachricht(text, art);
+          app.lokaleAntwort(zuLangText(ziel), [{ typ: "brain-treffer", id: app.neueId(), treffer: [{ id: ziel.id }] }], chat.gespraech, { brain: true });
+          audit("brain-aendern");
+          return true;
+        }
       }
       return false; // „Merke dir“ und „Ändere“ gehen an Gabi – sie antwortet mit einer Vorschlagskarte
     }

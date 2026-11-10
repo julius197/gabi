@@ -142,6 +142,10 @@ cd worker && npm run brain     # http://localhost:8790 · Zugangscode: test · D
   Brain.“). **Chip „Brain füllen“**: Gabi stellt die offenen Fragen nacheinander, macht aus der Antwort einen Vorschlag
   (Vorher/Nachher) und speichert erst nach „Übernehmen“. Befehle: „Merke dir: …“, „Ändere …“, „Was weißt du über …?“,
   „Wie vollständig ist mein Brain?“.
+- **Ohne KI (Demo-Modus und `npm run brain`)** antwortet ein Assistent, der nur wörtlich aus den gefundenen Einträgen
+  zitiert (`brain-suche.js`). Grundsatz: lieber eine Lücke als eine Antwort am Thema vorbei – die Regeln stehen im
+  `BRAIN-BAUPLAN.md` §4, ein Katalog von rund 80 Fragen in `worker/test/brain-fragen.test.js`. Er gleicht Tippfehler
+  aus („Öfnungszeiten“), kennt Wortfelder („anrufen“ ↔ „Telefon“) und lehnt medizinische Rat-Fragen ab.
 
 **Wo liegt das Brain?** Nur auf diesem Gerät: IndexedDB `gabi-brain` (Demo getrennt: `gabi-brain-demo`), sonst
 localStorage, zur Not nur im Tab (mit Hinweis). Zwei offene Tabs überschreiben sich nicht (jede Änderung prüft den
@@ -194,9 +198,11 @@ gelaufen. Dafür gibt es einen **eigenen Staging-Worker** – der Live-Worker `g
 
 **Was testen:**
 - eine Praxisfrage, die im Brain steht („Wo ist die Praxis Kieslingstraße?“) → Antwort mit Quellen-Chips
-- eine, die nicht im Brain steht („Habt ihr Parkplätze?“) → genau „Dazu steht noch nichts im Brain.“ und ein Eintrag
-  unter „Lücken“
-- einen Entwurf und einen Zu-klären-Punkt → „laut Entwurf, noch nicht bestätigt“ bzw. „das ist im Brain noch offen“
+- eine, die nicht im Brain steht („Habt ihr WLAN für Patienten?“) → genau „Dazu steht noch nichts im Brain.“ und ein
+  Eintrag unter „Lücken“
+- einen Entwurf („Macht ihr Hausbesuche?“ in der Demo) und einen Zu-klären-Punkt („Wo kann ich parken?“) → „laut Entwurf,
+  noch nicht bestätigt“ bzw. „das ist im Brain noch offen“
+- eine medizinische Rat-Frage („Welche Übungen helfen bei …?“) → Absage, keine Lücke
 - „Merke dir: …“ und „Ändere …“ → Vorschlagskarte, gespeichert wird erst mit „Übernehmen“
 - „Brain füllen“ → Gabi formuliert aus deiner Antwort den Eintrag
 - ein Diktat und eine Frage zu einer Notiz → wie bisher (die drei Test-Patienten sind leer und verschwinden, wenn

@@ -552,7 +552,23 @@
   }
   const BRAIN_BEISPIELANTWORT = "Beispielantwort aus dem Demo-Modus – hier stünde, was du gesagt hast.";
   const BRAIN_VORSCHLAG_TEXT = "Passt das so? Gespeichert wird erst, wenn du auf „Übernehmen“ tippst.";
-  const FRAGEFORM = /\?\s*$|^(wo|wann|wie|was|wer|welche[rsn]?|gibt es|habt ihr|bietet ihr|kann man|macht ihr|seit wann)\b/i;
+  // Eine ausformulierte Frage zur Praxis („Habt ihr …?“, „Wo ist …?“) geht ans Brain. Bloße Stichwörter („Theraband?“)
+  // suchen wie bisher erst in den Notizen – steht dort nichts und war es eine Frage, ist es eine Lücke im Brain.
+  const PRAXISFORM = /^(?:und\s+)?(wo|wann|wie|was|wer|wen|wem|welche[rsn]?|wieso|warum|gibt es|gibts|habt ihr|hat die praxis|bietet ihr|bieten wir|kann man|kann ich|macht ihr|machen wir|seit wann|seid ihr|sind wir|nehmt ihr|nehmen wir|ist die praxis|ist das|behandelt ihr|brauche ich|braucht man|arbeitet ihr)\b/i;
+  const ENDET_ALS_FRAGE = /\?\s*$/;
+  // Der Name der Praxis steht in fast keinem Eintrag – eine Antwort muss ihn nicht enthalten („Seit wann gibt es PhysioWorks?“)
+  const BRAIN_NEBENSACHE = ["PhysioWorks", "Physio Works"];
+  // Mit Brain: Fragen nach Medikamenten, Übungen oder einer Diagnose sind keine Wissenslücke der Praxis. Gabi gibt dazu
+  // nichts aus (Kernregel) – auch dann nicht, wenn jemand so etwas ins Brain geschrieben hat. Eng gefasst, damit
+  // Praxisfragen („Bietet ihr Akupunktur bei Migräne an?“) Praxisfragen bleiben.
+  const BRAIN_RAT = new RegExp([
+    "\\b(ibuprofen|paracetamol|diclofenac|voltaren|novalgin|aspirin|kortison|cortison)\\b",
+    "\\bwelche[sn]? (medikament|schmerzmittel|tablette|salbe)",
+    "\\b(soll|sollte|darf|kann|muss) (ich|er|sie|man|der patient|die patientin)\\b.{0,60}\\b(nehmen|einnehmen|schlucken|spritzen)\\b",
+    "\\bwelche übung(en)?\\b.{0,40}\\b(hilft|helfen|gut|bei|gegen|empfiehl|empfehl)",
+    "\\bwas hilft (bei|gegen)\\b",
+    "\\bwas (hab|habe|hat) (ich|er|sie)\\b(?! .{0,30}\\b(gesagt|gebucht|bezahlt|gewollt)\\b)",
+  ].join("|"), "i");
 
   /**
    * Ein Gesprächsschritt im Demo-Modus: Absicht erkennen, Werkzeug nutzen, kurz antworten.
@@ -574,9 +590,11 @@
 
     const suche = brain ? brainModul("GabiBrainSuche", "./brain-suche.js") : null;
     const antworten = brain ? brainAntwort || (suche && suche.antwortAusKontext) : null;
-    if (brain && antworten && a.art !== "rat") {
+    let brainLuecke = null; // Stichwort-Frage ohne Treffer im Brain: erst die Notizen, dann (wenn auch dort nichts steht) die Lücke
+    if (brain && antworten) {
       const hilfen = brainHilfen || brainModul("GabiBrainInterview", "./brain-interview.js");
       const knoten = Array.isArray(brain.knoten) ? brain.knoten : [];
+      // Befehle zuerst: „Merke dir: Wir empfehlen, zehn Minuten früher da zu sein“ ist Praxiswissen, keine Bitte um Rat
       const befehl = hilfen ? hilfen.befehlErkennen(letzte) : null;
       if (befehl && befehl.art === "merken") {
         await warte(450);
@@ -586,22 +604,31 @@
       if (befehl && befehl.art === "aendern") {
         await warte(450);
         if (!knoten.length) return sag("Dazu steht noch nichts im Brain – ich weiß nicht, welchen Eintrag ich ändern soll. Mit „Merke dir: …“ lege ich einen neuen an.");
-        senden({ t: "brain_vorschlag", vorschlag: hilfen.aendernOhneKi({ knoten: knoten[0], wunsch: befehl.text }) });
-        return sag(`Ich habe eine Änderung für **${knoten[0].titel}** vorbereitet. ${BRAIN_VORSCHLAG_TEXT}`);
+        // welcher Eintrag? Der, der zum Teil vor dem Doppelpunkt passt („die Telefonzeiten“) – nicht zum neuen Inhalt
+        const zielText = hilfen.aendernZiel ? hilfen.aendernZiel(befehl.text) : befehl.text;
+        const bester = suche && suche.kontextWaehlen ? suche.kontextWaehlen({ frage: zielText, knoten, maxKnoten: 1 })[0] : null;
+        const ziel = (bester && knoten.find((x) => x.id === bester.id)) || knoten[0];
+        senden({ t: "brain_vorschlag", vorschlag: hilfen.aendernOhneKi({ knoten: ziel, wunsch: befehl.text }) });
+        return sag(`Ich habe eine Änderung für **${ziel.titel}** vorbereitet. ${BRAIN_VORSCHLAG_TEXT}`);
       }
-      // Praxisfrage? Fakten zur Praxis (nicht die Bedienung der App), Unbekanntes und freie Suchwörter ohne Notiz-Auftrag
-      const ausNotizen = /^suche in meinen notizen:/i.test(String(letzte || "").trim());
-      const praxis = (a.art === "praxis" && PRAXIS.some((x) => x.text === a.text)) || a.art === "unbekannt" || (a.art === "suche" && !ausNotizen);
+      // Praxisfrage? Fakten zur Praxis (nicht die Bedienung der App), Unbekanntes und freie Suchwörter – außer es ist
+      // ausdrücklich von Notizen die Rede („Suche in meinen Notizen: …“, „Was steht in den Notizen zu …?“)
+      const frage = String(letzte || "").trim();
+      const ausNotizen = /\bnotiz/i.test(frage);
+      const praxis = a.art !== "rat" && ((a.art === "praxis" && PRAXIS.some((x) => x.text === a.text)) || a.art === "unbekannt" || (a.art === "suche" && !ausNotizen));
       if (praxis) {
-        const r = antworten(letzte, knoten);
-        // freie Suchwörter ohne Treffer im Brain und ohne Frageform bleiben eine Notiz-Suche (unten)
-        if (r.quellen.length || a.art !== "suche" || FRAGEFORM.test(String(letzte || "").trim())) {
+        // medizinischer Rat: ablehnen wie ohne Brain – keine Antwort aus dem Brain und keine Lücke
+        if (BRAIN_RAT.test(frage)) { await warte(450); return sag(ANTWORT.rat); }
+        const r = antworten(letzte, knoten, { nebensache: BRAIN_NEBENSACHE });
+        if (r.quellen.length || a.art !== "suche" || PRAXISFORM.test(frage)) {
           await warte(450);
           if (r.quellen.length) senden({ t: "quellen", knoten: r.quellen });
           await sag(r.text);
           if (r.luecke) senden({ t: "luecke", frage: r.luecke });
           return undefined;
         }
+        // Stichwörter ohne Treffer im Brain: weiter unten in den Notizen suchen
+        if (ENDET_ALS_FRAGE.test(frage) && r.luecke) brainLuecke = r;
       }
     }
 
@@ -635,7 +662,11 @@
     if (a.art === "suche") {
       const r = await nutze("notizen_suchen", { suchbegriff: a.suchbegriff, anzahl: 5 });
       const e = r.ergebnis;
-      if (r.fehler || !e.notizen.length) return sag("Dazu habe ich nichts gespeichert.");
+      if (r.fehler || !e.notizen.length) {
+        // mit Brain: eine Frage, zu der weder im Brain noch in den Notizen etwas steht, ist eine Wissenslücke
+        if (brainLuecke) { await sag(brainLuecke.text); senden({ t: "luecke", frage: brainLuecke.luecke }); return undefined; }
+        return sag("Dazu habe ich nichts gespeichert.");
+      }
       const wort = a.suchbegriff.split(" ")[0];
       const zeilen = e.notizen.map((n) => {
         const passend = ALLE.flatMap((x) => n[x] || []).find((p) => p.toLowerCase().includes(wort)) || ALLE.flatMap((x) => n[x] || [])[0] || "";

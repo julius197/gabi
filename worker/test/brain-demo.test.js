@@ -172,7 +172,7 @@ describe("Mit Brain-Kontext: alles andere bleibt", () => {
     // … selbst wenn fast jedes Suchwort im Brain stünde
     const viele = "Akupunktur Arthrose Migräne Tennisarm";
     const kontextViele = brain.kontextFuer(viele);
-    expect(S.antwortAusKontext(`Suche in meinen Notizen: ${viele}`, kontextViele.knoten).quellen).toContain("s-leistung-akupunktur"); // das Brain hätte geantwortet
+    expect(S.antwortAusKontext(viele, kontextViele.knoten).quellen).toContain("s-leistung-akupunktur"); // als Frage hätte das Brain geantwortet
     const e2 = await frag(`Suche in meinen Notizen: ${viele}`, kontextViele);
     expect(von(e2, "quellen").filter((q) => q.knoten)).toEqual([]);
     expect(von(e2, "luecke")).toEqual([]);
@@ -189,15 +189,99 @@ describe("Mit Brain-Kontext: alles andere bleibt", () => {
     expect(von(unsinn, "luecke")).toEqual([]);
   });
 
-  // Bekannter Fehler in demo.js (gemeldet): eine Notiz-Suche in Frageform ohne Kürzel („Theraband?“) wird bei aktivem Brain
-  // zur Praxisfrage – die Notizen werden nicht mehr durchsucht und die Frage landet als Lücke im Brain. Ohne Brain findet
-  // dieselbe Frage zwei Notizen. Sobald demo.js das behebt (erst die Notizen durchsuchen, dann die Lücke), schlägt dieser
-  // Test an: dann „it.fails“ durch „it“ ersetzen.
-  it.fails("BEKANNTER FEHLER: „Theraband?“ findet auch mit Brain die Notizen (heute: „Dazu steht noch nichts im Brain.“ + Lücke)", async () => {
-    expect(text(await frag("Theraband?"))).toMatch(/2 Notizen zu „Theraband“ gefunden/); // ohne Brain stimmt es
+  // Stichwörter („Theraband?“) sind auch mit Brain erst eine Suche in den Notizen – wie ohne Brain. Früher wurde daraus
+  // sofort eine Praxisfrage: die Notizen blieben ungefragt und die Frage landete als Lücke im Brain.
+  it("Stichwort mit Fragezeichen: erst die Notizen – nur wenn auch dort nichts steht, ist es eine Lücke", async () => {
+    expect(text(await frag("Theraband?"))).toMatch(/2 Notizen zu „Theraband“ gefunden/); // ohne Brain
     const e = await frag("Theraband?", LEER);
     expect(text(e)).toMatch(/2 Notizen zu „Theraband“ gefunden/);
     expect(von(e, "luecke")).toEqual([]);
+    expect(von(e, "quellen").filter((q) => q.knoten)).toEqual([]);
+    // weder im Brain noch in den Notizen: Lücke (mit Fragezeichen) bzw. „nichts gespeichert“ (ohne)
+    const wickel = await frag("Wickeltisch?", LEER);
+    expect(text(wickel)).toBe(NICHTS);
+    expect(von(wickel, "luecke")).toEqual([{ t: "luecke", frage: "Wickeltisch?" }]);
+    const ohneFrage = await frag("Wickeltisch", LEER);
+    expect(text(ohneFrage)).toBe("Dazu habe ich nichts gespeichert.");
+    expect(von(ohneFrage, "luecke")).toEqual([]);
+    // steht das Stichwort im Brain, kommt die Antwort von dort – ohne Umweg über die Notizen
+    const brain = await seedBrain(true);
+    const aku = await frag("Akupunktur?", brain.kontextFuer("Akupunktur?"));
+    expect(von(aku, "quellen")[0].knoten).toContain("s-leistung-akupunktur");
+  });
+
+  it("ausformulierte Praxisfrage ohne Treffer: gleich die Lücke – die Notizen der Patienten werden dafür nicht durchsucht", async () => {
+    const e = await frag("Habt ihr einen Wickeltisch?", LEER);
+    expect(text(e)).toBe(NICHTS);
+    expect(von(e, "luecke")).toEqual([{ t: "luecke", frage: "Habt ihr einen Wickeltisch?" }]);
+    expect(von(e, "status")).toEqual([]); // kein Werkzeug gelaufen („Ich suche in den Notizen …“ erschiene als Status)
+    expect(von(await frag("Theraband?", LEER), "status").length).toBeGreaterThan(0); // Gegenstück: hier lief die Notiz-Suche
+    // ist ausdrücklich von Notizen die Rede, bleibt es eine Notiz-Suche – in jeder Formulierung
+    for (const frage of ["Was steht in den Notizen zu Theraband?", "Suche in meinen Notizen: Theraband", "Gibt es eine Notiz mit Theraband?"]) {
+      const n = await frag(frage, LEER);
+      expect(text(n), frage).toMatch(/Notizen zu „Theraband“ gefunden/);
+      expect(von(n, "luecke"), frage).toEqual([]);
+    }
+  });
+
+  it("medizinischer Rat ist keine Wissenslücke: Gabi lehnt ab – auch wenn das Brain etwas dazu enthielte", async () => {
+    const eintrag = { id: "k-ibu", art: "praxiswissen", status: "bestaetigt", titel: "Ibuprofen", inhalt: "Bei Schmerzen 400 mg Ibuprofen nehmen. Übungen bei Bandscheibenvorfall: Rückenstrecker.", tags: ["medikament"] };
+    const mitWissen = { v: 1, knoten: [eintrag] };
+    const absage = text(await frag("Welche Übungen soll ich empfehlen?")); // die bisherige Absage, wörtlich
+    expect(absage).toMatch(/Diagnosen und Empfehlungen gebe ich nicht/);
+    for (const frage of ["Soll ich Ibuprofen nehmen?", "Welche Übungen helfen bei einem Bandscheibenvorfall?", "Was hilft gegen Rückenschmerzen?", "Welches Schmerzmittel ist gut?", "Darf er die Tablette nehmen?"]) {
+      for (const kontext of [LEER, mitWissen]) {
+        const e = await frag(frage, kontext);
+        expect(text(e), frage).toBe(absage);
+        expect(von(e, "luecke"), frage).toEqual([]);
+        expect(von(e, "quellen").filter((q) => q.knoten), frage).toEqual([]);
+        expect(text(e)).not.toMatch(/400 mg|Rückenstrecker/);
+      }
+    }
+    // Praxisfragen, die nur so ähnlich klingen, bleiben Praxisfragen
+    const brain = await seedBrain(true);
+    for (const frage of ["Bietet ihr Akupunktur bei Migräne an?", "Kann ich als Selbstzahler kommen?"]) {
+      const e = await frag(frage, brain.kontextFuer(frage));
+      expect(text(e), frage).not.toBe(absage);
+      expect(von(e, "quellen").length, frage).toBe(1);
+    }
+    const mitbringen = await frag("Muss ich ein Handtuch mitbringen?", LEER);
+    expect(text(mitbringen)).toBe(NICHTS);
+    expect(von(mitbringen, "luecke")).toHaveLength(1);
+  });
+
+  it("„Merke dir“ geht vor: ein Satz mit „empfehlen“ ist Praxiswissen, keine Bitte um Rat", async () => {
+    const e = await frag("Merke dir: Wir empfehlen, zehn Minuten früher da zu sein.", LEER);
+    expect(von(e, "brain_vorschlag")).toHaveLength(1);
+    expect(von(e, "brain_vorschlag")[0].vorschlag).toMatchObject({ typ: "neu", ohneKi: true });
+    expect(von(e, "brain_vorschlag")[0].vorschlag.inhalt).toMatch(/zehn Minuten früher/);
+    expect(text(e)).toBe(VORSCHLAG);
+    // ohne Brain bleibt derselbe Satz, was er war (die Absage)
+    expect(text(await frag("Merke dir: Wir empfehlen, zehn Minuten früher da zu sein."))).toMatch(/Empfehlungen gebe ich nicht/);
+  });
+
+  it("„Ändere X: Y“ trifft den Eintrag X – auch wenn Y nach einem anderen Eintrag klingt", async () => {
+    const brain = await seedBrain(true);
+    const bitte = "Ändere die Telefonzeiten: samstags geschlossen";
+    const kontext = brain.kontextFuer(bitte);
+    // die Suche über den ganzen Satz führt zum offenen Punkt über die Öffnungszeiten („samstags geschlossen“) …
+    expect(kontext.knoten[0].titel).toBe("Wann sind die Praxen selbst geöffnet?");
+    expect(kontext.knoten.map((k) => k.id)).toContain("s-telefonzeiten");
+    // … der Vorschlag gilt trotzdem den Telefonzeiten
+    const e = await frag(bitte, kontext);
+    const v = von(e, "brain_vorschlag")[0].vorschlag;
+    expect(v).toMatchObject({ typ: "aendern", id: "s-telefonzeiten", ohneKi: true });
+    expect(v.inhalt).toMatch(/7:30–16:00/); // der bisherige Inhalt bleibt
+    expect(v.inhalt).toMatch(/samstags geschlossen/);
+    expect(text(e)).toMatch(/Änderung für \*\*Telefonzeiten\*\* vorbereitet/);
+  });
+
+  it("der Name der Praxis muss in der Antwort nicht vorkommen", async () => {
+    const brain = await seedBrain(true);
+    const frage = "Seit wann gibt es PhysioWorks?";
+    const e = await frag(frage, brain.kontextFuer(frage));
+    expect(von(e, "quellen")[0].knoten).toEqual(["s-geschichte"]);
+    expect(text(e)).toMatch(/Gegründet 2011/);
   });
 
   it("Bedienung, Begrüßung, Dank und die Absage an Diagnosen/Empfehlungen bleiben wörtlich gleich", async () => {

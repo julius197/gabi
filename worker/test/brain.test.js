@@ -1307,6 +1307,34 @@ describe("Wissenslücken", () => {
     expect(brain.eigene()).toHaveLength(1);
   });
 
+  it("eine eingetragene Lücke ist wieder offen, sobald es ihren Eintrag nicht mehr gibt (gelöscht, rückgängig gemacht)", async () => {
+    const { brain } = await neu();
+    const l = await brain.lueckeMelden("Gibt es einen Wickeltisch?");
+    const r = await brain.lueckeEintragen(l.id);
+    expect(brain.luecken()).toEqual([]);
+    expect(brain.gesundheit().luecken).toBe(0);
+    // Eintrag im Papierkorb: die Frage ist wieder eine offene Lücke – in der Liste und in der Gesundheit
+    await brain.loeschen(r.knoten.id);
+    expect(brain.luecken()).toHaveLength(1);
+    expect(brain.luecken()[0]).toMatchObject({ id: l.id, frage: "Gibt es einen Wickeltisch?", status: "offen", knoten: "" });
+    expect(brain.gesundheit().luecken).toBe(1);
+    // aus dem Papierkorb zurückgeholt: wieder erledigt
+    await brain.wiederherstellen(r.knoten.id);
+    expect(brain.luecken()).toEqual([]);
+    // endgültig gelöscht und erneut gefragt: zählt weiter, bleibt offen und lässt sich neu eintragen
+    await brain.loeschen(r.knoten.id);
+    await brain.endgueltigLoeschen(r.knoten.id);
+    const wieder = await brain.lueckeMelden("Gibt es einen Wickeltisch?");
+    expect(wieder).toMatchObject({ id: l.id, status: "offen", knoten: "", anzahl: 2 });
+    const r2 = await brain.lueckeEintragen(wieder.id);
+    expect(r2.ok).toBe(true);
+    expect(r2.knoten.id).not.toBe(r.knoten.id);
+    expect(brain.luecken()).toEqual([]);
+    // Rückgängig nimmt den neuen Eintrag wieder weg: die Frage ist wieder offen
+    await brain.rueckgaengig();
+    expect(brain.luecken().map((x) => x.status)).toEqual(["offen"]);
+  });
+
   it("verwerfen entfernt die Lücke; höchstens 200 – zuerst fallen Erledigte, dann die am längsten nicht Gefragten", async () => {
     const { brain, zeit, ablage } = await neu();
     const erste = await brain.lueckeMelden("Frage Nummer null?");

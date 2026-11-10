@@ -37,6 +37,9 @@
 
   // ---------- Befehle im Gespräch ----------
   const MERKEN = /^\s*(?:gabi[,:]?\s+)?(?:bitte\s+)?merk(?:e)?\s+dir(?:\s+bitte)?\s*[:,–-]?\s*(?:dass\s+)?(\S[\s\S]{2,})$/i;
+  // „Kannst du dir merken, dass …?“ · „Schreib ins Brain: …“ · „Trag bitte ins Brain ein, dass …“
+  const MERKEN_FRAGE = /^\s*(?:gabi[,:]?\s+)?(?:kannst|könntest|koenntest|würdest|wuerdest)\s+du\s+dir\s+(?:bitte\s+)?merken\s*[:,–-]?\s*(?:dass\s+)?(\S[\s\S]{2,}?)\s*\??\s*$/i;
+  const MERKEN_BRAIN = /^\s*(?:gabi[,:]?\s+)?(?:bitte\s+)?(?:schreib(?:e)?|trag(?:e)?|nimm|speicher(?:e)?|notier(?:e)?)\s+(?:das\s+|dir\s+)?(?:bitte\s+)?(?:ins|in\s+das|im)\s+brain(?:\s+ein|\s+auf)?\s*[:,–-]?\s*(?:dass\s+)?(\S[\s\S]{2,})$/i;
   const AENDERN = /^\s*(?:gabi[,:]?\s+)?(?:bitte\s+)?(?:änder(?:e|n)?|aender(?:e|n)?|korrigier(?:e|en)?|aktualisier(?:e|en)?|berichtig(?:e|en)?)\s+(\S[\s\S]{2,})$/i;
   const WISSEN = /^\s*(?:gabi[,:]?\s+)?was\s+wei(?:ß|ss)t\s+du\s+(?:über|ueber|zum|zur|zu|von|vom)\s+(\S[\s\S]*?)\s*\??\s*$/i;
   const GESUNDHEIT = /wie\s+(?:vollständig|vollstaendig|gut|aktuell|gesund|voll)\s+ist\s+(?:mein|das|unser|dein)\s+brain|brain[- ]?(?:stand|status|gesundheit)\b|was\s+fehlt\s+(?:noch\s+)?im\s+brain|wie\s+steht\s+es\s+um\s+(?:mein|das|unser)\s+brain/i;
@@ -51,7 +54,7 @@
     if (!t || t.length > 4000) return null;
     if (INTERVIEW.test(t)) return { art: "interview", text: "" };
     if (GESUNDHEIT.test(t) && t.length <= 120) return { art: "gesundheit", text: "" };
-    let m = MERKEN.exec(t);
+    let m = MERKEN.exec(t) || MERKEN_FRAGE.exec(t) || MERKEN_BRAIN.exec(t);
     if (m && !NOTIZ_BEZUG.test(m[1])) {
       // bei sehr kurzem Inhalt („Merke dir: ab“) rutscht das Trennzeichen sonst mit in den Text
       const inhalt = glatt(m[1]).replace(/^[:,–-]+\s*/, "");
@@ -62,6 +65,16 @@
     m = WISSEN.exec(t);
     if (m && !NOTIZ_BEZUG.test(m[1])) return { art: "wissen", text: glatt(m[1]).replace(/[?.!]+$/, "") };
     return null;
+  }
+
+  /**
+   * Bei „Ändere X: Y“ der Teil, der sagt, WAS geändert werden soll (X). Daran wird der Eintrag gesucht – nicht am neuen
+   * Inhalt: „Ändere die Telefonzeiten: samstags geschlossen“ meint die Telefonzeiten, nicht den Eintrag zu Öffnungszeiten.
+   */
+  function aendernZiel(text) {
+    const t = glatt(text);
+    const m = /^(.{3,80}?)\s*(?::|–|—|\s-\s|,\s*dass\b|\s(?:auf|so,?\s*dass)\s)/i.exec(t);
+    return m && m[1].trim().length >= 3 ? m[1].trim() : t;
   }
 
   // ---------- Vorschläge ohne KI ----------
@@ -153,6 +166,6 @@
 
   return {
     TITEL_MAX, INHALT_MAX, DEMO_ANTWORT,
-    befehlErkennen, vorschlagOhneKi, merkenOhneKi, aendernOhneKi, reihenfolge, frageText, gesundheitText, alsSatz, kuerzen,
+    befehlErkennen, aendernZiel, vorschlagOhneKi, merkenOhneKi, aendernOhneKi, reihenfolge, frageText, gesundheitText, alsSatz, kuerzen,
   };
 });

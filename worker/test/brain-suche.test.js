@@ -53,7 +53,8 @@ describe("Normalisierung (deutsch)", () => {
     expect(S.normal("Café – Crème brûlée!")).toBe("cafe creme brulee");
     expect(S.normal("85 € pro Einheit")).toBe("85 euro pro einheit");
     expect(S.normal("  Mo–Fr:\t7:30–17:00\nUhr ")).toBe("mo fr 7 30 17 00 uhr");
-    expect(S.normal("E-Mail: info@physio-works.de")).toBe("e mail info physio works de");
+    expect(S.normal("E-Mail: info@physio-works.de")).toBe("email info physio works de"); // „E-Mail“ ist ein Wort
+    expect(S.normal("Eine E-Mail-Adresse oder Mailadresse")).toBe("eine email oder email"); // … samt „-Adresse“
     for (const leer of [null, undefined, "", "   ", "–?!"]) expect(S.normal(leer)).toBe("");
     expect(S.normal(42)).toBe("42");
   });
@@ -104,8 +105,9 @@ describe("Normalisierung (deutsch)", () => {
   it("Suchwörter: ohne Füllwörter, als Stämme, jedes nur einmal – auch „Habt ihr …“ und „Seid ihr …“", () => {
     expect(S.woerter("Wann sind die Praxen geöffnet?")).toEqual(["prax", "geoeffnet"]);
     expect(S.woerter("Was kostet die Osteopathie bei euch?")).toEqual(["kostet", "osteopathi"]);
-    expect(S.woerter("Standorte, Standorte und nochmal Standort")).toEqual(["standort", "nochmal"]);
-    expect(S.woerter("Habt ihr eine E-Mail-Adresse?")).toEqual(["mail", "adress"]);
+    expect(S.woerter("Standorte, Standorte und nochmal Standort")).toEqual(["standort"]);
+    expect(S.woerter("Standorte, Standorte und Parken am Standort")).toEqual(["standort", "park"]);
+    expect(S.woerter("Habt ihr eine E-Mail-Adresse?")).toEqual(["email"]); // nicht „Adresse“ – das suchte nach den Standorten
     expect(S.woerter("Seid ihr barrierefrei?")).toEqual(["barrierefrei"]);
     expect(S.woerter("Was ist das?")).toEqual([]);
     expect(S.woerter("Zimmer 5 im 2. Stock")).toEqual(["zimm", "5", "2", "stock"]);
@@ -162,15 +164,19 @@ describe("Rangfolge der Suche", () => {
     ];
     const t = suche(knoten, "Was sind die Kosten?");
     expect(ids(t)).toEqual(["kosten", "preis"]);
-    expect(t[1].deckung).toBe(0); // nur über das Wortfeld gefunden
-    expect(t[1].stark).toBe(false);
+    // über das Wortfeld gefunden: schwächer gewertet, aber das Suchwort gilt als gefunden – sonst käme der Knoten nie
+    // in Gabis Kontext („Wer ist der Chef?“ fände den Inhaber nicht)
+    expect(t[1].punkte).toBeLessThan(t[0].punkte * 0.6);
+    expect(t[1].deckung).toBe(1);
+    expect(t[1].stark).toBe(true);
     // das Wortfeld greift auch, wenn der Stamm anders aussieht als das Wort („Preis“ → „prei“, „Inhaber“ → „inhab“)
     expect(S.stamm("preis")).toBe("prei");
     expect(ids(suche(knoten, "Preis", { praefix: false }))).toEqual(["preis", "kosten"]);
     expect(ids(suche([k("c", "Leitung", "Der Chef ist Philipp"), k("t", "Team", "zwölf")], "Wer ist der Inhaber?"))).toEqual(["c"]);
     // Fragewörter sagen, wonach gesucht wird: „wo“ → Standort/Adresse, „wie viel“ → Preis
     expect(ids(suche([k("s", "Standorte", "zwei in Nürnberg"), k("x", "Team", "zwölf")], "Wo seid ihr?"))).toEqual(["s"]);
-    expect(ids(suche(knoten, "Wie viel?"))).toEqual(["preis"]);
+    // ohne jedes Inhaltswort ist das Fragewort die Frage: „Wie viel?“ sucht nach Preisen – samt Wortfeld („Kosten“)
+    expect(ids(suche(knoten, "Wie viel?"))).toEqual(["preis", "kosten"]);
   });
 
   it("Suche beim Tippen: das letzte Wort zählt schon als Wortanfang (praefix) – ohne praefix nicht", () => {
@@ -409,7 +415,7 @@ describe("Antwort ohne KI: nur aus dem Kontext, nichts dazuerfunden", () => {
     expect(r.text).not.toMatch(/[[\]]/);
   });
 
-  it("lange Knoten: nur die passenden Zeilen (höchstens vier); höchstens drei Knoten und zwei offene Punkte", () => {
+  it("lange Knoten: nur die passenden Zeilen (höchstens vier); höchstens drei Knoten; offene Punkte nur, wo sie etwas beitragen", () => {
     const zeilen = Array.from({ length: 12 }, (_, i) => `- Zeile ${i + 1}: ${i % 3 === 0 ? "Parken" : "Anderes"} ${"und noch mehr Text ".repeat(3)}`).join("\n");
     const r = S.antwortAusKontext("parken", [k("p", "Hinweise Parken", zeilen)]);
     const punkte = r.text.split("\n").filter((z) => z.startsWith("- "));
@@ -417,9 +423,16 @@ describe("Antwort ohne KI: nur aus dem Kontext, nichts dazuerfunden", () => {
     for (const p of punkte) expect(p).toMatch(/Parken/);
     const viele = Array.from({ length: 6 }, (_, i) => k(`p${i}`, `Parken ${i}`, "Parken erlaubt"));
     const offene = Array.from({ length: 4 }, (_, i) => k(`f${i}`, `Parken offen ${i}?`, "", { art: "frage", status: "zu_klaeren" }));
+    // drei Wissens-Einträge beantworten die Frage schon: kein offener Punkt obendrauf (die Antwort bleibt kurz)
     const alle = S.antwortAusKontext("parken", [...viele, ...offene]);
-    expect(alle.quellen).toEqual(["p0", "p1", "p2", "f0", "f1"]);
+    expect(alle.quellen).toEqual(["p0", "p1", "p2"]);
     expect(unbelegt(alle, [...viele, ...offene])).toEqual([]);
+    // bei ein oder zwei Einträgen kommt der offene Punkt zum selben Wort dazu (einer)
+    expect(S.antwortAusKontext("parken", [...viele.slice(0, 2), ...offene]).quellen).toEqual(["p0", "p1", "f0"]);
+    // gibt es gar kein Wissen dazu: die offenen Punkte, höchstens zwei
+    const nurOffen = S.antwortAusKontext("parken", offene);
+    expect(nurOffen.quellen).toEqual(["f0", "f1"]);
+    expect(nurOffen.text.startsWith("Das ist im Brain noch offen: ")).toBe(true);
   });
 
   it("mit dem echten Seed: jede Zeile jeder Antwort steht wörtlich in einem Kontext-Knoten", () => {

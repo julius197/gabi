@@ -20,6 +20,30 @@ describe("Brain-Befehle im Gespräch erkennen", () => {
     expect(IV.befehlErkennen("Merke dir:\n\nMo–Fr 8–18 Uhr\nSa geschlossen").text).toBe("Mo–Fr 8–18 Uhr\nSa geschlossen");
   });
 
+  it("Ziel eines Änderungswunschs: der Teil, der sagt, WAS geändert wird – nicht der neue Inhalt", () => {
+    expect(IV.aendernZiel("die Telefonzeiten: samstags geschlossen")).toBe("die Telefonzeiten");
+    expect(IV.aendernZiel("die Öffnungszeiten auf 8 bis 18 Uhr")).toBe("die Öffnungszeiten");
+    expect(IV.aendernZiel("die Telefonzeiten – freitags bis 15 Uhr")).toBe("die Telefonzeiten");
+    expect(IV.aendernZiel("die Hausordnung, dass Hunde erlaubt sind")).toBe("die Hausordnung");
+    // ohne Trennung bleibt der ganze Text das Ziel
+    expect(IV.aendernZiel("Parken")).toBe("Parken");
+    expect(IV.aendernZiel("den Eintrag zum Parken hinter dem Haus")).toBe("den Eintrag zum Parken hinter dem Haus");
+    // der Befehl selbst liefert den Text nach dem Verb
+    expect(IV.aendernZiel(IV.befehlErkennen("Ändere die Telefonzeiten: samstags geschlossen").text)).toBe("die Telefonzeiten");
+  });
+
+  it("auch als Frage („Kannst du dir merken, dass …?“) und mit „ins Brain“ („Schreib ins Brain: …“)", () => {
+    expect(IV.befehlErkennen("Kannst du dir merken, dass wir montags erst um 9 öffnen?")).toEqual({ art: "merken", text: "wir montags erst um 9 öffnen" });
+    expect(IV.befehlErkennen("Könntest du dir bitte merken: Handtuch mitbringen")).toEqual({ art: "merken", text: "Handtuch mitbringen" });
+    expect(IV.befehlErkennen("Schreib ins Brain: Parken hinter dem Haus")).toEqual({ art: "merken", text: "Parken hinter dem Haus" });
+    expect(IV.befehlErkennen("Bitte trag ins Brain ein, dass die Rezeption ab 8 besetzt ist")).toEqual({ art: "merken", text: "die Rezeption ab 8 besetzt ist" });
+    expect(IV.befehlErkennen("Gabi, speichere im Brain: Osteopathie kostet 85 Euro")).toEqual({ art: "merken", text: "Osteopathie kostet 85 Euro" });
+    // alles mit Notiz-Bezug bleibt ausgenommen, eine bloße Frage nach dem Brain ist kein Befehl
+    expect(IV.befehlErkennen("Kannst du dir merken, dass TP-01 Knieschmerzen hat?")).toBeNull();
+    expect(IV.befehlErkennen("Was steht im Brain über Parken?")).toBeNull();
+    expect(IV.befehlErkennen("Kannst du dir Dinge merken?")).toBeNull();
+  });
+
   it("„Ändere …“, „Korrigiere …“, „Aktualisiere …“, „Berichtige …“", () => {
     expect(IV.befehlErkennen("Ändere die Öffnungszeiten auf 8 bis 18 Uhr")).toEqual({ art: "aendern", text: "die Öffnungszeiten auf 8 bis 18 Uhr" });
     for (const t of ["ändere die Telefonzeiten: freitags nur bis 15 Uhr", "Aendere die Telefonzeiten", "Bitte korrigiere den Preis für Osteopathie", "Gabi, aktualisiere die Trainingszeiten", "Berichtige die Adresse am Thumenberger Weg", "ändern die Zeiten bitte"]) {

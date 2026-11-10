@@ -86,6 +86,40 @@ Tests: `cd ~/Desktop/gabi-brain/worker && npm test`. Lokaler Brain-Server: `npm 
 14. **Brain-Server lokal auf Port 8790** (`npm run brain`), getrennt von `npm run lokal`/`vorschau` (8788) – so kann
     Julius' Vorschau der Live-Version weiterlaufen, während er das Brain ansieht.
 
+## Antwortqualität ohne KI – Umbau am 10.11. (vor der Prüfrunde)
+
+Eigene Stichprobe mit 91 Praxisfragen gegen das Demo-Brain: Der Assistent ohne KI (Demo-Modus, `npm run brain`)
+antwortete zu oft am Thema vorbei („Wie lange dauert eine Behandlung?“ → Manuelle Therapie, weil „lange“ auf
+„langsame“ passte) oder gar nicht („Wo seid ihr?“, „Öfnungszeiten?“, „Wann kann ich anrufen?“). Umbau in
+`brain-suche.js` (Regeln: `BRAIN-BAUPLAN.md` §4):
+
+- **Grundsatz: lieber eine Lücke als eine Antwort am Thema vorbei.** Die Antwort muss jedes Inhaltswort der Frage
+  abdecken; eine Eigenschaft (Preis, Zeiten, Adresse …) zählt nur beim gefragten Thema oder als offener Punkt.
+- Tippfehler (ein Fehler ab 6, zwei ab 10 Buchstaben), „E-Mail-Adresse“ als ein Wort, mehr Füllwörter, Wortfelder
+  („anrufen“ ↔ „Telefon“, „Wochenende“ ↔ „Sa“), Fragewort als Frage („Wo seid ihr?“), „seit wann“ → Gründung,
+  falsche Freunde („Rezept“ ≠ „Rezeption“), Komposita („Behandlungsräume“ fragt nicht nach „Behandlung“).
+- Wortfeld-Treffer gelten in der Kontext-Auswahl als Treffer – das hilft auch dem Weg mit KI („Wer ist der Chef?“
+  bekam vorher gar keinen Kontext).
+- `demo.js` (nur mit Brain-Kontext): medizinische Rat-Fragen („Soll ich Ibuprofen nehmen?“) bekommen die Absage statt
+  einer Lücke – auch wenn so etwas im Brain stünde (Kernregel vor Brain); „Merke dir: Wir empfehlen …“ ist ein
+  Merk-Befehl, keine Rat-Frage; Stichwörter („Theraband?“) suchen wie ohne Brain erst in den Notizen.
+- Fragenkatalog als Test: `worker/test/brain-fragen.test.js` (80 Fälle). **Gegenprobe:** gegen den Stand davor
+  (`42faa05`) schlagen 49 der neuen und angepassten Tests an, am neuen Stand sind alle grün.
+
+Aus Fork E (Unit-Tests) übernommene Funde, alle mit Test und Gegenprobe. Gegenprobe im Browser für die Vorschläge
+(`gegenprobe-vorschlag.mjs`, alter Stand `42faa05` auf eigenem Port 8793): langer Eintrag nach „Übernehmen“ nur noch
+1 493 von 4 654 Zeichen, späterer Zusatz überschrieben → am neuen Stand bleibt beides erhalten (3/3).
+
+| Fund | Stufe | Korrektur |
+|---|---|---|
+| Änderungsvorschlag schnitt lange Einträge ab (der Kontext kürzt auf 1 500 Zeichen, „Übernehmen“ ersetzte den ganzen Inhalt) | muss | `brain-gespraech.js`: Vorschlag nur, wenn der Server den Eintrag ungekürzt gesehen hat; sonst Hinweis und Link ins Brain. Dazu: ein Vorschlag gilt nur für den Stand (`rev`), den er kannte – ein veralteter öffnet sich zum Prüfen, statt Neueres zu überschreiben |
+| „Theraband?“ wurde mit Brain zur Lücke statt zur Notiz-Suche | sollte | `demo.js`: Stichwörter erst in den Notizen suchen |
+| Reine Wortfeld-Treffer kamen nie in Gabis Kontext | sollte | `brain-suche.js` (siehe oben) |
+| Kurze Wortanfänge trafen falsch („lange“ → „langsame“) | sollte | Füllwörter, Abdeckungsregel |
+| Eingetragene Lücke blieb „eingetragen“, auch wenn ihr Eintrag wieder gelöscht war | sollte | `brain.js`: `lueckeStand` – ohne Eintrag ist die Lücke wieder offen |
+| „Merke dir: Wir empfehlen …“ bekam die Absage; „Kannst du dir merken, dass …“ wurde nicht erkannt | kann, gleich mitgemacht | `demo.js`, `brain-interview.js` |
+| Nebenwirkung des Umbaus, beim Nachstellen im Browser gefunden: „Ändere die Telefonzeiten: samstags geschlossen“ traf den Eintrag zu den Öffnungszeiten (gesucht wurde mit dem ganzen Satz, also auch mit dem neuen Inhalt – durch die neuen Wortfelder schlug das durch) | muss | Ziel = der Teil vor dem Doppelpunkt (`aendernZiel`); der Browser stellt diesen Eintrag im Kontext nach vorn, der Demo-Assistent wählt danach |
+
 ## Vorkommnisse
 
 **Fehlalarm „Anfrage an den Live-Worker“ (10.11., ca. 15:50) – nachgeprüft, nichts passiert.**
@@ -123,3 +157,10 @@ angeben, nie auf die Standard-Adresse verlassen.
 - Supabase-Entwurf: Stapel (Seed/Import) und Verlauf laufen in Einzelschritten – für den echten Betrieb gehört der
   Stapel in eine Postgres-Funktion (eine Transaktion).
 - Graph: Pfeilspitzen an den Kanten als Option; „Treffer hervorheben“ bewegt die Kamera bewusst nicht.
+- Aus Fork E, nicht eingebaut (alle „kann“): Umbenennen zieht Verweise in Einträgen im Papierkorb nicht nach ·
+  Export/Import ist bei „<“ direkt vor einem Buchstaben und bei einer Zeile `%%% gabi-brain %%%` im Inhalt nicht
+  zeichengleich · ZIP ohne Prüfsummen-Kontrolle, verschlüsselte ZIPs ergeben Zeichensalat · eine von Hand gelöschte
+  Seed-Verbindung kommt mit der nächsten Seed-Fassung wieder · „FFP2-Maske“ und „Typ-2“ gelten als Kürzel und werden
+  nie eine Lücke · ein gescheitertes Rückgängig verwirft den Schritt.
+- Antwort ohne KI: Fragen, deren Antwort nur sinngemäß im Brain steht („Nehmt ihr Privatpatienten?“ ↔ „Privatpraxis“),
+  werden eine Lücke – das kann erst das echte Modell.
