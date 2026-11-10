@@ -301,7 +301,20 @@
         <p class="unsichtbar" id="brain-meldung" role="status"></p>
         <datalist id="brain-quellen"><option value="Philipp"></option><option value="Julius"></option><option value="physio-works.de"></option></datalist>
         <datalist id="brain-titel-liste"></datalist>`;
-      if (app.laptop.matches) $("#brain-legende").open = true;
+      // Am Laptop ist die Legende von Anfang an offen – wenn sie ganz unter die Zoom-Knöpfe passt. Ist die Fläche dafür zu
+      // niedrig (ihr Inhalt scrollte dann, siehe max-height), bleibt sie zugeklappt. Entschieden wird, sobald der Graph
+      // seine Größe hat – der Beobachter meldet das vor dem ersten Bild, es klappt also nichts sichtbar um.
+      if (app.laptop.matches && typeof ResizeObserver === "function") {
+        const graph = $("#brain-graph");
+        const legende = $("#brain-legende");
+        const groesse = new ResizeObserver(() => {
+          if (!graph.clientHeight) return;
+          groesse.disconnect();
+          legende.open = true;
+          if (legende.scrollHeight > legende.clientHeight + 1) legende.open = false;
+        });
+        groesse.observe(graph);
+      } else if (app.laptop.matches) $("#brain-legende").open = true;
       const suche = $("#brain-suche");
       let uhr = null;
       suche.addEventListener("input", () => {
@@ -343,6 +356,7 @@
       kopfZeichnen();
       leisteZeichnen();
       filterZeichnen();
+      standZeichnen(); // Trefferzahl und leerer Zustand im Graphen (Einblendung in der Fläche), Ansage für Screenreader
       for (const [id] of REITER) $(`#brain-${id}`).hidden = z.reiter !== id;
       if (z.reiter === "graph") graphZeichnen();
       else if (z.graph) z.graph.aktiv(false);
@@ -434,6 +448,45 @@
       const knopf = $("#brain-filter-knopf");
       knopf.setAttribute("aria-expanded", String(z.filterOffen));
       knopf.classList.toggle("aktiv", aktiv);
+    }
+
+    // ---------- Stand von Suche und Filter: Trefferzahl und leerer Zustand – in der Liste und im Graphen dieselben Texte ----------
+    /** „5 Treffer für …“ bzw. „12 Einträge (gefiltert)“. */
+    const zaehlText = (n) => (z.treffer ? `${n === 1 ? "1 Treffer" : `${n} Treffer`} für „${z.suche.trim()}“` : `${n === 1 ? "1 Eintrag" : `${n} Einträge`}${filterAktiv() ? " (gefiltert)" : ""}`);
+    const leerSatz = () => (z.treffer ? "Dazu steht nichts im Brain." : "Kein Eintrag passt zu diesen Filtern.");
+    /** Leerer Zustand als Block; "" = es gibt etwas zu zeigen. */
+    function leerHtml(anzahl) {
+      if (!z.brain.knoten().length) return `<div class="leer"><div class="kachel">${symbol("graph")}</div><h2>Dein Brain ist noch leer</h2><p>Leg den ersten Eintrag an oder importiere Markdown-Dateien.</p><div class="knopf-reihe"><button class="knopf primaer" type="button" data-brain="neu">${symbol("plus")}Ersten Eintrag anlegen</button><button class="knopf sekundaer" type="button" data-brain="import">${symbol("hoch")}Importieren</button></div></div>`;
+      if (anzahl) return "";
+      return `<div class="leer"><div class="kachel">${symbol("suche")}</div><h2>Nichts gefunden</h2><p>${leerSatz()}</p>${filterAktiv() ? `<button class="knopf sekundaer" type="button" data-brain="filter-weg">Filter zurücksetzen</button>` : ""}</div>`;
+    }
+    /** Wie viele Einträge Suche und Filter übrig lassen – die Liste zeigt genau diese, der Graph hebt sie hervor. */
+    function passendeAnzahl() {
+      const liste = gefiltert();
+      if (!z.treffer) return liste.length;
+      const drin = new Set(z.treffer);
+      return liste.filter((k) => drin.has(k.id)).length;
+    }
+    let anfrageAlt = null; // Suchbegriff und Filter beim letzten Zeichnen (null: Graph und Liste waren nicht zu sehen)
+    /** Im Graphen stehen Trefferzahl und leerer Zustand als Einblendung IN der Fläche (wie die Fokus-Leiste): die
+        Zeichenfläche behält ihre Größe, nichts ruckt beim Suchen. Angesagt wird nur, wenn sich Suche oder Filter ändern. */
+    function standZeichnen() {
+      const imGraph = z.reiter === "graph" && !PROBE_KNOTEN;
+      if (!imGraph && z.reiter !== "liste") { anfrageAlt = null; return; }
+      const n = passendeAnzahl();
+      const leer = leerHtml(n);
+      if (imGraph) {
+        let ziel = $("#brain-graph-stand");
+        if (!ziel) { ziel = document.createElement("div"); ziel.id = "brain-graph-stand"; $("#brain-graph").append(ziel); }
+        const zeigen = Boolean(leer || z.treffer || filterAktiv());
+        ziel.className = `brain-graph-stand${leer ? " nichts" : ""}`;
+        ziel.hidden = !zeigen;
+        if (zeigen) mitFokus(ziel, leer || `<span>${esc(zaehlText(n))}</span>`);
+        $("#brain-graph").classList.toggle("ohne-treffer", Boolean(leer)); // Legende und Minimap treten hinter die Karte zurück
+      }
+      const anfrage = `${z.suche.trim()}\u0001${JSON.stringify(z.filter)}`;
+      if (anfrageAlt !== null && anfrage !== anfrageAlt) melden(n ? zaehlText(n) : `Nichts gefunden. ${leerSatz()}`);
+      anfrageAlt = anfrage;
     }
 
     // ==========================================================
@@ -563,20 +616,16 @@
       if (z.treffer) { const rang = new Map(z.treffer.map((id, i) => [id, i])); liste = liste.filter((k) => rang.has(k.id)).sort((a, b) => rang.get(a.id) - rang.get(b.id)); } else liste = sortiert(liste);
       const kopf = `
         <div class="brain-liste-kopf">
-          <p class="suche-hinweis" role="status">${z.treffer ? `${liste.length === 1 ? "1 Treffer" : `${liste.length} Treffer`} für „${esc(z.suche.trim())}“` : `${liste.length === 1 ? "1 Eintrag" : `${liste.length} Einträge`}${filterAktiv() ? " (gefiltert)" : ""}`}</p>
+          <p class="suche-hinweis">${esc(zaehlText(liste.length))}</p>
           <div class="brain-liste-wahl">
             <label class="brain-auswahl"><span class="unsichtbar">Gruppieren</span><select data-brain-wahl="gruppierung"${z.treffer ? " disabled" : ""}>${GRUPPIERUNG.map(([w, n]) => `<option value="${w}"${z.gruppierung === w ? " selected" : ""}>${n}</option>`).join("")}</select>${symbol("runter")}</label>
             <label class="brain-auswahl"><span class="unsichtbar">Sortieren</span><select data-brain-wahl="sortierung"${z.treffer ? " disabled" : ""}>${SORTIERUNG.map(([w, n]) => `<option value="${w}"${z.sortierung === w ? " selected" : ""}>${n}</option>`).join("")}</select>${symbol("runter")}</label>
           </div>
         </div>`;
-      let rumpf;
-      if (!z.brain.knoten().length) {
-        rumpf = `<div class="leer"><div class="kachel">${symbol("graph")}</div><h2>Dein Brain ist noch leer</h2><p>Leg den ersten Eintrag an oder importiere Markdown-Dateien.</p><div class="knopf-reihe"><button class="knopf primaer" type="button" data-brain="neu">${symbol("plus")}Ersten Eintrag anlegen</button><button class="knopf sekundaer" type="button" data-brain="import">${symbol("hoch")}Importieren</button></div></div>`;
-      } else if (!liste.length) {
-        rumpf = `<div class="leer"><div class="kachel">${symbol("suche")}</div><h2>Nichts gefunden</h2><p>${z.treffer ? "Dazu steht nichts im Brain." : "Kein Eintrag passt zu diesen Filtern."}</p>${filterAktiv() ? `<button class="knopf sekundaer" type="button" data-brain="filter-weg">Filter zurücksetzen</button>` : ""}</div>`;
-      } else if (z.treffer || z.gruppierung === "keine") {
+      let rumpf = leerHtml(liste.length); // leerer Zustand: derselbe Block wie im Graphen
+      if (!rumpf && (z.treffer || z.gruppierung === "keine")) {
         rumpf = `<ul class="brain-zeilen">${liste.map(zeileHtml).join("")}</ul>`;
-      } else {
+      } else if (!rumpf) {
         const gruppen = z.gruppierung === "status" ? B.STATUS.map((s) => [s.id, s.name, (k) => k.status === s.id]) : B.ARTEN.map((a) => [a.id, a.mehrzahl, (k) => k.art === a.id]);
         rumpf = gruppen.map(([id, name, passt]) => {
           const teil = liste.filter(passt);
