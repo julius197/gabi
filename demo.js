@@ -542,8 +542,24 @@
     unbekannt: "Dazu habe ich nichts gespeichert. Im Demo-Modus verstehe ich einfache Fragen – probier zum Beispiel „Was wollte TP-01?“, „Hausaufgaben von TP-02“ oder „Wo sind die Standorte?“.",
   };
 
-  /** Ein Gesprächsschritt im Demo-Modus: Absicht erkennen, Werkzeug nutzen, kurz antworten. */
-  async function demoGespraech({ letzte, werkzeuge, senden, warte = () => Promise.resolve() }) {
+  // Brain-Hilfen gibt es nur mit aktivem Brain: im Browser als nachgeladene Globale, in Node per require
+  function brainModul(global, datei) {
+    try {
+      if (typeof self !== "undefined" && self[global]) return self[global];
+      if (typeof require === "function") return require(datei);
+    } catch { /* nicht geladen */ }
+    return null;
+  }
+  const BRAIN_BEISPIELANTWORT = "Beispielantwort aus dem Demo-Modus – hier stünde, was du gesagt hast.";
+  const BRAIN_VORSCHLAG_TEXT = "Passt das so? Gespeichert wird erst, wenn du auf „Übernehmen“ tippst.";
+  const FRAGEFORM = /\?\s*$|^(wo|wann|wie|was|wer|welche[rsn]?|gibt es|habt ihr|bietet ihr|kann man|macht ihr|seit wann)\b/i;
+
+  /**
+   * Ein Gesprächsschritt im Demo-Modus: Absicht erkennen, Werkzeug nutzen, kurz antworten.
+   * brain = der Brain-Kontext aus der Anfrage (Bauplan §5.1). Ist er da, kommen Praxisfragen NUR daraus – mit den
+   * Ereignissen „quellen“ und „luecke“ –, nie aus den fest eingebauten Texten (PRAXIS).
+   */
+  async function demoGespraech({ letzte, werkzeuge, senden, warte = () => Promise.resolve(), brain = null, brainAntwort = null, brainHilfen = null }) {
     const sag = (text) => textStroemen(text, senden, warte);
     const k = { letzte, senden };
     const nutze = async (name, eingabe) => {
@@ -555,6 +571,39 @@
     const patienten = await werkzeuge.ausfuehren("patienten_auflisten", {}, {});
     const kuerzelListe = ((patienten.ergebnis && patienten.ergebnis.patienten) || []).map((p) => p.kuerzel);
     const a = absichtErkennen(letzte, kuerzelListe);
+
+    const suche = brain ? brainModul("GabiBrainSuche", "./brain-suche.js") : null;
+    const antworten = brain ? brainAntwort || (suche && suche.antwortAusKontext) : null;
+    if (brain && antworten && a.art !== "rat") {
+      const hilfen = brainHilfen || brainModul("GabiBrainInterview", "./brain-interview.js");
+      const knoten = Array.isArray(brain.knoten) ? brain.knoten : [];
+      const befehl = hilfen ? hilfen.befehlErkennen(letzte) : null;
+      if (befehl && befehl.art === "merken") {
+        await warte(450);
+        senden({ t: "brain_vorschlag", vorschlag: { ...hilfen.merkenOhneKi(befehl.text), ohneKi: true } });
+        return sag(BRAIN_VORSCHLAG_TEXT);
+      }
+      if (befehl && befehl.art === "aendern") {
+        await warte(450);
+        if (!knoten.length) return sag("Dazu steht noch nichts im Brain – ich weiß nicht, welchen Eintrag ich ändern soll. Mit „Merke dir: …“ lege ich einen neuen an.");
+        senden({ t: "brain_vorschlag", vorschlag: hilfen.aendernOhneKi({ knoten: knoten[0], wunsch: befehl.text }) });
+        return sag(`Ich habe eine Änderung für **${knoten[0].titel}** vorbereitet. ${BRAIN_VORSCHLAG_TEXT}`);
+      }
+      // Praxisfrage? Fakten zur Praxis (nicht die Bedienung der App), Unbekanntes und freie Suchwörter ohne Notiz-Auftrag
+      const ausNotizen = /^suche in meinen notizen:/i.test(String(letzte || "").trim());
+      const praxis = (a.art === "praxis" && PRAXIS.some((x) => x.text === a.text)) || a.art === "unbekannt" || (a.art === "suche" && !ausNotizen);
+      if (praxis) {
+        const r = antworten(letzte, knoten);
+        // freie Suchwörter ohne Treffer im Brain und ohne Frageform bleiben eine Notiz-Suche (unten)
+        if (r.quellen.length || a.art !== "suche" || FRAGEFORM.test(String(letzte || "").trim())) {
+          await warte(450);
+          if (r.quellen.length) senden({ t: "quellen", knoten: r.quellen });
+          await sag(r.text);
+          if (r.luecke) senden({ t: "luecke", frage: r.luecke });
+          return undefined;
+        }
+      }
+    }
 
     if (["rat", "hallo", "hilfe", "danke", "tschuess", "befinden", "unbekannt"].includes(a.art)) { await warte(450); return sag(ANTWORT[a.art]); }
     if (a.art === "praxis") { await warte(450); return sag(a.text); }
@@ -685,6 +734,7 @@
         if (!text || String(text).length < 200) throw new DemoFehler(400, "Keine gültige Aufnahme.");
         await warte(700);
         const frisch = daten(); // nach dem Warten neu lesen – sonst überschreibt eine alte Kopie zwischenzeitliche Änderungen
+        if (url.searchParams.get("zweck") === "antwort") return { text: BRAIN_BEISPIELANTWORT }; // Brain-Interview: nichts über die Praxis erfinden
         if (url.searchParams.get("zweck") === "frage") {
           const frage = FRAGEN[(frisch.frage || 0) % FRAGEN.length];
           frisch.frage = (frisch.frage || 0) + 1;
@@ -789,7 +839,7 @@
       if (!letzte) throw new DemoFehler(400, "Die letzte Nachricht fehlt.");
       const aktion = body && body.aktion;
       let patient = null;
-      if (aktion) {
+      if (aktion && aktion.typ !== "brain_antwort") {
         patient = daten().patienten.find((x) => x.id === aktion.patient_id);
         if (!patient) throw new DemoFehler(404, "Test-Patient nicht gefunden.");
       }
@@ -806,8 +856,15 @@
           const r = await werkzeuge.ausfuehren("bericht_erstellen", { kuerzel: patient.kuerzel, art }, { letzte, senden: sicher });
           if (r.fehler) { await textStroemen(r.meldung, sicher, pause); sicher({ t: "fertig" }); return; }
           await textStroemen(berichtText(art, patient.kuerzel, r.ergebnis.notizen), sicher, pause);
+        } else if (aktion && aktion.typ === "brain_antwort") {
+          // Brain-Interview: aus der Antwort wird ein Vorschlag (ohne KI nur geglättet) – gespeichert wird erst per Knopf
+          const hilfen = brainModul("GabiBrainInterview", "./brain-interview.js");
+          if (!hilfen) throw new DemoFehler(503, "Das Brain ist nicht geladen.");
+          await pause(500);
+          sicher({ t: "brain_vorschlag", vorschlag: { ...hilfen.vorschlagOhneKi({ knoten: aktion.knoten, antwort: String(aktion.antwort || "").trim() || letzte }), ohneKi: true } });
+          await textStroemen(BRAIN_VORSCHLAG_TEXT, sicher, pause);
         } else {
-          await demoGespraech({ letzte, werkzeuge, senden: sicher, warte: pause });
+          await demoGespraech({ letzte, werkzeuge, senden: sicher, warte: pause, brain: body && body.brainKontext && typeof body.brainKontext === "object" ? body.brainKontext : null });
         }
         sicher({ t: "fertig" });
       } catch (e) {

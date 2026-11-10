@@ -122,6 +122,10 @@
       const b = karte.bericht || {};
       return `[App-Hinweis: ${b.titel || "Bericht"} für ${b.kuerzel} angezeigt – ${stichpunkte(b.zusammenfassung).join("; ")}]`;
     }
+    if (karte.typ === "brain-vorschlag") {
+      const zustand = karte.uebernommen ? "übernommen" : karte.verworfen ? "nicht übernommen" : "noch nicht übernommen";
+      return `[App-Hinweis: Vorschlag fürs Brain „${String(karte.titel || "").slice(0, 120)}“ angezeigt (${zustand})]`;
+    }
     return "";
   }
 

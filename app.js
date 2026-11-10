@@ -20,7 +20,7 @@
   // Seite und Skript aus verschiedenen Versionen (Browser-Cache: alte index.html, neue Dateien – oder v1 → v2):
   // einmal je Version frisch laden; hilft das nicht, ein Hinweis mit Knopf statt einer leeren Seite.
   // VERSION muss zum ?v= in index.html passen (ein Test prüft das).
-  const VERSION = "2.1.2";
+  const VERSION = "2.2.0-brain";
   const MERKER = `gabi.frisch-geladen.${VERSION}`;
   let geladenAls = null;
   try { geladenAls = new URL(document.currentScript.src).searchParams.get("v"); } catch { geladenAls = null; }
@@ -57,6 +57,13 @@
   const PRODUKTION = location.hostname === "gabi.automatilabs.de";
   const modus = { demo: false, grund: "" };
   let demoApi = null;
+  // Brain (Gedächtnis der Praxis, #/brain): im Code AUS. AN über config.js (brain: true) oder ?brain=1 – erst dann werden
+  // die Brain-Dateien nachgeladen. Ohne Schalter lädt die App keine davon und verhält sich wie bisher (BRAIN bleibt null).
+  const BRAIN_PARAM = new URLSearchParams(location.search).get("brain");
+  const BRAIN_AN = BRAIN_PARAM === "1" || (BRAIN_PARAM !== "0" && Boolean(window.GABI_CONFIG && window.GABI_CONFIG.brain));
+  const BRAIN_DATEIEN = ["brain.css", "brain-suche.js", "brain.js", "brain-speicher.js", "brain-seed.js", "brain-graph.js", "brain-interview.js", "brain-ansicht.js", "brain-gespraech.js"];
+  let BRAIN = null; // die Brain-Ansicht (brain-ansicht.js) mit BRAIN.gespraech (brain-gespraech.js)
+  let serverFunktionen = []; // aus /api/status – „brain“ heißt: der Server versteht den Brain-Kontext
 
   const $ = (sel) => document.querySelector(sel);
   const el = {
@@ -64,6 +71,7 @@
     seitenPatienten: $("#seiten-patienten"), seitenFussText: $("#seiten-fuss-text"), seitenGespraeche: $("#seiten-gespraeche"),
     schublade: $("#schublade"), schubladeListe: $("#schublade-liste"), schubladeZu: $("#schublade-zu"),
     laden: $("#ansicht-laden"), ladenDrehen: $("#laden-drehen"), ladenText: $("#laden-text"), zugang: $("#ansicht-zugang"), offline: $("#ansicht-offline"), chat: $("#ansicht-chat"), notizen: $("#ansicht-notizen"),
+    brain: $("#ansicht-brain"), naviBrain: $('.navi a[data-navi="brain"]'), schubladeBrain: $("#schublade-brain"), infoBrain: $("#info-brain"),
     zugangForm: $("#zugang-form"), zugangCode: $("#zugang-code"), zugangZeigen: $("#zugang-zeigen"), zugangFehler: $("#zugang-fehler"), zugangWeiter: $("#zugang-weiter"),
     offlineTitel: $("#offline-titel"), offlineText: $("#offline-text"), offlineErneut: $("#offline-erneut"),
     willkommen: $("#willkommen"), gruss: $("#gruss"), nachrichten: $("#nachrichten"),
@@ -71,6 +79,7 @@
     eingabe: $("#eingabe"), text: $("#eingabe-text"), mikro: $("#mikro"), senden: $("#senden"), aufnahmeZeit: $("#aufnahme-zeit"), aufnahmeText: $("#aufnahme-text"), wellen: $("#wellen"),
     dialogFrage: $("#dialog-frage"), frageTitel: $("#frage-titel"), frageText: $("#frage-text"), frageJa: $("#frage-ja"), frageNein: $("#frage-nein"),
     frageHakenZeile: $("#frage-haken-zeile"), frageHaken: $("#frage-haken"), frageHakenText: $("#frage-haken-text"),
+    frageHaken2Zeile: $("#frage-haken2-zeile"), frageHaken2: $("#frage-haken2"), frageHaken2Text: $("#frage-haken2-text"),
     dialogPatient: $("#dialog-patient"), patientForm: $("#patient-form"), patientKuerzel: $("#patient-kuerzel"), patientPseudonym: $("#patient-pseudonym"), patientFehler: $("#patient-fehler"), patientAbbrechen: $("#patient-abbrechen"), patientAnlegen: $("#patient-anlegen"),
     dialogInfo: $("#dialog-info"), infoTitel: $("#info-titel"), infoZuruecksetzen: $("#info-zuruecksetzen"), infoVerbinden: $("#info-verbinden"), infoAbmelden: $("#info-abmelden"),
     toasts: $("#toasts"),
@@ -181,7 +190,7 @@
   // ---------- Rückfrage (immer nur eine offen) ----------
   // haken: optionales Häkchen (Vorgabe: an) – nach der Antwort steht der Zustand in el.frageHaken.checked
   let frageOffen = false;
-  function frage(titel, text, { ja = "OK", nein = "Abbrechen", gefahr = false, haken = "" } = {}) {
+  function frage(titel, text, { ja = "OK", nein = "Abbrechen", gefahr = false, haken = "", haken2 = "" } = {}) {
     if (frageOffen) return Promise.resolve(false);
     frageOffen = true;
     const ausloeser = bedienterKnopf();
@@ -197,6 +206,10 @@
     el.frageHakenZeile.hidden = !haken;
     el.frageHakenText.textContent = haken;
     el.frageHaken.checked = true;
+    // zweites Häkchen (z. B. „Brain-Wissen auch löschen“): bewusst nicht vorbelegt – nach der Antwort in el.frageHaken2.checked
+    el.frageHaken2Zeile.hidden = !haken2;
+    el.frageHaken2Text.textContent = haken2;
+    el.frageHaken2.checked = false;
     el.dialogFrage.returnValue = "";
     return new Promise((ok) => {
       el.dialogFrage.addEventListener("close", () => {
@@ -264,6 +277,7 @@
     if (!r.ok) {
       const f = new Error((daten && daten.fehler) || STATUS_TEXT(r.status));
       f.status = r.status;
+      f.daten = daten; // z. B. bei 409 der gespeicherte Stand
       throw f;
     }
     return daten;
@@ -351,7 +365,7 @@
   function ansichtZeigen(name) {
     const vorher = gezeigteAnsicht;
     gezeigteAnsicht = name;
-    const ansichten = { laden: el.laden, zugang: el.zugang, offline: el.offline, chat: el.chat, notizen: el.notizen };
+    const ansichten = { laden: el.laden, zugang: el.zugang, offline: el.offline, chat: el.chat, notizen: el.notizen, brain: el.brain };
     for (const [n, knoten] of Object.entries(ansichten)) {
       if (n !== name) {
         if (!knoten.hidden) beruhigen(knoten);
@@ -359,13 +373,14 @@
       }
       knoten.hidden = n !== name;
     }
+    if (BRAIN && vorher === "brain" && name !== "brain") BRAIN.verstecken();
     const neu = ansichten[name];
     if (vorher === "laden" && name !== "laden" && neu) {
       neu.classList.add("einblenden");
       const fertig = (e) => { if (e.target !== neu) return; neu.classList.remove("einblenden"); neu.removeEventListener("animationend", fertig); };
       neu.addEventListener("animationend", fertig);
     }
-    const mitKopf = name === "chat" || name === "notizen";
+    const mitKopf = name === "chat" || name === "notizen" || name === "brain";
     el.kopf.hidden = !mitKopf;
     el.app.classList.toggle("ohne-seite", !mitKopf);
     if (!mitKopf) schubladeSchliessen(true);
@@ -433,6 +448,7 @@
       const r = await fetch(`${API}/api/status`, { cache: "no-store", signal: abbruch.signal });
       if (!r.ok) return "nicht-erreichbar";
       const d = await r.json();
+      serverFunktionen = Array.isArray(d.funktionen) ? d.funktionen.filter((f) => typeof f === "string") : [];
       const bereit = typeof d.bereit === "boolean" ? d.bereit : Boolean(d.eingerichtet && d.eingerichtet.zugang && d.eingerichtet.supabase);
       return bereit ? "" : "nicht-eingerichtet";
     } catch {
@@ -486,6 +502,66 @@
   // Scrollposition steuert die App (nach dem Neuladen sonst „Nochmal versuchen“ unter der Eingabezeile)
   try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch { /* egal */ }
 
+  // ---------- Brain nachladen (nur mit Schalter) ----------
+  function dateiLaden(name) {
+    return new Promise((ok, nein) => {
+      const css = name.endsWith(".css");
+      const k = document.createElement(css ? "link" : "script");
+      if (css) { k.rel = "stylesheet"; k.href = `${name}?v=${encodeURIComponent(VERSION)}`; } else { k.src = `${name}?v=${encodeURIComponent(VERSION)}`; k.async = false; } // Reihenfolge der Skripte bleibt
+      k.onload = () => ok();
+      k.onerror = () => nein(new Error(name));
+      document.head.append(k);
+    });
+  }
+  let brainLaedt = null;
+  /** Brain-Dateien einmal laden und die Ansicht anlegen. Ohne Schalter: nichts. Scheitert es, läuft Gabi ohne Brain weiter. */
+  function brainLaden() {
+    if (!BRAIN_AN) return Promise.resolve(null);
+    if (!brainLaedt) {
+      brainLaedt = Promise.all(BRAIN_DATEIEN.map(dateiLaden)).then(() => {
+        const app = {
+          K, esc, symbol, toast, frage, ersetzen, fokusSetzen, neueId, version: VERSION, chat,
+          demo: () => modus.demo, laptop: LAPTOP, wenigBewegung: WENIG_BEWEGUNG,
+          el: { ansicht: el.brain, nachrichten: el.nachrichten, chipsLeiste: el.chipsLeiste, willkommen: el.willkommen },
+          dialogAnmelden: (d) => { DIALOGE.push(d); d.addEventListener("close", () => { if (el.toasts.parentNode === d) toastsNachVorn(); }); },
+          api,
+          patienten: async () => chat.patienten || (await patientenLaden().then(() => chat.patienten, () => [])) || [],
+          notizen: async () => ((await api("/api/notizen")) || {}).notizen || [],
+          berichte: brainBerichte,
+          adresseSetzen: (hash, { ersetzen: statt = false } = {}) => { if (jetzigerHash() !== hash) history[statt ? "replaceState" : "pushState"](null, "", hash); letzterHash = hash; },
+          interviewStarten: () => BRAIN && BRAIN.gespraech.interviewStarten(),
+          serverKannBrain: () => modus.demo || serverFunktionen.includes("brain"),
+          senden, lokaleAntwort, nachrichtNeuZeichnen, gespraechMerken, modusSetzen, hakenZeichnen,
+          nutzerNachricht: (text, art = "") => nachrichtHinzufuegen({ id: neueId(), rolle: "nutzer", text: String(text).trim(), art, lokal: true }),
+          zumGespraech: () => { if (jetzigerHash() !== chatHash()) location.hash = chatHash(); },
+          eingabeFokus: () => { if (!GROB) el.text.focus(); },
+        };
+        BRAIN = window.GabiBrainAnsicht.erstelle(app);
+        BRAIN.gespraech = window.GabiBrainGespraech.erstelle(app, BRAIN);
+        if (el.naviBrain) el.naviBrain.hidden = false;
+        if (el.schubladeBrain) el.schubladeBrain.hidden = false;
+        if (el.infoBrain) el.infoBrain.hidden = false;
+        return BRAIN;
+      }).catch(() => {
+        toast("Das Brain ließ sich nicht laden – Gabi läuft ohne weiter.", { art: "warn", dauer: 6000 });
+        return null;
+      });
+    }
+    return brainLaedt;
+  }
+  /** Berichte aus den Gesprächen dieses Geräts (nur Art, Kürzel, Datum) – im Brain als geschützte Knoten. */
+  async function brainBerichte() {
+    const liste = [];
+    for (const e of verlauf.eintraege) {
+      let nachrichten = e.id === chat.gespraech.id ? chat.nachrichten : (verlauf.inhalte.get(e.id) || {}).nachrichten;
+      if (!nachrichten) { try { nachrichten = await verlauf.ablage.laden(e.id); } catch { nachrichten = null; } }
+      for (const k of VERLAUF.kartenVon(nachrichten || [])) {
+        if (k && k.typ === "bericht" && k.bericht && k.id) liste.push({ id: k.id, titel: k.bericht.titel, kuerzel: k.bericht.kuerzel, erstellt_am: k.bericht.erstellt_am, gespraech: e.id });
+      }
+    }
+    return liste;
+  }
+
   let gestartet = false;
   let startLaeuft = null;
   /** App starten (nach Zugang oder im Demo-Modus): Gesprächsverlauf öffnen, Patienten laden, Adresse zeigen. */
@@ -494,6 +570,8 @@
     startLaeuft = (async () => {
       gestartet = false; // Navigation wartet, bis der Verlauf bereit ist
       ordnerZwischenspeicherLeeren();
+      await brainLaden();
+      if (BRAIN) BRAIN.bereit().then(() => { if (BRAIN) BRAIN.gespraech.startZeichnen(); }).catch(() => {});
       await verlaufStarten();
       gestartet = true;
       const patienten = patientenLaden().catch(() => {});
@@ -530,9 +608,10 @@
   const ausInfoDialog = () => { el.dialogInfo.close(); zuletztBedient = { knopf: el.testBadge, zeit: performance.now() }; };
   el.infoZuruecksetzen.addEventListener("click", async () => {
     ausInfoDialog();
-    if (!(await frage("Beispieldaten zurücksetzen?", "Alle Änderungen im Demo-Modus gehen verloren, auch die Demo-Gespräche.", { ja: "Zurücksetzen", gefahr: true }))) return;
+    if (!(await frage("Beispieldaten zurücksetzen?", BRAIN ? "Alle Änderungen im Demo-Modus gehen verloren, auch die Demo-Gespräche und das Demo-Brain." : "Alle Änderungen im Demo-Modus gehen verloren, auch die Demo-Gespräche.", { ja: "Zurücksetzen", gefahr: true }))) return;
     demoApi.zuruecksetzen();
     await gespraecheLeeren(); // Demo-Gespräche verweisen sonst auf Notizen, die es nicht mehr gibt
+    if (BRAIN) await BRAIN.zuruecksetzen().catch(() => {});
     ordnerZwischenspeicherLeeren();
     await patientenLaden().catch(() => {});
     if ((location.hash || "#/") !== "#/") location.hash = "#/";
@@ -559,9 +638,11 @@
       a === 1 ? "Eine Aufnahme ist noch nicht gesendet und geht verloren." : a > 1 ? `${a} Aufnahmen sind noch nicht gesendet und gehen verloren.` : "",
       speichert === 1 ? "Ein Entwurf wird gerade gespeichert – Gabi wartet noch darauf." : speichert > 1 ? `${speichert} Entwürfe werden gerade gespeichert – Gabi wartet noch darauf.` : "",
       e === 1 ? "In den Gesprächen ist ein Entwurf noch nicht gespeichert." : e > 1 ? `In den Gesprächen sind ${e} Entwürfe noch nicht gespeichert.` : "",
+      BRAIN && BRAIN.ungespeichert() ? "Deine Änderung im Brain ist noch nicht gespeichert und geht verloren." : "",
     ].filter(Boolean).join(" ");
-    if (!(await frage("Abmelden?", text, { ja: "Abmelden", gefahr: Boolean(a || e || (notiz && !notizSpeichert)), haken: "Gespräche auf diesem Gerät auch löschen" }))) return;
-    await abmelden({ loeschen: el.frageHaken.checked });
+    // Brain: eigenes Häkchen, bewusst nicht vorbelegt – das Wissen liegt im lokalen Betrieb nur auf diesem Gerät
+    if (!(await frage("Abmelden?", text, { ja: "Abmelden", gefahr: Boolean(a || e || (notiz && !notizSpeichert) || (BRAIN && BRAIN.ungespeichert())), haken: "Gespräche auf diesem Gerät auch löschen", haken2: BRAIN ? "Brain-Wissen auf diesem Gerät auch löschen" : "" }))) return;
+    await abmelden({ loeschen: el.frageHaken.checked, brainLoeschen: Boolean(BRAIN && el.frageHaken2.checked) });
   });
 
   /** Text unter dem Ladekreis (leer = keiner); der Ladekreis sagt dasselbe für Screenreader. */
@@ -587,7 +668,7 @@
    * 6. Reste im Tab leeren: Aufnahmen, Notizordner (Zwischenspeicher, Suche, Ansicht), getippter Text, Adresse
    * 7. Code auch im Tab vergessen, Zugangsseite
    */
-  async function abmelden({ loeschen = false } = {}) {
+  async function abmelden({ loeschen = false, brainLoeschen = false } = {}) {
     if (abmeldenLaeuft) return;
     abmeldenLaeuft = true;
     speicher.loeschen("lokal", "gabi.zugang"); // laufende Anfragen behalten den Code (zugang) bis Schritt 7
@@ -615,6 +696,8 @@
         demoKanal.senden({ art: "geleert" });
         setTimeout(() => demoKanal.schliessen(), 500);
       }
+      // Brain: Ablage schließen; mit Häkchen das Brain-Wissen dieses Geräts sofort löschen (echt und Demo)
+      if (BRAIN && !(await BRAIN.abmelden({ loeschen: brainLoeschen })) && brainLoeschen) toast("Das Brain ließ sich nicht vollständig löschen – Gabi holt es beim nächsten Start nach.", { art: "fehler", dauer: 8000 });
       // höchstens so lange wie eine Anfrage – ab Beginn bzw. ab dem Losschicken eines Entwurfs (speichernBis)
       const beginn = Date.now();
       const frist = () => Math.max(beginn + 20000, speichernBis);
@@ -646,13 +729,16 @@
   let letzterHash = location.hash || "#/";
   let routeLaeuft = false;
   const jetzigerHash = () => location.hash || "#/";
+  /** Notizordner oder Brain: Bereiche neben dem Gespräch – dort bleibt die Adresse, wenn sich das offene Gespräch ändert. */
+  const nebenGespraech = () => jetzigerHash().startsWith("#/notizen") || jetzigerHash().startsWith("#/brain");
   const GESPRAECH_ADRESSE = /^#\/gespraech\/([0-9A-Za-z-]{8,64})$/;
 
   /** Bereich umschalten (Gespräch ↔ Notizen) – erst, wenn der neue Inhalt bereitsteht: kein leerer Zwischenzustand. */
   function bereichZeigen(notizen) {
-    ansichtZeigen(notizen ? "notizen" : "chat");
+    const bereich = notizen === "brain" ? "brain" : notizen ? "notizen" : "chat";
+    ansichtZeigen(bereich);
     for (const a of document.querySelectorAll(".navi a")) {
-      if (a.dataset.navi === (notizen ? "notizen" : "chat")) a.setAttribute("aria-current", "page");
+      if (a.dataset.navi === bereich) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     }
     el.kopfWechsel.setAttribute("href", notizen ? chatHash() : "#/notizen");
@@ -680,9 +766,22 @@
         history.replaceState(null, "", letzterHash);
         return;
       }
+      // Brain: ungespeicherte Bearbeitung beim Verlassen oder Wechsel des Eintrags nachfragen
+      if (BRAIN && ziel !== letzterHash && BRAIN.ungespeichert() && !(await BRAIN.verlassenOk())) {
+        history.replaceState(null, "", letzterHash);
+        return;
+      }
       ordner.geaendert = false;
       const vorher = letzterHash;
       if (ziel !== vorher) ordner.bearbeiten = null; // Bearbeiten endet beim Verlassen (sonst bliebe die Notiz später hängen)
+      if (BRAIN && ziel.startsWith("#/brain")) {
+        letzterHash = ziel;
+        BRAIN.route(ziel);
+        bereichZeigen("brain");
+        BRAIN.zeigen();
+        if (!vorher.startsWith("#/brain")) window.scrollTo(0, 0);
+        return;
+      }
       if (ziel.startsWith("#/notizen")) {
         letzterHash = ziel;
         await notizenZeigen(ziel); // aus dem Zwischenspeicher sofort, sonst höchstens kurz warten (alter Inhalt bleibt so lange)
@@ -761,7 +860,7 @@
   function chatLinksAktualisieren() {
     const h = chatHash();
     for (const a of document.querySelectorAll('.navi a[data-navi="chat"], a.marke')) a.setAttribute("href", h);
-    if (jetzigerHash().startsWith("#/notizen")) el.kopfWechsel.setAttribute("href", h);
+    if (nebenGespraech()) el.kopfWechsel.setAttribute("href", h);
   }
 
   // ---------- Öffnen beim Start ----------
@@ -1070,7 +1169,7 @@
       })
       .catch(speicherFehler);
     if (erstes) {
-      if (g === chat.gespraech && !jetzigerHash().startsWith("#/notizen")) {
+      if (g === chat.gespraech && !nebenGespraech()) {
         const h = chatHash(g);
         history.replaceState(null, "", h); // ab jetzt eigene Adresse: Neuladen und Zurück öffnen dieses Gespräch
         letzterHash = h;
@@ -1150,7 +1249,7 @@
   /** Neues leeres Gespräch als offenes – ohne neuen Eintrag im Browserverlauf. */
   function neuesLeeresZeigen() {
     gespraechAktivieren(gespraechAnlegen());
-    if (!jetzigerHash().startsWith("#/notizen") && jetzigerHash() !== "#/") { history.replaceState(null, "", "#/"); letzterHash = "#/"; }
+    if (!nebenGespraech() && jetzigerHash() !== "#/") { history.replaceState(null, "", "#/"); letzterHash = "#/"; }
     chatLinksAktualisieren();
   }
 
@@ -1425,6 +1524,7 @@
   el.kopfMenue.addEventListener("click", schubladeOeffnen);
   el.schubladeZu.addEventListener("click", () => schubladeSchliessen());
   el.schublade.addEventListener("click", (e) => { if (e.target === el.schublade) schubladeSchliessen(); }); // Tipp neben die Schublade
+  if (el.schubladeBrain) el.schubladeBrain.addEventListener("click", () => schubladeSchliessen(true)); // Link „Brain“: Schublade zu, dann wechseln
   el.schublade.addEventListener("cancel", (e) => { e.preventDefault(); if (!verlauf.umbenennen && !verlauf.escUmbenennen) schubladeSchliessen(); }); // Esc – mit Animation
   el.schublade.addEventListener("close", () => {
     el.schublade.classList.remove("schliesst");
@@ -1499,6 +1599,7 @@
     el.chipsLeiste.hidden = leer;
     modusAnzeigen();
     seitenPatientenZeigen();
+    if (BRAIN) BRAIN.gespraech.startZeichnen();
   }
 
   function nachrichtBauen(n) {
@@ -1562,6 +1663,7 @@
     if (n.quellen && n.quellen.length) {
       teile.push(`<div class="quellen"><span class="augenbraue">Gefundene Notizen</span>${n.quellen.slice(0, 6).map((q) => `<a class="quelle" href="#/notizen/n/${esc(q.id)}">${symbol("dokument")}${esc(q.kuerzel)} · ${esc(K.datumKurz(q.erstellt_am))}</a>`).join("")}</div>`);
     }
+    if (BRAIN) { const zusatz = BRAIN.gespraech.nachrichtZusatz(n); if (zusatz) teile.push(zusatz); }
     if (n.fehler) {
       // Kam schon ein Entwurf/Bericht an, fehlt nur Gabis Text dazu: kein „Nochmal versuchen“ (siehe wiederholen)
       const karte = karteDerAntwort(n);
@@ -1650,10 +1752,11 @@
     const gabi = nachrichtHinzufuegen({ id: neueId(), rolle: "gabi", text: "", karten: [], quellen: [], laeuft: true, wartet: true, status: "" }, g);
     const fuerServer = K.verlaufFuerServer(g.nachrichten.filter((n) => n !== gabi));
     if (aktion && fuerServer.length) fuerServer[fuerServer.length - 1] = { rolle: "nutzer", text: nutzer.text }; // Diktat pur, ohne Vorsatz
-    await abwarten(antwortHolen(gabi, { nachrichten: fuerServer, ...(aktion ? { aktion } : {}) }, g));
+    // freie Fragen bekommen den passenden Kontext aus dem Brain mit (nie Diktat oder Bericht)
+    await abwarten(antwortHolen(gabi, { nachrichten: fuerServer, ...(aktion ? { aktion } : {}) }, g, { brainFrage: BRAIN && !aktion ? nutzer.text : "" }));
   }
 
-  async function antwortHolen(gabi, body, g = chat.gespraech) {
+  async function antwortHolen(gabi, body, g = chat.gespraech, { brainFrage = "" } = {}) {
     const abbruch = new AbortController();
     chat.laeuft = { abbruch, gabi, gespraech: g };
     netzfehlerVergessen(gabi); // „Nochmal versuchen“, während ein Netzfehler noch vorläufig war
@@ -1664,6 +1767,10 @@
     eingabeAktualisieren();
     let netz = false;
     try {
+      if (BRAIN && brainFrage) {
+        const brainKontext = await BRAIN.gespraech.kontext(brainFrage);
+        if (brainKontext) { body = { ...body, brainKontext }; gabi.body = body; }
+      }
       await chatStrom(body, (e) => ereignis(gabi, e, g), abbruch.signal);
     } catch (e) {
       if (e instanceof Abbruch) {
@@ -1695,6 +1802,12 @@
   }
 
   function ereignis(gabi, e, g = chat.gespraech) {
+    // Brain: Quellen (Knoten), Lücke, Vorschlagskarte
+    if (BRAIN && BRAIN.gespraech.ereignis(gabi, e, g)) {
+      if (e.t === "brain_vorschlag") gespraechMerken(g);
+      spaeterZeichnen(gabi);
+      return;
+    }
     switch (e.t) {
       case "text":
         gabi.text += String(e.d || "");
@@ -1811,6 +1924,10 @@
       el.modusSymbol.innerHTML = '<use href="#i-mikro"/>';
       el.modusText.textContent = `Diktat für ${m.kuerzel}${kurzName(m) ? ` · ${kurzName(m)}` : ""}`;
       el.text.placeholder = "Sprechen oder tippen …";
+    } else if (m.typ === "interview") {
+      el.modusSymbol.innerHTML = '<use href="#i-funke"/>';
+      el.modusText.textContent = BRAIN ? BRAIN.gespraech.modusText(m) : "Brain füllen";
+      el.text.placeholder = "Antworte per Sprache oder Text …";
     } else {
       el.modusSymbol.innerHTML = '<use href="#i-suche"/>';
       el.modusText.textContent = "Suche in deinen Notizen";
@@ -1836,6 +1953,7 @@
   const kurzName = (p) => String(p.pseudonym || "").replace(/^Testfall\s+/i, "").replace(/\s*\(fiktiv\)$/, "");
 
   function karteHtml(n, k) {
+    if (typeof k.typ === "string" && k.typ.startsWith("brain-")) return BRAIN ? BRAIN.gespraech.karteHtml(n, k) : "";
     if (k.typ === "auswahl") return auswahlHtml(k);
     if (k.typ === "entwurf") return entwurfHtml(k, n);
     if (k.typ === "bericht") return berichtHtml(k);
@@ -2015,6 +2133,7 @@
     if (aktion === "kopieren") return kopieren(nachrichtAlsText(n), "Antwort kopiert.");
     if (aktion === "vorlesen") return vorlesen(n);
     if (aktion === "neu-laden") return location.reload();
+    if (aktion.startsWith("brain-")) return BRAIN ? BRAIN.gespraech.klick(aktion, n, k, b, g) : undefined;
     if (!k) return;
     // eine aus einem anderen Tab übernommene vorläufige Antwort (dort Netzfehler, „unterwegs“) gilt hier, sobald an ihrer
     // Karte gearbeitet wird: sonst übergeht der andere Tab die Änderung, und sein nächstes Schreiben nimmt sie zurück
@@ -2375,6 +2494,7 @@
       modusSetzen(null);
       return senden({ text, senden: `Suche in meinen Notizen: ${text}`, art: "suche" });
     }
+    if (BRAIN && BRAIN.gespraech.textAbfangen(text, art, m)) return undefined; // Interview-Antwort oder Brain-Befehl
     return senden({ text, art, beispiel });
   }
 
@@ -2482,7 +2602,7 @@
     try {
       const b64 = await holen();
       await sichtbar();
-      const zweck = modusBeiAufnahme && modusBeiAufnahme.typ === "diktat" ? "diktat" : "frage";
+      const zweck = modusBeiAufnahme && modusBeiAufnahme.typ === "diktat" ? "diktat" : modusBeiAufnahme && modusBeiAufnahme.typ === "interview" ? "antwort" : "frage";
       const demoZusatz = modus.demo ? `?zweck=${zweck}${zweck === "diktat" ? `&patient=${encodeURIComponent(modusBeiAufnahme.kuerzel)}` : ""}` : "";
       const d = await api(`/api/transkribieren${demoZusatz}`, { methode: "POST", text: b64, zeit: 180000 });
       const text = String((d && d.text) || "").trim();
@@ -3049,7 +3169,7 @@
   }
 
   window.addEventListener("beforeunload", (e) => {
-    if (offeneEntwuerfe().length || aufnahmen.size || ordner.geaendert || aufnahme.phase !== "bereit" || erkennt) { e.preventDefault(); e.returnValue = ""; }
+    if (offeneEntwuerfe().length || aufnahmen.size || ordner.geaendert || aufnahme.phase !== "bereit" || erkennt || (BRAIN && BRAIN.ungespeichert())) { e.preventDefault(); e.returnValue = ""; }
   });
 
   // Los geht's
