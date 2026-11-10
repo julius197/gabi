@@ -470,3 +470,130 @@ describe("Übernahme aus v2.0: was andere Tabs aus der Liste lesen", () => {
     expect(m).toMatchObject({ titel: "Diktat TP-01: Knie rechts, Flexion 100…", entwuerfe: 1 });
   });
 });
+
+describe("Brain-Karten: Endzustände sind einbahnig – auch über zwei Tabs (v2.2)", () => {
+  const K = require("../../kern.js");
+  const vorschlag = (extra = {}) => ({ typ: "brain-vorschlag", id: "v1", art: "neu", knoten: "", titel: "Telefonzeiten", inhalt: "Mo–Fr 8–12 Uhr", ...extra });
+  const frage = (extra = {}) => ({ typ: "brain-interview", id: "i1", knoten: "s-frage-parken", ...extra });
+  function lsAttrappe() {
+    const m = new Map();
+    return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); } };
+  }
+
+  it("„übernommen“ (mit der Kennung des Eintrags), „verworfen“ und „erledigt“ wandern hinüber – zurück geht es nie", () => {
+    const hier = [gabi("x", { id: "g1", karten: [vorschlag(), vorschlag({ id: "v2", titel: "Parken" }), frage()] })];
+    const dort = [gabi("x", { id: "g1", karten: [vorschlag({ uebernommen: "kNeuerEintrag0000001" }), vorschlag({ id: "v2", titel: "Parken", verworfen: true }), frage({ erledigt: true })] })];
+    expect(G.endzustaendeUebernehmen(hier, dort)).toEqual([hier[0]]);
+    expect(hier[0].karten).toEqual([vorschlag({ uebernommen: "kNeuerEintrag0000001" }), vorschlag({ id: "v2", titel: "Parken", verworfen: true }), frage({ erledigt: true })]);
+    // ein älterer Stand ohne Endzustand nimmt nichts zurück …
+    expect(G.endzustaendeUebernehmen(hier, [gabi("x", { id: "g1", karten: [vorschlag(), vorschlag({ id: "v2", titel: "Parken" }), frage()] })])).toEqual([]);
+    expect(hier[0].karten.map((k) => [k.uebernommen, k.verworfen, k.erledigt])).toEqual([["kNeuerEintrag0000001", undefined, undefined], [undefined, true, undefined], [undefined, undefined, true]]);
+    // … und ein übernommener Vorschlag behält die Kennung seines Eintrags (kein zweiter Tab schreibt eine andere darüber)
+    expect(G.endzustaendeUebernehmen(hier, [gabi("x", { karten: [vorschlag({ uebernommen: "kAndererEintrag00002" })] })])).toEqual([]);
+    expect(hier[0].karten[0].uebernommen).toBe("kNeuerEintrag0000001");
+    // noch einmal dasselbe: nichts mehr zu tun
+    expect(G.endzustaendeUebernehmen(hier, dort)).toEqual([]);
+  });
+
+  it("hier verworfen, dort übernommen: beides bleibt stehen, und „übernommen“ zählt (der Eintrag steht ja im Brain) – nie umgekehrt gelöscht", () => {
+    const a = [gabi("x", { karten: [vorschlag({ verworfen: true })] })];
+    expect(G.endzustaendeUebernehmen(a, [gabi("x", { karten: [vorschlag({ uebernommen: "kNeuerEintrag0000001" })] })])).toHaveLength(1);
+    expect(a[0].karten[0]).toMatchObject({ uebernommen: "kNeuerEintrag0000001" });
+    expect(K.karteAlsText(a[0].karten[0])).toMatch(/\(übernommen\)\]$/); // so erfährt es auch Gabi
+    const b = [gabi("x", { karten: [vorschlag({ uebernommen: "kNeuerEintrag0000001" })] })];
+    G.endzustaendeUebernehmen(b, [gabi("x", { karten: [vorschlag({ verworfen: true })] })]);
+    expect(b[0].karten[0].uebernommen).toBe("kNeuerEintrag0000001"); // ein „verworfen“ von dort nimmt das Übernehmen nicht zurück
+    expect(K.karteAlsText(b[0].karten[0])).toMatch(/\(übernommen\)\]$/);
+  });
+
+  it("nur dieselbe Karte vom selben Typ; fremde Felder und Brain-Karten ohne Endzustand bleiben unberührt", () => {
+    const hier = [gabi("x", { karten: [vorschlag({ id: "x1" }), frage({ id: "x2" }), { typ: "brain-treffer", id: "x3" }, { typ: "brain-gesundheit", id: "x4" }, vorschlag({ id: "x5" }), frage({ id: "x6" })] })];
+    const vorher = JSON.stringify(hier);
+    const dort = [gabi("x", { karten: [
+      frage({ id: "x1", erledigt: true }), // gleiche Kennung, anderer Typ
+      vorschlag({ id: "x2", uebernommen: "kNeuerEintrag0000001" }),
+      { typ: "brain-treffer", id: "x3", erledigt: true, uebernommen: "k", verworfen: true }, // dieser Typ kennt keinen Endzustand
+      { typ: "brain-gesundheit", id: "x4", erledigt: true },
+      vorschlag({ id: "x5", erledigt: true, gespeichert: "n-1", gewaehlt: "p-1" }), // Felder anderer Kartentypen zählen hier nicht
+      frage({ id: "x6", uebernommen: "k", verworfen: true }),
+      vorschlag({ id: "gibt-es-hier-nicht", uebernommen: "k" }),
+    ] })];
+    expect(G.endzustaendeUebernehmen(hier, dort)).toEqual([]);
+    expect(JSON.stringify(hier)).toBe(vorher);
+  });
+
+  it("zwei Tabs: dort übernommen, hier gerade in Bearbeitung → hier auch übernommen (sonst entstünde der Eintrag doppelt)", () => {
+    const hier = gabi("Das trage ich so ein – bitte prüfen.", { id: "g1", karten: [vorschlag({ bearbeiten: true, bearbeitung: { inhalt: "hier getippt" } })] });
+    const fremd = [gabi("Das trage ich so ein – bitte prüfen.", { id: "g1", karten: [vorschlag({ uebernommen: "kNeuerEintrag0000001", inhalt: "dort übernommen" })] }), gabi("neu", { id: "g2" })];
+    const r = G.zusammenfuehren([hier], fremd, { inArbeit: (n) => (n.karten || []).some((k) => k.bearbeiten) });
+    expect(r.geaendert).toEqual([hier]);
+    expect(hier.karten[0].uebernommen).toBe("kNeuerEintrag0000001");
+    expect(r.neu.map((n) => n.id)).toEqual(["g2"]);
+    expect(r.veraltet).toBe(false);
+    // dort verworfen bzw. die Interview-Frage dort beantwortet: ebenso
+    const hier2 = gabi("x", { id: "g4", karten: [vorschlag({ bearbeiten: true }), frage()] });
+    G.zusammenfuehren([hier2], [gabi("x", { id: "g4", karten: [vorschlag({ verworfen: true }), frage({ erledigt: true })] })], { inArbeit: () => true });
+    expect(hier2.karten[0].verworfen).toBe(true);
+    expect(hier2.karten[1].erledigt).toBe(true);
+    // ohne laufende Arbeit kommt der fremde Stand ganz an
+    const hier3 = gabi("x", { id: "g5", karten: [vorschlag(), frage()] });
+    const r3 = G.zusammenfuehren([hier3], [gabi("x", { id: "g5", karten: [vorschlag({ uebernommen: "kNeuerEintrag0000001" }), frage({ erledigt: true })] })]);
+    expect(r3).toMatchObject({ geaendert: [hier3], veraltet: false });
+    expect(hier3.karten).toEqual([vorschlag({ uebernommen: "kNeuerEintrag0000001" }), frage({ erledigt: true })]);
+  });
+
+  it("zwei Tabs: ein älterer Stand des anderen Tabs nimmt eigenes „übernommen“/„verworfen“/„erledigt“ nicht zurück – und gilt als veraltet", () => {
+    const eigene = () => gabi("x", { id: "g1", karten: [vorschlag({ uebernommen: "kNeuerEintrag0000001" }), vorschlag({ id: "v2", verworfen: true }), frage({ erledigt: true })] });
+    const alt = () => [gabi("x neu", { id: "g1", karten: [vorschlag(), vorschlag({ id: "v2" }), frage()] })];
+    const hier = eigene();
+    const r = G.zusammenfuehren([hier], alt());
+    expect(r.geaendert).toEqual([hier]);
+    expect(hier.text).toBe("x neu"); // übrige Änderungen kommen an
+    expect(hier.karten.map((k) => [k.uebernommen, k.verworfen, k.erledigt])).toEqual([["kNeuerEintrag0000001", undefined, undefined], [undefined, true, undefined], [undefined, undefined, true]]);
+    expect(r.veraltet).toBe(true); // dem gespeicherten Stand fehlen die eigenen Endzustände: zurückschreiben
+    // dasselbe, während hier an der Nachricht gearbeitet wird
+    const hier2 = eigene();
+    const r2 = G.zusammenfuehren([hier2], alt(), { inArbeit: () => true });
+    expect(r2).toMatchObject({ geaendert: [], veraltet: true });
+    expect(hier2.text).toBe("x");
+    expect(hier2.karten[0].uebernommen).toBe("kNeuerEintrag0000001");
+    // je ein Endzustand allein genügt für „veraltet“
+    for (const karte of [vorschlag({ uebernommen: "k1" }), vorschlag({ verworfen: true }), frage({ erledigt: true })]) {
+      const offen = { ...karte };
+      for (const feld of ["uebernommen", "verworfen", "erledigt"]) delete offen[feld];
+      expect(G.zusammenfuehren([gabi("x", { id: "g7", karten: [karte] })], [gabi("x", { id: "g7", karten: [offen] })]).veraltet, JSON.stringify(karte)).toBe(true);
+    }
+    // gleicher Stand: nichts zurückzuschreiben
+    expect(G.zusammenfuehren([eigene()], [eigene()])).toMatchObject({ geaendert: [], veraltet: false });
+  });
+
+  it("Ablage: Speichern nimmt „übernommen“ und „erledigt“ nie zurück – ein Tab mit altem Stand wird nachgezogen", async () => {
+    for (const a of [G.lsAblage("gabi.", lsAttrappe()), G.speicherAblage()]) {
+      await a.bereit();
+      expect(await a.speichern({ id: "g", entwuerfe: 0 }, [gabi("x", { id: "m1", karten: [vorschlag({ uebernommen: "kNeuerEintrag0000001" }), frage({ erledigt: true })] })])).toBeNull();
+      // der andere Tab schreibt seinen alten Stand (Vorschlag noch offen und in Bearbeitung, Frage noch offen) samt einer neuen Nachricht
+      const alt = [gabi("x", { id: "m1", karten: [vorschlag({ inhalt: "alter Tab", bearbeitung: { inhalt: "tippt" } }), frage()] }), nutzer("neu", { id: "m2" })];
+      const nachgezogen = await a.speichern({ id: "g", entwuerfe: 0 }, alt);
+      expect(nachgezogen[0].karten[0].uebernommen).toBe("kNeuerEintrag0000001"); // für den Tab zum Nachziehen
+      expect(nachgezogen[0].karten[1].erledigt).toBe(true);
+      const da = await a.laden("g");
+      expect(da[0].karten[0].uebernommen).toBe("kNeuerEintrag0000001");
+      expect(da[0].karten[1].erledigt).toBe(true);
+      expect(da[1].text).toBe("neu"); // das Übrige des neueren Stands bleibt
+      // und ein verworfener Vorschlag bleibt verworfen
+      await a.speichern({ id: "h", entwuerfe: 0 }, [gabi("y", { id: "m3", karten: [vorschlag({ id: "v9", verworfen: true })] })]);
+      await a.speichern({ id: "h", entwuerfe: 0 }, [gabi("y", { id: "m3", karten: [vorschlag({ id: "v9" })] })]);
+      expect((await a.laden("h"))[0].karten[0].verworfen).toBe(true);
+    }
+  });
+
+  it("offene Brain-Vorschläge sind keine offenen Notiz-Entwürfe; Flüchtiges („speichert“) wird nicht mitgespeichert", () => {
+    const nachrichten = [nutzer("Merke dir: Parken hinter dem Haus"), gabi("Vorschlag", { karten: [vorschlag({ speichert: true }), frage()] })];
+    expect(G.offeneEntwuerfe(nachrichten)).toBe(0);
+    expect(G.meta({ id: "x", nachrichten, erstellt: 1, geaendert: 2 }).entwuerfe).toBe(0);
+    expect(G.bereinigen(nachrichten)[1].karten).toEqual([vorschlag(), frage()]);
+    // nur Brain-Karten ohne eine Nachricht der Nutzerin (z. B. „Brain füllen“ aus dem Brain heraus gestartet): nichts zum Aufheben
+    expect(G.istLeer([gabi("Frage 1 von 7", { lokal: true, karten: [frage()] })])).toBe(true);
+    expect(G.istLeer(nachrichten)).toBe(false);
+  });
+});

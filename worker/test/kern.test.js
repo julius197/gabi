@@ -257,3 +257,66 @@ describe("Bericht-PDF", () => {
     expect(PDF.berichtDateiname({ ...bericht, art: "zusammenfassung" })).toBe("PhysioWorks_Zusammenfassung_TP-01_2026-11-08.pdf");
   });
 });
+
+describe("Kern: Brain-Karten im Verlauf für den Server", () => {
+  const vorschlag = (extra = {}) => ({ typ: "brain-vorschlag", titel: "Telefonzeiten", inhalt: "Mo–Fr 8–12 Uhr unter 0911 2399823. INHALT-NICHT-MITSCHICKEN", grund: "GRUND-NICHT-MITSCHICKEN", knoten: "s-telefonzeiten", ...extra });
+
+  it("ein Vorschlag fürs Brain wird zu einer Hinweiszeile: Titel und Zustand – übernommen, nicht übernommen, noch nicht übernommen", () => {
+    expect(K.karteAlsText(vorschlag())).toBe("[App-Hinweis: Vorschlag fürs Brain „Telefonzeiten“ angezeigt (noch nicht übernommen)]");
+    expect(K.karteAlsText(vorschlag({ uebernommen: true }))).toBe("[App-Hinweis: Vorschlag fürs Brain „Telefonzeiten“ angezeigt (übernommen)]");
+    expect(K.karteAlsText(vorschlag({ verworfen: true }))).toBe("[App-Hinweis: Vorschlag fürs Brain „Telefonzeiten“ angezeigt (nicht übernommen)]");
+    expect(K.karteAlsText(vorschlag({ uebernommen: true, verworfen: true }))).toMatch(/\(übernommen\)\]$/); // übernommen gewinnt (Endzustand aus einem anderen Tab)
+    // auch die Zustände, wie sie nach dem Speichern im Gespräch stehen (Kennung des Knotens bzw. Zeitpunkt)
+    expect(K.karteAlsText(vorschlag({ uebernommen: "kAbCdEfGhIjKlMnOpQrSt" }))).toMatch(/\(übernommen\)\]$/);
+    expect(K.karteAlsText(vorschlag({ verworfen: 1794301200000 }))).toMatch(/\(nicht übernommen\)\]$/);
+  });
+
+  it("nur der Titel geht mit (höchstens 120 Zeichen) – nie der vorgeschlagene Inhalt, der Grund oder Kennungen", () => {
+    const zeile = K.karteAlsText(vorschlag({ typNeu: "aendern", id: "s-telefonzeiten" }));
+    for (const nicht of ["INHALT-NICHT-MITSCHICKEN", "GRUND-NICHT-MITSCHICKEN", "0911", "s-telefonzeiten"]) expect(zeile).not.toContain(nicht);
+    const lang = K.karteAlsText(vorschlag({ titel: "T".repeat(500) }));
+    expect(lang).toBe(`[App-Hinweis: Vorschlag fürs Brain „${"T".repeat(120)}“ angezeigt (noch nicht übernommen)]`);
+    for (const ohne of [undefined, null, ""]) expect(K.karteAlsText(vorschlag({ titel: ohne }))).toBe("[App-Hinweis: Vorschlag fürs Brain „“ angezeigt (noch nicht übernommen)]");
+    expect(K.karteAlsText(vorschlag({ titel: 42 }))).toContain("„42“");
+  });
+
+  it("andere Brain-Karten (Interview, Lücken-Hinweis, Unbekanntes) erzeugen keinen Text für den Server", () => {
+    for (const typ of ["brain-interview", "brain-luecke", "brain-quellen", "brain", "brain-vorschlag2", "Brain-Vorschlag", ""]) {
+      expect(K.karteAlsText({ typ, titel: "Telefonzeiten", frage: "Wie sind die Telefonzeiten?", knoten: "s-telefonzeiten" }), typ).toBe("");
+    }
+    for (const kaputt of [null, undefined, "brain-vorschlag", 42, []]) expect(K.karteAlsText(kaputt)).toBe("");
+  });
+
+  it("im Verlauf hängt die Hinweiszeile an Gabis Antwort; Interview-Karten und lokale Hinweise kommen nicht mit", () => {
+    const v = K.verlaufFuerServer([
+      { rolle: "nutzer", text: "Merke dir: Telefonzeiten sind Mo–Fr 8–12 Uhr" },
+      { rolle: "gabi", text: "Das trage ich so ins Brain ein – bitte prüfen.", karten: [vorschlag({ uebernommen: true })] },
+      { rolle: "nutzer", text: "Brain füllen" },
+      { rolle: "gabi", text: "Frage 1 von 7: …", karten: [{ typ: "brain-interview", frage: "Gibt es Parkplätze?", knoten: "s-frage-parken" }] },
+      { rolle: "gabi", text: "Brain-Daten liegen nur auf diesem Gerät.", lokal: true, karten: [vorschlag({ titel: "Lokal" })] },
+      { rolle: "nutzer", text: "Ändere die Telefonzeiten auf 8–13 Uhr" },
+      { rolle: "gabi", text: "", karten: [vorschlag({ verworfen: true }), vorschlag({ titel: "Zweiter Vorschlag" })] },
+    ]);
+    expect(v).toEqual([
+      { rolle: "nutzer", text: "Merke dir: Telefonzeiten sind Mo–Fr 8–12 Uhr" },
+      { rolle: "gabi", text: "Das trage ich so ins Brain ein – bitte prüfen.\n\n[App-Hinweis: Vorschlag fürs Brain „Telefonzeiten“ angezeigt (übernommen)]" },
+      { rolle: "nutzer", text: "Brain füllen" },
+      { rolle: "gabi", text: "Frage 1 von 7: …" },
+      { rolle: "nutzer", text: "Ändere die Telefonzeiten auf 8–13 Uhr" },
+      { rolle: "gabi", text: "[App-Hinweis: Vorschlag fürs Brain „Telefonzeiten“ angezeigt (nicht übernommen)]\n[App-Hinweis: Vorschlag fürs Brain „Zweiter Vorschlag“ angezeigt (noch nicht übernommen)]" },
+    ]);
+    expect(JSON.stringify(v)).not.toMatch(/INHALT-NICHT|GRUND-NICHT|s-frage-parken|Lokal/);
+  });
+
+  it("ein gescheiterter Wortwechsel bleibt draußen, auch wenn schon ein Brain-Vorschlag da war (nur Entwurf und Bericht halten ihn)", () => {
+    const v = K.verlaufFuerServer([
+      { rolle: "nutzer", text: "Hallo" },
+      { rolle: "gabi", text: "Hallo!" },
+      { rolle: "nutzer", text: "Merke dir: Parken hinter dem Haus" },
+      { rolle: "gabi", text: "Das trage ich", fehler: "Verbindung unterbrochen", karten: [vorschlag({ titel: "Parken" })] },
+      { rolle: "nutzer", text: "Wie sind die Telefonzeiten?" },
+      { rolle: "gabi", text: "Dazu steht", abgebrochen: true, karten: [vorschlag()] },
+    ]);
+    expect(v).toEqual([{ rolle: "nutzer", text: "Hallo" }, { rolle: "gabi", text: "Hallo!" }]);
+  });
+});

@@ -18,10 +18,12 @@
   function normal(text) {
     return String(text == null ? "" : text)
       .normalize("NFC") // zerlegte Umlaute (z. B. Dateinamen vom Mac) erst zusammensetzen – sonst würde „ö“ zu „o“ statt „oe“
+      // unsichtbare Zeichen (weiches Trennzeichen, Leerzeichen ohne Breite, Richtungsmarken – oft aus Webseiten mitkopiert) trennen kein Wort
+      .replace(/[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g, "")
       .toLowerCase()
       .replace(/€/g, " euro ")
       .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
-      .normalize("NFKD").replace(/[̀-ͯ]/g, "")
+      .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
   }

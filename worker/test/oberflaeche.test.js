@@ -1,6 +1,6 @@
 // Oberfläche ohne Browser: Demo-Modus (Fake-API), PDF-Erzeugung, Seed-Datei, Gleichlauf mit dem Worker.
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { kuerzelPruefen, normalisieren, suchtext } from "../src/notiz.js";
 import { RESET_DATEI, SEED_DATEI, resetSql, seedSql } from "../dev/seed_erzeugen.mjs";
@@ -177,13 +177,91 @@ describe("Hilfsdatei supabase/reset_test.sql (nur von Hand, nach Julius' OK)", (
 });
 
 describe("Versionsstempel", () => {
+  const wurzel = new URL("../../", import.meta.url);
+  const lies = (name) => readFileSync(new URL(name, wurzel), "utf8");
+  const html = lies("index.html");
+  const app = lies("app.js");
+  const version = /const VERSION = "([^"]+)"/.exec(app)[1];
+  const brainDateien = JSON.parse(/const BRAIN_DATEIEN = (\[[^\]]*\]);/.exec(app)[1]);
+  /** Alles, was index.html von der eigenen Adresse lädt: [Datei, Stempel oder ""] */
+  const geladen = [...html.matchAll(/<(?:script|link)\b[^>]*?\b(?:src|href)="([^"#?:]+)(?:\?v=([^"]*))?"/g)].map((m) => [m[1], m[2] || ""]);
+
   it("VERSION in app.js passt zu jedem ?v= in index.html (sonst lädt jeder Start einmal neu oder zeigt „aktualisiert“)", () => {
-    const wurzel = new URL("../../", import.meta.url);
-    const html = readFileSync(new URL("index.html", wurzel), "utf8");
-    const version = /const VERSION = "([^"]+)"/.exec(readFileSync(new URL("app.js", wurzel), "utf8"))[1];
     const eigene = [...html.matchAll(/(?:src|href)="(style\.css|config\.js|kern\.js|pdf\.js|demo\.js|aufnahme\.js|gespraeche\.js|app\.js)\?v=([^"]+)"/g)];
     expect(eigene.map((m) => m[1]).sort()).toEqual(["app.js", "aufnahme.js", "config.js", "demo.js", "gespraeche.js", "kern.js", "pdf.js", "style.css"]);
     for (const m of eigene) expect(`${m[1]}?v=${m[2]}`).toBe(`${m[1]}?v=${version}`);
+  });
+
+  it("die Fassung mit Brain heißt 2.2.0-brain – und passt unverändert in eine Adresse", () => {
+    expect(version).toBe("2.2.0-brain");
+    expect(encodeURIComponent(version)).toBe(version);
+    // jede eigene Datei in index.html trägt den Stempel – keine ohne, keine mit einem alten (nur die fremde Bibliothek hat ihre eigene Nummer)
+    const eigene = geladen.filter(([datei]) => !datei.startsWith("vendor/") && /\.(js|css)$/.test(datei));
+    expect(eigene).toHaveLength(8);
+    for (const [datei, stempel] of eigene) expect(`${datei}?v=${stempel}`).toBe(`${datei}?v=${version}`);
+    expect(geladen.filter(([datei]) => datei.startsWith("vendor/"))).toEqual([["vendor/jspdf.umd.min.js", "4.2.1"]]);
+  });
+
+  it("ohne Schalter lädt die App keine Brain-Datei: keine steht in index.html, im Code ist der Schalter aus", () => {
+    expect(geladen.map(([datei]) => datei).filter((datei) => /brain/i.test(datei))).toEqual([]);
+    expect(html).not.toMatch(/(?:src|href)="[^"]*brain[^"]*\.(?:js|css)/i);
+    // config.js: brain steht auf false (nicht nur „nicht true“)
+    const fenster = {};
+    new Function("window", lies("config.js"))(fenster);
+    expect(fenster.GABI_CONFIG.brain).toBe(false);
+    expect(typeof fenster.GABI_CONFIG.apiUrl).toBe("string");
+    // der Schalter selbst: ?brain=1 schaltet an, ?brain=0 schaltet aus (auch gegen config.js), sonst entscheidet config.js
+    const ausdruck = /const BRAIN_AN = ([^;]+);/.exec(app)[1];
+    const an = (BRAIN_PARAM, config) => new Function("BRAIN_PARAM", "window", `return ${ausdruck};`)(BRAIN_PARAM, { GABI_CONFIG: config });
+    expect(an(null, { brain: false })).toBe(false);
+    expect(an(null, {})).toBe(false);
+    expect(an(null, undefined)).toBe(false);
+    expect(an("1", { brain: false })).toBe(true);
+    expect(an("1", undefined)).toBe(true);
+    expect(an(null, { brain: true })).toBe(true);
+    expect(an("0", { brain: true })).toBe(false);
+    for (const anders of ["", "true", "an", "2", "01"]) { expect(an(anders, { brain: false }), anders).toBe(false); expect(an(anders, { brain: true }), anders).toBe(true); }
+    expect(/const BRAIN_PARAM = ([^;]+);/.exec(app)[1]).toBe('new URLSearchParams(location.search).get("brain")');
+    // geladen wird an genau einer Stelle – und die prüft zuerst den Schalter
+    expect(app.match(/BRAIN_DATEIEN/g)).toHaveLength(2);
+    expect(app).toMatch(/function brainLaden\(\) \{\s*if \(!BRAIN_AN\) return Promise\.resolve\(null\);/);
+    // was zum Brain gehört, steht versteckt im Dokument, bis der Schalter es zeigt
+    for (const marke of ['data-navi="brain"', 'id="ansicht-brain"', 'id="schublade-brain"', 'id="info-brain"']) {
+      const tag = new RegExp(`<[a-z]+\\b[^>]*${marke}[^>]*>`).exec(html);
+      expect(tag, marke).not.toBeNull();
+      expect(tag[0], marke).toMatch(/\shidden(?=[\s>])/);
+    }
+  });
+
+  it("mit Schalter: genau die Brain-Dateien, die es gibt – in einer Reihenfolge, in der jede findet, was sie braucht – mit ?v=VERSION", () => {
+    expect(brainDateien).toEqual(["brain.css", "brain-suche.js", "brain.js", "brain-speicher.js", "brain-seed.js", "brain-graph.js", "brain-interview.js", "brain-ansicht.js", "brain-gespraech.js"]);
+    for (const datei of brainDateien) expect(existsSync(new URL(datei, wurzel)), datei).toBe(true);
+    // keine Brain-Datei im Ordner, die nicht geladen würde (und umgekehrt)
+    const imOrdner = readdirSync(wurzel).filter((datei) => /^brain[\w-]*\.(?:js|css)$/.test(datei)).sort();
+    expect([...brainDateien].sort()).toEqual(imOrdner);
+    expect(new Set(brainDateien).size).toBe(brainDateien.length);
+    // Reihenfolge: jedes Skript liest beim Laden nur, was eine frühere Datei bereitgestellt hat
+    const skripte = brainDateien.filter((datei) => datei.endsWith(".js"));
+    const stellt = new Map(); // GabiBrain… → Datei
+    for (const datei of skripte) for (const m of lies(datei).matchAll(/\bwurzel\.(GabiBrain[A-Za-z]*)\s*=[^=]/g)) stellt.set(m[1], datei);
+    expect([...stellt.keys()].sort()).toEqual(["GabiBrain", "GabiBrainAnsicht", "GabiBrainGespraech", "GabiBrainGraph", "GabiBrainInterview", "GabiBrainSeed", "GabiBrainSpeicher", "GabiBrainSuche"]);
+    for (const datei of skripte) {
+      // gelesen wird über das globale Objekt (wurzel/W/window/self) – Erwähnungen in Kommentaren zählen nicht
+      const braucht = new Set([...lies(datei).matchAll(/\b(?:wurzel|W|window|self)\.(GabiBrain[A-Za-z]*)\b(?!\s*=[^=])/g)].map((m) => m[1]).filter((name) => stellt.get(name) !== datei));
+      for (const name of braucht) expect(stellt.has(name), `${datei} braucht ${name} – das stellt keine Brain-Datei bereit`).toBe(true);
+      for (const name of braucht) expect(skripte.indexOf(stellt.get(name)), `${datei} braucht ${name} aus ${stellt.get(name)}`).toBeLessThan(skripte.indexOf(datei));
+    }
+    expect(skripte.indexOf("brain-suche.js")).toBeLessThan(skripte.indexOf("brain.js")); // das Modell baut schon beim Laden auf der Suche auf
+    expect(lies("brain.js")).toContain("wurzel.GabiBrain = fabrik(wurzel.GabiBrainSuche)");
+    expect(lies("brain-ansicht.js").match(/\bW\.GabiBrain[A-Za-z]*/g).length).toBeGreaterThanOrEqual(5); // die Prüfung oben greift wirklich
+    // app.js greift erst nach dem Laden auf die Ansicht und das Gespräch zu
+    expect(app).toMatch(/Promise\.all\(BRAIN_DATEIEN\.map\(dateiLaden\)\)\.then\(/);
+    // geladen wird mit dem Versionsstempel (Stil und Skript), Skripte in fester Reihenfolge
+    const laden = app.slice(app.indexOf("function dateiLaden(name) {"), app.indexOf("let brainLaedt"));
+    expect(laden).toContain("k.href = `${name}?v=${encodeURIComponent(VERSION)}`");
+    expect(laden).toContain("k.src = `${name}?v=${encodeURIComponent(VERSION)}`");
+    expect(laden).toContain("k.async = false");
+    expect(laden).toContain("k.onerror = () => nein(");
   });
 });
 

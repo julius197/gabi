@@ -152,7 +152,8 @@
     // eslint-disable-next-line no-control-regex
     let t = String(roh).replace(/[\u0000\u0001]/g, "");
     t = t.replace(/`([^`\n]+)`/g, (_, c) => platz(`<code>${esc(c)}</code>`));
-    t = t.replace(VERWEIS, (_, ziel, anzeige) => {
+    t = t.replace(VERWEIS, (roh, ziel, anzeige) => {
+      if (roh.includes("\u0001")) return roh; // `Code` im Verweis: bleibt Text – Platzhalter werden nie verschachtelt
       const z = ziel.trim();
       const a = (anzeige || ziel).trim();
       const r = opt.aufloesen ? opt.aufloesen(z) : null;
@@ -160,7 +161,7 @@
         ? `<a class="brain-verweis" href="#/brain/${esc(r.id)}">${esc(a)}</a>`
         : `<span class="brain-verweis fehlt" data-fehlt="${esc(z)}" title="Diesen Eintrag gibt es noch nicht">${esc(a)}</span>`);
     });
-    t = t.replace(/\[([^\]\n]{1,200})\]\(((?:https?:\/\/|mailto:|tel:)[^\s)<>"']{1,500})\)/g, (_, text, url) => platz(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`));
+    t = t.replace(/\[([^\]\n\u0001]{1,200})\]\(((?:https?:\/\/|mailto:|tel:)[^\s)<>"'\u0001]{1,500})\)/g, (_, text, url) => platz(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`));
     t = esc(t)
       .replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>")
       .replace(/(^|[\s(])\*([^*\s][^*\n]*?)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>")
@@ -462,7 +463,7 @@
       const name = dec.decode(b.subarray(p + 46, p + 46 + nameLaenge));
       p += 46 + nameLaenge + extra + kommentar;
       const kurz = name.split("/").pop();
-      if (!kurz || name.endsWith("/") || /^\.|^__MACOSX/.test(name) || !/\.(md|markdown|txt)$/i.test(kurz)) continue;
+      if (!kurz || name.endsWith("/") || /(?:^|\/)(?:\.|__MACOSX)/.test(name) || !/\.(md|markdown|txt)$/i.test(kurz)) continue;
       if (gross > GRENZEN.importDatei || gepackt > GRENZEN.importDatei) throw new Error(`„${kurz.slice(0, 60)}“ ist zu groß.`);
       gesamt += gross;
       if (gesamt > GRENZEN.importGesamt) throw new Error("Zu viel auf einmal – höchstens 2 MB je Import.");
@@ -477,7 +478,9 @@
         const stuecke = [];
         let laenge = 0;
         for (;;) {
-          const { done, value } = await leser.read();
+          let teil;
+          try { teil = await leser.read(); } catch { throw new Error("Die ZIP-Datei ist beschädigt."); }
+          const { done, value } = teil;
           if (done) break;
           laenge += value.length;
           if (laenge > GRENZEN.importDatei) { leser.cancel().catch(() => {}); throw new Error(`„${kurz.slice(0, 60)}“ ist zu groß.`); }
@@ -673,11 +676,24 @@
       const t = jetzt();
       const weg = new Set(Array.isArray(z.meta.seedWeg) ? z.meta.seedWeg : []);
       const neu = [];
+      // trägt schon ein anderer Eintrag diesen Titel (selbst angelegt), legt der Seed keinen zweiten daneben – sonst ließe sich keiner von beiden mehr ändern
+      const belegt = (k) => [...z.knoten.values()].some((x) => x.id !== k.id && !x.geloescht && schluessel(x.titel) === schluessel(k.titel));
       for (const k of seedKnoten(t)) {
         if (k.quelle === "Demo" && z.knoten.size) continue;
         const alt = z.knoten.get(k.id);
-        if (!alt) { if (!weg.has(k.id)) neu.push(k); continue; }
-        if (alt.rev === 1 && !alt.geloescht && INHALT_FELDER.some((f) => !gleichesFeld(alt, k, f))) {
+        if (!alt) { if (!weg.has(k.id) && !belegt(k)) neu.push(k); continue; }
+        if (alt.geloescht || belegt(k) || !INHALT_FELDER.some((f) => !gleichesFeld(alt, k, f))) continue;
+        // unberührt = nie von Hand geändert: Jede frühere Fassung stammt selbst aus dem Seed – und der Verlauf ist lückenlos
+        // (so viele Fassungen wie Änderungen). Im Zweifel bleibt der Eintrag, wie er ist. „rev === 1“ allein hätte nur die
+        // erste neue Fassung durchgelassen – danach wäre der Eintrag für immer stehen geblieben.
+        let unberuehrt = alt.rev === 1;
+        if (!unberuehrt) {
+          try {
+            const fassungen = await ablage.verlauf(alt.id);
+            unberuehrt = fassungen.length === Math.min(alt.rev - 1, Number(ablage.verlaufMax) || GRENZEN.versionen) && fassungen.every((v) => v && v.grund === "seed");
+          } catch { unberuehrt = false; }
+        }
+        if (unberuehrt) {
           await ablage.knotenSchreiben({ ...alt, ...stand(k), geaendert: t }, { erwartet: alt.rev, version: { nr: alt.rev, zeit: t, grund: "seed", ...stand(alt) } });
         }
       }
@@ -912,10 +928,18 @@
     // ---- Wissenslücken ----
     const KUERZEL = /\b[A-Za-zÄÖÜäöü]{1,4}-\d{1,4}\b|\b[A-ZÄÖÜ]{2,4}\d{1,4}\b/;
     /** Frage, die Gabi nicht aus dem Brain beantworten konnte. Fragen mit Patienten-Kürzel gehören nicht ins Brain. */
+    /** Nennt der Text das Kürzel eines vorhandenen Test-Patienten – auch klein, ohne Bindestrich oder ohne führende Null („tp 1“, „kn7“)? */
+    function nenntPatienten(text) {
+      const form = (t) => schluessel(t).replace(/(^|\D)0+(?=\d)/g, "$1");
+      const kuerzel = new Set((quellen.patienten || []).map((p) => form(p && p.kuerzel).replace(/ /g, "")).filter(Boolean));
+      if (!kuerzel.size) return false;
+      const w = form(text).split(" ");
+      return w.some((_, i) => [1, 2, 3].some((n) => kuerzel.has(w.slice(i, i + n).join(""))));
+    }
     async function lueckeMelden(frage) {
       const text = einzeilig(frage).slice(0, 200);
       const s = schluessel(text);
-      if (s.length < 4 || KUERZEL.test(text)) return null;
+      if (s.length < 4 || KUERZEL.test(text) || nenntPatienten(text)) return null;
       const t = jetzt();
       let l = [...z.luecken.values()].find((x) => x.schluessel === s);
       if (l) l = { ...l, anzahl: (Number(l.anzahl) || 1) + 1, zuletzt: t };
