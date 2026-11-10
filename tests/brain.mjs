@@ -573,7 +573,7 @@ async function teil2(browser, motor, { geraet, schema, wenigBewegung = false, bi
   await fragen(page, "Ändere die Telefonzeiten: freitags nur bis 15 Uhr");
   await page.waitForSelector('.nachricht:last-child .brain-karte .brain-diff-alt');
   const vorNach = await page.evaluate(() => { const k = [...document.querySelectorAll(".brain-karte")].pop(); return { alt: k.querySelector(".brain-diff-alt").textContent, neu: k.querySelector(".brain-diff-neu").textContent }; });
-  pruefe(/7:30–16:00/.test(vorNach.alt) && /freitags nur bis 15 Uhr/.test(vorNach.neu) && /\[\[Kontakt\]\]/.test(vorNach.neu), `${name}: „Ändere …“ zeigt Vorher/Nachher, vorhandene Verweise bleiben erhalten`);
+  pruefe(/7:30–16:00/.test(vorNach.alt) && /Freitags nur bis 15 Uhr\./.test(vorNach.neu) && !/Die Telefonzeiten:/.test(vorNach.neu) && /\[\[Kontakt\]\]/.test(vorNach.neu), `${name}: „Ändere …“ zeigt Vorher/Nachher, vorhandene Verweise bleiben erhalten`);
   await page.click('.nachricht:last-child .brain-karte [data-aktion="brain-verwerfen"]');
   pruefe(!(await knotenMitTitel(page, "Telefonzeiten")).inhalt.includes("15 Uhr"), `${name}: verworfener Vorschlag ändert nichts`);
 
@@ -603,7 +603,7 @@ async function teil2(browser, motor, { geraet, schema, wenigBewegung = false, bi
   await page.waitForSelector(".nachricht:last-child .brain-karte .brain-stand-neu");
   const standNachVersuch = (await knotenMitTitel(page, "Telefonzeiten")).inhalt;
   const vorherGezeigt = await page.textContent(".nachricht:last-child .brain-karte .brain-diff-alt");
-  pruefe(/Zwischendurch im Brain ergänzt\./.test(standNachVersuch) && !/samstags geschlossen/.test(standNachVersuch) && /Zwischendurch im Brain ergänzt\./.test(vorherGezeigt),
+  pruefe(/Zwischendurch im Brain ergänzt\./.test(standNachVersuch) && !/samstags geschlossen/i.test(standNachVersuch) && /Zwischendurch im Brain ergänzt\./.test(vorherGezeigt),
     `${name}: ein veralteter Vorschlag überschreibt eine spätere Änderung nicht – „Vorher“ zeigt den neuen Stand, mit Hinweis`);
   await page.click('.nachricht:last-child .brain-karte [data-aktion="brain-verwerfen"]');
   await page.evaluate(async (inhalt) => { const b = window.GabiBrainAnsicht.aktuell.brain; await b.aendern(b.findeTitel("Telefonzeiten").id, { inhalt }); }, telefonVorher);

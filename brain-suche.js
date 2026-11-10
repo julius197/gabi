@@ -22,6 +22,8 @@
       .replace(/[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g, "")
       .toLowerCase()
       .replace(/€/g, " euro ")
+      // „10er-Karte“ ist ein Wort – sonst träfe „Kann ich mit Karte zahlen?“ die Zehnerkarten
+      .replace(/(\d+er)[\s-]+(?=[a-zäöüß]{3})/g, "$1")
       // „E-Mail“, „E-Mail-Adresse“, „Mailadresse“ sind ein Wort – sonst sucht „Adresse“ nach den Standorten
       .replace(/(^|[^a-z0-9äöüß])(?:e[\s-]?mail(?:[\s-]?adress[a-z]*)?|mail[\s-]?adress[a-z]*)(?![a-z0-9äöüß])/g, "$1 email ")
       .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
@@ -47,7 +49,14 @@
     "kennst kennt kennen gerade aktuell momentan derzeit jetzt bald ganz gar etwa vielleicht irgendwie irgendwo irgendwann falls weil damit ohne " +
     "neben zwischen gegen ab per wegen bezueglich dies jene manche einige andere anderen beide beiden niemand jeder jede jedes frage fragen info " +
     "infos information informationen thema erzaehl erzaehle erzaehlen suche such suchen erfahren interessiert interessiere hinter denen deren dessen " +
-    "laeuft laufen lautet lauten nehmt nehmen nehme nimmt"
+    "laeuft laufen lautet lauten nehmt nehmen nehme nimmt " +
+    // gebeugte Formen, Umgangssprache und Mundart, Tageszeiten, Füllverben und Allerweltswörter („Leute“, „Haus“, „Anfang“)
+    "welchem is hi hey servus moin guten morgen super top perfekt wollte wollten fragt unserem unserer unseren unseres eurem vieler vielen zwei " +
+    "nachmittag nachmittags vormittag vormittags abend abends morgens mittags frueh spaet sitzt sitzen bedeutet bedeuten gemacht " +
+    "melde melden leute personen menschen haus anfang ende wos eich habts seids nen ne nem wieviel find " +
+    "ihre ihren ihrer ihrem deiner deinem deinen meiner meinem meinen hin her halt eben wohl bloss nix net ned scho amoi denen manchmal " +
+    "erste ersten erster naechste naechsten letzte letzten neue neuen neuer gesamt gesamte ganze ganzen genaue genauen " +
+    "rein raus hinein drin rauf hoch runter vorbei dabei davor danach dafuer dagegen damals spaeter frueher"
   ).split(" "));
 
   /** Leichtes deutsches Stemming: eine Endung weg, der Stamm bleibt mindestens 4 Zeichen lang. Zahlen bleiben. */
@@ -69,10 +78,37 @@
     return liste;
   }
 
-  /** Wortstämme eines Texts ohne Füllwörter (mit Wiederholungen) – das, was ein Knoten inhaltlich „sagt“. */
+  const TAGE = ["mo", "di", "mi", "do", "fr", "sa", "so"];
+  const BUCHSTABE = "A-Za-zÄÖÜäöüß";
+  const SPANNE = new RegExp(`(^|[^${BUCHSTABE}])(Mo|Di|Mi|Do|Fr|Sa|So)\\.?\\s*[–—-]\\s*(Mo|Di|Mi|Do|Fr|Sa|So)(?![${BUCHSTABE}])`, "g");
+  const STRICH_VORN = new RegExp(`([${BUCHSTABE}]{3,})-\\s+(?:und|oder|bzw\\.?|sowie)\\s+([${BUCHSTABE}]{6,})`, "g");
+  const STRICH_HINTEN = new RegExp(`([${BUCHSTABE}]{6,})\\s+(?:und|oder|bzw\\.?|sowie)\\s+-([${BUCHSTABE}]{3,})`, "g");
+  const BINDESTRICH = new RegExp(`([${BUCHSTABE}]{3,})-([${BUCHSTABE}]{3,})`, "g");
+  /**
+   * Was in einem Text mitgemeint ist, ausschreiben – nur für den Vergleich, nie für die Anzeige:
+   * „Mo–Do“ → mo di mi do · „Rücken- und Schulterschmerzen“ → auch „Rückenschmerzen“ · „Bewegungsanalysen und -korrekturen“ →
+   * auch „Bewegungskorrekturen“ · „Kinesio-Tape“ → auch „Kinesiotape“. Wo das Grundwort beginnt, weiß der Code nicht – er
+   * bildet jede mögliche Zusammensetzung; die falschen trifft keine Frage.
+   */
+  function mitgemeint(text) {
+    const t = String(text == null ? "" : text);
+    if (!/[–—-]/.test(t)) return t;
+    const zusatz = [];
+    for (const m of t.matchAll(SPANNE)) {
+      const i = TAGE.indexOf(m[2].toLowerCase());
+      const j = TAGE.indexOf(m[3].toLowerCase());
+      if (i >= 0 && j > i) zusatz.push(TAGE.slice(i, j + 1).join(" "));
+    }
+    for (const m of t.matchAll(STRICH_VORN)) for (let i = 2; i <= m[2].length - 5; i++) zusatz.push(m[1] + m[2].slice(i).toLowerCase());
+    for (const m of t.matchAll(STRICH_HINTEN)) for (let i = 4; i < m[1].length; i++) zusatz.push(m[1].slice(0, i) + m[2].toLowerCase());
+    for (const m of t.matchAll(BINDESTRICH)) zusatz.push(m[1] + m[2].toLowerCase());
+    return zusatz.length ? `${t} ${zusatz.join(" ")}` : t;
+  }
+
+  /** Wortstämme eines Texts ohne Füllwörter (mit Wiederholungen) – das, was ein Knoten inhaltlich „sagt“, samt Mitgemeintem. */
   function inhaltsStaemme(text) {
     const liste = [];
-    for (const w of normal(text).split(" ")) {
+    for (const w of normal(mitgemeint(text)).split(" ")) {
       if (!w || FUELLWOERTER.has(w) || (w.length < 2 && !/\d/.test(w))) continue;
       const st = stamm(w);
       if (!FUELLWOERTER.has(st)) liste.push(st);
@@ -80,52 +116,82 @@
     return liste;
   }
 
-  /** Suchwörter einer Anfrage: Wortstämme ohne Füllwörter, jedes nur einmal. */
+  /** Suchwörter einer Anfrage: Wortstämme ohne Füllwörter (auch gebeugte: „unserem“, „vielen“), jedes nur einmal. */
   function woerter(text) {
     const gesehen = new Set();
     for (const w of normal(text).split(" ")) {
       if (!w || FUELLWOERTER.has(w) || (w.length < 2 && !/\d/.test(w))) continue;
-      gesehen.add(stamm(w));
+      const st = stamm(w);
+      if (!FUELLWOERTER.has(st)) gesehen.add(st);
     }
     return [...gesehen];
   }
 
-  // Wortfelder: wer nach „Kosten“ fragt, meint auch „Preis“. Bewusst klein gehalten (Wortstämme in Vergleichsform).
+  // Wortfelder: wer nach „Kosten“ fragt, meint auch „Preis“. Bewusst klein gehalten (Wörter in Vergleichsform).
   const WORTFELDER = [
-    ["preis", "kost", "kostet", "teuer", "gebuehr", "tarif", "euro", "bezahl", "selbstzahl"],
-    ["standort", "adress", "anfahrt", "anschrift", "strass", "wegbeschreibung", "filiale"],
-    ["oeffnungszeit", "geoeffnet", "offen", "geschlossen", "sprechzeit", "sprechstund"],
-    ["telefon", "telefonisch", "rufnummer", "handynummer", "anruf", "anrufen", "nummer", "erreich", "erreichbar"],
+    ["preis", "kost", "kostet", "teuer", "gebuehr", "tarif", "euro", "bezahl", "selbstzahl", "zahlt", "zahlen"],
+    ["standort", "adress", "anfahrt", "anschrift", "strass", "wegbeschreibung", "filiale", "postleitzahl", "plz", "stadt"],
+    ["oeffnungszeit", "geoeffnet", "offen", "geschlossen", "sprechzeit", "sprechstund", "vorbeikommen", "vorbeischauen"],
+    ["telefon", "telefonisch", "telefonnummer", "telefonnr", "tel", "telnr", "rufnummer", "handynummer", "anruf", "anrufen", "nummer", "nr", "erreich", "erreichbar"],
     ["email", "mail"],
     ["termin", "terminbuchung", "terminvergabe", "terminvereinbarung", "buchen", "anmeld", "anmeldung", "vereinbar"],
-    ["kass", "krankenkass", "gesetzlich", "versichert", "privat", "privatpraxis", "abrechn", "abrechnung"],
+    ["kass", "kasse", "krankenkass", "kassenpatient", "gesetzlich", "versichert", "privat", "privatpraxis", "privatpatient", "abrechn", "abrechnung"],
     ["rezept", "verordnung", "ueberweisung"],
     ["park", "parkplatz", "parkplaetz", "parkmoeglichkeit", "parkhaus", "tiefgarage", "barrierefrei", "barrierefreiheit", "rollstuhl", "aufzug"],
     ["kind", "jugend", "jugendlich", "youngster"],
-    ["alt", "alter", "jahr"],
-    ["team", "mitarbeit", "mitarbeiter", "kolleg", "personal"],
-    ["inhaber", "chef", "gruender", "besitzer", "leitung", "leitet", "leiter", "leiten", "geschaeftsfuehrer"],
+    ["alt", "alter", "jahr", "jaehrig"],
+    ["team", "mitarbeit", "mitarbeiter", "kolleg", "personal", "therapeut", "therapeutin", "physiotherapeut"],
+    ["inhaber", "chef", "gruender", "besitzer", "leitung", "leitet", "leiter", "leiten", "geschaeftsfuehrer", "praxisleitung", "praxismanagerin", "managerin", "manager", "managt"],
     ["gegruendet", "gruendung", "geschicht", "entstehung"],
-    ["leistung", "angebot", "behandlung", "therapi"],
-    ["training", "trainier", "trainingszeit", "geraetetraining", "trainingstherapi"],
-    ["partner", "kooperation", "kooperationspartner", "referenz"],
-    ["wochenend", "samstag", "sonntag", "sa"],
+    ["partner", "kooperation", "kooperationspartner", "referenz", "verein", "club"],
+    ["montag", "montags", "mo"], ["dienstag", "dienstags", "di"], ["mittwoch", "mittwochs", "mi"], ["donnerstag", "donnerstags", "do"],
+    ["freitag", "freitags", "fr"], ["samstag", "samstags", "sa"], ["sonntag", "sonntags"], ["feiertag", "feiertags"],
+    ["dauert", "dauer", "stunde", "minute"],
+    ["gross", "groesse", "quadratmeter", "qm", "m2", "flaeche"],
   ];
+  const WOCHENTAGE = ["montag", "montags", "mo", "dienstag", "dienstags", "di", "mittwoch", "mittwochs", "mi", "donnerstag", "donnerstags", "do", "freitag", "freitags", "fr", "samstag", "samstags", "sa", "sonntag", "sonntags"];
+  // Oberbegriffe gelten nur in eine Richtung: wer nach dem „Tag“ fragt, meint jeden Wochentag – „Montag“ meint aber nicht „Freitag“
+  const OBERBEGRIFFE = [
+    ["tag", WOCHENTAGE], ["tagen", WOCHENTAGE], ["wochentag", WOCHENTAGE], ["wochenend", ["samstag", "samstags", "sa", "sonntag", "sonntags"]],
+    // „Leistungen“ und „Angebot“ meinen alles, was behandelt und therapiert wird – aber „Trainingstherapie“ meint nicht „Leistung“
+    ["leistung", ["angebot", "behandlung", "therapi"]], ["angebot", ["leistung", "behandlung", "therapi"]],
+    ["behandlung", ["therapi"]], ["therapi", ["behandlung"]],
+    ["trainier", ["training"]], ["trainiert", ["training"]],
+  ];
+  // Oberbegriffe, die eine Eigenschaft meinen (die übrigen sind Themen)
+  const OBER_EIGENSCHAFT = ["tag", "tagen", "wochentag", "wochenend"];
   // Felder, die eine Eigenschaft meinen (Preis, Adresse, Zeiten, Kontakt …) und kein eigenes Thema: Eine Antwort darf so ein
   // Wort nicht von einem anderen Thema borgen („Was kostet Akupunktur?“ ist mit dem Preis der Osteopathie nicht beantwortet).
-  const EIGENSCHAFT_FELDER = ["preis", "standort", "oeffnungszeit", "telefon", "email", "termin", "kass", "rezept", "park", "alt", "wochenend"];
-  // Wörter für die Praxis selbst: stehen fast überall und müssen in einer Antwort nicht vorkommen („Ist die Praxis barrierefrei?“)
-  const ALLGEMEIN = ["praxis", "praxen"];
+  const EIGENSCHAFT_FELDER = ["preis", "standort", "oeffnungszeit", "telefon", "email", "termin", "kass", "rezept", "park", "alt", "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag", "sonntag", "feiertag", "dauert", "gross"];
+  // Wörter für die Praxis selbst und ihre Patienten: stehen fast überall und müssen in einer Antwort nicht vorkommen
+  // („Ist die Praxis barrierefrei?“, „Was sage ich einem Patienten, der nach Parkplätzen fragt?“)
+  const ALLGEMEIN = ["praxis", "praxen", "patient", "patienten", "patientin", "patientinnen"];
+  // Verben, die in einer Praxis fast jede Frage tragen („Behandelt ihr Migräne?“): keine Pflicht, aber ein Hinweis fürs Ordnen
+  const SCHWACH = ["behandelt", "behandeln", "behandle", "betreut", "betreuen", "betreue", "leitet", "leiten", "leite"];
   const FELD_ZU_WORT = new Map();
+  const feldDazu = (wort, feld) => { const alt = FELD_ZU_WORT.get(wort); FELD_ZU_WORT.set(wort, alt ? [...new Set([...alt, ...feld])] : feld); };
   // unter dem Wort und unter seinem Stamm: gesucht wird immer mit Stämmen („Preis“ → „prei“, „Inhaber“ → „inhab“)
-  for (const feld of WORTFELDER) for (const w of feld) { FELD_ZU_WORT.set(w, feld); FELD_ZU_WORT.set(stamm(w), feld); }
-  const EIGENSCHAFT = new Set(WORTFELDER.filter((feld) => EIGENSCHAFT_FELDER.some((w) => feld.includes(w))).flatMap((feld) => feld.flatMap((w) => [w, stamm(w)])));
+  for (const feld of WORTFELDER) for (const w of feld) { feldDazu(w, feld); feldDazu(stamm(w), feld); }
+  for (const [ober, unter] of OBERBEGRIFFE) { feldDazu(ober, [ober, ...unter]); feldDazu(stamm(ober), [ober, ...unter]); }
+  const EIGENSCHAFT = new Set([
+    ...WORTFELDER.filter((feld) => EIGENSCHAFT_FELDER.includes(feld[0])).flatMap((feld) => feld.flatMap((w) => [w, stamm(w)])),
+    ...OBER_EIGENSCHAFT.flatMap((ober) => [ober, stamm(ober)]),
+  ]);
+  const ALLGEMEIN_STAEMME = new Set(ALLGEMEIN.flatMap((w) => woerter(w)));
   // Fragewörter sind Füllwörter, sagen aber, wonach gesucht wird
-  const FRAGEWORT = { wo: ["standort", "adress"], wann: ["zeit", "uhr"], wieviel: ["preis"] };
+  const FRAGEWORT = { wo: ["standort", "adress"], wann: ["zeit", "uhr"], wieviel: ["preis"], wer: ["team"] };
   // Wendungen, die eindeutig sagen, worum es geht – zählen wie ein Suchwort (über das Wortfeld auch „Geschichte“, „Gründung“)
-  const ABSICHT = [[/\bseit wann\b|\bwie lange gibt es\b|\bwie alt ist\b|\bwie lange (?:schon|bereits)\b/, "gegruendet"]];
-  // Fragen ganz ohne Inhaltswort („Wo seid ihr?“, „Wann habt ihr auf?“): das Fragewort ist dann die Frage
-  const ABSICHT_OHNE_INHALT = [[/\bwo\b|\bwohin\b/, "standort"], [/\bwann\b/, "oeffnungszeit"], [/\bwie ?viel\b/, "preis"], [/\b(?:bietet|bieten|anbieten|angebot)\b/, "leistung"]];
+  const ABSICHT = [
+    [/\bseit wann\b|\bwie lange gibt es\b|\bwie alt ist\b|\bwie lange (?:schon|bereits)\b|\bseit wie viel/, "gegruendet"],
+    [/\bwem gehoert\b|\bwer besitzt\b/, "inhaber"],
+    [/\bwie heiss(?:t|en)\b/, "name"],
+    // „Habt ihr samstags auf?“, „Seid ihr am Sonntag da?“, „Hat die Praxis mittwochs zu?“
+    [/\b(?:habt|seid|macht|habts|seids) ihr\b.*\b(?:auf|offen|zu|da)$|\b(?:hat|ist|macht) die praxis\b.*\b(?:auf|offen|zu)$|\bwann\b.*\b(?:macht|habt|seid)\b.*\b(?:auf|zu)$/, "oeffnungszeit"],
+  ];
+  // Fragen ganz ohne Inhaltswort („Wo seid ihr?“, „Wann habt ihr auf?“, „Wo ist die Praxis?“): das Fragewort ist dann die Frage
+  const ABSICHT_OHNE_INHALT = [[/\bwo\b|\bwohin\b/, "standort"], [/\bwann\b/, "oeffnungszeit"], [/\bwie ?viel\b|\bwieviel\b/, "preis"], [/\b(?:bietet|bieten|anbieten|angebot)\b/, "leistung"], [/\bwer\b/, "team"]];
+  // Begrüßung und Anrede am Anfang gehören nicht zur Frage („Guten Morgen, kannst du mir sagen …“, „Hey Gabi, …“)
+  const GRUSS = /^\s*(?:(?:hallo|hi|hey|servus|moin|grü(?:ß|ss)\s+(?:gott|dich)|guten\s+(?:morgen|tag|abend)|sag\s+mal)(?![A-Za-zÄÖÜäöüß])[\s,!.]*)+(?:gabi(?![A-Za-zÄÖÜäöüß])[\s,!.:]*)?/i;
 
   /** Abstand zweier Wörter in Tippfehlern (Buchstabe fehlt, zu viel, falsch oder zwei vertauscht) – höchstens bis max gezählt. */
   function tippAbstand(a, b, max) {
@@ -149,15 +215,16 @@
   }
 
   /**
-   * Tippfehler ausgleichen: Ein Suchwort (ab 6 Buchstaben), das im Bestand weder genau noch als Wortanfang vorkommt, wird
-   * durch das ähnlichste Wort des Bestands ersetzt – ein Tippfehler, ab 10 Buchstaben zwei; der erste Buchstabe muss stimmen.
+   * Tippfehler ausgleichen: Ein Suchwort (ab 6 Buchstaben), das im Bestand weder genau noch als Wortanfang vorkommt und in
+   * keinem Wortfeld steht, wird durch das ähnlichste Wort des Bestands ersetzt – ein Tippfehler, ab 10 Buchstaben zwei;
+   * der erste Buchstabe muss stimmen.
    */
   function tippfehlerAusgleichen(such, bestand) {
     const liste = Array.isArray(bestand) ? bestand : [...bestand];
     const ergebnis = [];
     for (const w of such) {
       let wort = w;
-      if (w.length >= 6 && !/\d/.test(w) && !liste.some((x) => passung(w, x) >= 0.7)) {
+      if (w.length >= 6 && !/\d/.test(w) && !FELD_ZU_WORT.has(w) && !liste.some((x) => passung(w, x) >= 0.7)) {
         const max = w.length >= 10 ? 2 : 1;
         let abstand = max + 1;
         for (const x of liste) {
@@ -174,24 +241,50 @@
 
   /**
    * Wonach fragt jemand? such = Inhaltswörter (Tippfehler am Bestand ausgeglichen) plus eindeutige Wendungen;
-   * zusatz = schwache Hinweise aus Fragewörtern („wo“ → Standort). Ohne jedes Inhaltswort wird das Fragewort zur Frage.
+   * zusatz = schwache Hinweise aus Fragewörtern („wo“ → Standort); gross = Wörter, die mitten im Satz großgeschrieben
+   * sind (Hauptwörter und Namen – steht so ein Wort nirgends im Brain, geht es um etwas Neues).
+   * Ohne jedes Inhaltswort wird das Fragewort zur Frage; „Praxis“ und „Patient“ zählen dabei nicht als Inhalt.
    */
   function frageWoerter(anfrage, bestand = null) {
-    const text = normal(anfrage);
+    const ganz = String(anfrage == null ? "" : anfrage);
+    const ohneGruss = ganz.replace(GRUSS, "");
+    const frage = ohneGruss.trim() ? ohneGruss : ganz;
+    const text = normal(frage);
     const roh = text.split(" ").filter(Boolean);
-    let such = woerter(anfrage);
+    let such = woerter(frage);
     if (bestand) such = tippfehlerAusgleichen(such, bestand);
     const zusatz = [];
     for (const w of roh) if (FRAGEWORT[w]) zusatz.push(...FRAGEWORT[w]);
     if (roh.includes("wie") && roh.includes("viel")) zusatz.push(...FRAGEWORT.wieviel);
-    for (const [muster, wort] of ABSICHT) if (muster.test(text) && !such.some((s) => (FELD_ZU_WORT.get(s) || []).includes(wort) || s === wort)) such.push(wort);
-    if (!such.length) for (const [muster, wort] of ABSICHT_OHNE_INHALT) if (muster.test(text) && !such.includes(wort)) such.push(wort);
-    return { such, zusatz: [...new Set(zusatz)], roh };
+    const gemeintSchon = (wort) => such.some((s) => s === wort || (FELD_ZU_WORT.get(s) || []).includes(wort));
+    let wendung = false;
+    for (const [muster, wort] of ABSICHT) if (muster.test(text)) { wendung = true; if (!gemeintSchon(wort)) such.push(wort); }
+    if (!wendung && !such.some((s) => !ALLGEMEIN_STAEMME.has(s))) {
+      for (const [muster, wort] of ABSICHT_OHNE_INHALT) if (muster.test(text)) { if (!such.includes(wort)) such.push(wort); break; }
+    }
+    // großgeschrieben mitten im Satz (nicht am Satzanfang): Hauptwörter und Namen
+    const gross = new Set();
+    const stuecke = frage.trim().split(/\s+/);
+    stuecke.forEach((stueck, i) => {
+      if (i === 0 || /[.!?:]$/.test(stuecke[i - 1])) return;
+      if (/^[("„»]*[A-ZÄÖÜ]/.test(stueck)) for (const w of woerter(stueck)) gross.add(w);
+    });
+    return { such, zusatz: [...new Set(zusatz)], roh, gross: [...gross] };
   }
 
   // [kürzeres Wort, längeres Wort mit demselben Anfang] – als Wortstämme, wie stamm() sie liefert („Rezeption“ → „rezeptio“)
   const FALSCHE_FREUNDE = [["rezept", "rezeptio"]];
-  /** Wie gut passt ein Suchwort zu einem Wort aus dem Bestand? 1 = gleich, 0,7 = Wortanfang, 0,45 = Teil eines Kompositums oder verwandt. */
+  // Endungen (an Wortstämmen): „telefonisch“ ↔ „Telefon“, „kostet“ ↔ „Kosten“, „Praxis“ ↔ „Praxen“, „Rezeptionistin“ ↔ „Rezeption“
+  const ENDUNG = /^(?:e|en|er|ern|es|em|n|s|ns|i|is|in|innen|nen|et|t|st|te|ten|isch|ische|ischen|nisch|ung|ungen|ing|ier|iere|ieren|iert|l|ler|lerin|lich|liche|chen|ist|isti|nist|nisti)$/;
+  // allgemeines Grundwort: „Triggerpunktbehandlung“ fragt nach dem Triggerpunkt. („…therapie“ gehört nicht dazu:
+  // „Trainingstherapie“ ist ein eigener Name und fragt nicht nach „Training“.)
+  const GRUNDWORT = ["behandlung"];
+  /**
+   * Wie gut passt ein Suchwort zu einem Wort aus dem Bestand?
+   * 1 = gleich · 0,7 = deutlich: getippter Wortanfang („Akupunktur“ ↔ „Akupunkturbehandlung“), nur eine Endung mehr
+   * („telefonisch“ ↔ „Telefon“), das Gefragte ist das Grundwort („Ärztin“ ↔ „Fachärztin“) · 0,45 = schwach: nur das
+   * Bestimmungswort stimmt („Bewegungsbad“ ↔ „Bewegung“), Wortteil, langer gemeinsamer Anfang · 0 = passt nicht.
+   */
   function passung(suchwort, wort) {
     if (suchwort === wort) return 1;
     if (/^\d+$/.test(suchwort) || /^\d+$/.test(wort)) return 0; // Zahlen nur genau
@@ -201,15 +294,28 @@
       const b = wort.startsWith(zwei) ? 2 : wort.startsWith(eins) ? 1 : 0;
       if (a && b && a !== b) return 0;
     }
+    if (suchwort.length <= wort.length) {
+      if (suchwort.length >= 4 && wort.startsWith(suchwort)) return 0.7;
+      if (suchwort.length >= 5 && wort.endsWith(suchwort)) return 0.7;
+      if (suchwort.length >= 5 && wort.includes(suchwort)) return 0.45;
+    } else {
+      if (wort.length >= 4 && suchwort.startsWith(wort)) {
+        const rest = suchwort.slice(wort.length);
+        return ENDUNG.test(rest) || GRUNDWORT.includes(rest) || GRUNDWORT.includes(rest.replace(/^s/, "")) ? 0.7 : 0.45;
+      }
+      if (wort.length >= 5 && suchwort.includes(wort)) return 0.45;
+    }
     const kurz = suchwort.length <= wort.length ? suchwort : wort;
     const lang = suchwort.length <= wort.length ? wort : suchwort;
-    // Wortanfang: getippt „Akupunktur“, im Bestand „Akupunkturbehandlung“ → deutlich. Umgekehrt (gefragt „Behandlungsräume“, im
-    // Bestand nur „Behandlung“) ist es bloß das Bestimmungswort eines Kompositums → schwach; Endungen („telefonisch“) zählen voll.
-    if (kurz.length >= 4 && lang.startsWith(kurz)) return kurz === suchwort || lang.length - kurz.length <= 5 ? 0.7 : 0.45;
-    if (kurz.length >= 5 && lang.includes(kurz)) return 0.45;
-    // verwandt: langer gemeinsamer Wortanfang („trainieren“ ↔ „Training“)
     let gleich = 0;
     while (gleich < kurz.length && kurz[gleich] === lang[gleich]) gleich++;
+    if (gleich >= 8) {
+      // gleiches Bestimmungswort, Grundwörter aus demselben Wortfeld: „Kiefergelenksbehandlung“ ↔ „Kiefergelenkstherapie“
+      const a = suchwort.slice(gleich).replace(/^s/, "");
+      const b = wort.slice(gleich).replace(/^s/, "");
+      if (a.length >= 4 && b.length >= 4 && (FELD_ZU_WORT.get(a) || []).some((v) => v === b || stamm(v) === b)) return 0.7;
+    }
+    // verwandt: langer gemeinsamer Wortanfang („trainieren“ ↔ „Training“)
     if (gleich >= 6 && gleich >= kurz.length * 0.7) return 0.45;
     return 0;
   }
@@ -258,18 +364,24 @@
    * Ergebnis: [{ id, punkte, woerter, deckung, stark }] – deckung = Anteil der Suchwörter, die direkt vorkommen;
    * stark = mindestens ein Suchwort steht im Knoten (wörtlich, als Wortanfang, als Wortteil oder verwandt).
    */
-  function suchen(index, anfrage, { limit = 20, praefix = true } = {}) {
-    if (!index || !index.docs.length) return [];
+  function suchen(index, anfrage, opt) {
+    return suchenMitWoertern(index, anfrage, opt).treffer;
+  }
+  /** Wie suchen(), dazu die Suchwörter, mit denen gesucht wurde: { treffer, such }. */
+  function suchenMitWoertern(index, anfrage, { limit = 20, praefix = true } = {}) {
+    if (!index || !index.docs.length) return { treffer: [], such: [] };
     // Suchwörter (Tippfehler am Bestand ausgeglichen), dazu schwächer: Fragewörter – und unten die Wortfelder
     const { such, zusatz, roh } = frageWoerter(anfrage, index.vokabular.keys());
     const letztes = praefix && roh.length ? roh[roh.length - 1] : "";
-    if (!such.length && !zusatz.length && !(letztes && letztes.length >= 2)) return [];
+    if (!such.length && !zusatz.length && !(letztes && letztes.length >= 2)) return { treffer: [], such };
 
     const N = index.docs.length;
     const punkte = new Float64Array(N);
     const direkt = new Float64Array(N); // Zahl der Suchwörter mit direktem Treffer
     const staerke = new Float64Array(N);
     const gefunden = Array.from({ length: N }, () => null);
+    const je = Array.from({ length: N }, () => null); // je Knoten: Suchwort → wie gut es dort steht (1 genau … 0,5 nur über das Wortfeld)
+    const merke = (nr, suchwort, p) => { const m = je[nr] || (je[nr] = {}); if (!(m[suchwort] >= p)) m[suchwort] = p; };
 
     /** tf je Dokument für ein Suchwort (über alle passenden Wörter des Bestands). */
     const treffer = (suchwort, { mindest = 0.45, alsAnfang = false } = {}) => {
@@ -305,6 +417,7 @@
       const letzter = praefix && i === such.length - 1 && stamm(letztes) === w;
       const direktTf = treffer(w, { alsAnfang: letzter });
       werten(direktTf, 1, true);
+      for (const [nr, t] of direktTf) merke(nr, w, t.p);
       // Wortfeld: nur genaue Treffer und Wortanfänge, deutlich schwächer gewertet – aber das Suchwort gilt als gefunden
       // („Wann kann ich anrufen?“ findet „Telefonzeiten“, auch wenn „anrufen“ nirgends steht)
       const schon = new Set(direktTf.keys());
@@ -319,6 +432,7 @@
           if (staerke[nr] < 0.5) staerke[nr] = 0.5;
           (gefunden[nr] || (gefunden[nr] = new Set())).add(t.wort);
         }
+        for (const nr of tf.keys()) merke(nr, w, 0.5);
       }
     });
     // noch kein Wort zu Ende getippt (z. B. „ko“): als Wortanfang suchen
@@ -339,10 +453,10 @@
       // vor einem längeren Titel, in dem das Wort nur vorkommt („Führt … alle Akupunktur-Behandlungen selbst durch?“)
       const titelGanz = such.length && d.titelInhalt.length && d.titelInhalt.every((t) => such.includes(t)) ? 1 : 0;
       const wert = punkte[nr] * (0.6 + 0.4 * deckung) * (1 + 0.5 * imTitel + 0.6 * genauImTitel + 0.5 * titelGanz);
-      ergebnis.push({ id: d.id, punkte: wert, woerter: gefunden[nr] ? [...gefunden[nr]] : [], deckung, stark: staerke[nr] >= 0.45, imTitel });
+      ergebnis.push({ id: d.id, punkte: wert, woerter: gefunden[nr] ? [...gefunden[nr]] : [], deckung, stark: staerke[nr] >= 0.45, imTitel, je: je[nr] || {} });
     }
     ergebnis.sort((a, b) => b.punkte - a.punkte || (a.id < b.id ? -1 : 1));
-    return ergebnis.slice(0, limit);
+    return { treffer: ergebnis.slice(0, limit), such };
   }
 
   // ---------- Filter ----------
@@ -396,15 +510,24 @@
     const kandidaten = (Array.isArray(knoten) ? knoten : []).filter((k) => k && k.id && !k.geloescht && !k.abgeleitet && KONTEXT_ARTEN.includes(k.art));
     if (!kandidaten.length || !String(frage || "").trim()) return [];
     const nachId = new Map(kandidaten.map((k) => [k.id, k]));
-    const treffer = suchen(index || erstelleIndex(kandidaten), frage, { limit: 24, praefix: false }).filter((t) => nachId.has(t.id));
+    const alle = suchenMitWoertern(index || erstelleIndex(kandidaten), frage, { limit: 60, praefix: false });
+    const treffer = alle.treffer.filter((t) => nachId.has(t.id));
     if (!treffer.length) return [];
     const bester = treffer[0].punkte;
-    // nur was wirklich zur Frage gehört: ein Suchwort steht da und der Abstand zum besten Treffer ist nicht zu groß
-    const direkt = treffer.filter((t) => t.stark && t.punkte >= bester * 0.25).slice(0, Math.max(1, maxKnoten - 2));
+    // (1) Je Suchwort die zwei Knoten, die es am besten tragen (wörtlich vor Wortfeld). So fehlt der Eintrag zum Thema nicht,
+    //     nur weil ein anderer Knoten zufällig zwei Wörter der Frage enthält („Was kostet die Trainingstherapie?“).
+    const gewaehlt = new Set();
+    for (const w of alle.such || []) {
+      const mit = treffer.filter((t) => (t.je[w] || 0) >= 0.5).sort((x, y) => Number(y.je[w] >= 0.7) - Number(x.je[w] >= 0.7) || y.punkte - x.punkte);
+      for (const t of mit.slice(0, 2)) gewaehlt.add(t.id);
+    }
+    // (2) Dazu, was insgesamt wirklich zur Frage gehört: ein Suchwort steht da und der Abstand zum besten ist nicht zu groß
+    for (const t of treffer) if (t.stark && t.punkte >= bester * 0.25) gewaehlt.add(t.id);
+    const direkt = treffer.filter((t) => gewaehlt.has(t.id) && t.stark).slice(0, Math.max(1, maxKnoten - 2));
     if (!direkt.length) return [];
     const reihe = direkt.map((t) => t.id);
     const drin = new Set(reihe);
-    // Nachbarn der zwei besten: ausdrückliche Verweise immer, „gehört zu“ nur, wenn der Nachbar selbst zur Frage passt
+    // (3) Nachbarn der zwei besten: ausdrückliche Verweise immer, „gehört zu“ nur, wenn der Nachbar selbst zur Frage passt
     const punkteVon = new Map(treffer.map((t) => [t.id, t.punkte]));
     const nachbarn = [];
     for (const id of reihe.slice(0, 2)) {
@@ -420,6 +543,12 @@
     for (const n of nachbarn) {
       if (reihe.length >= maxKnoten) break;
       if (!drin.has(n.id)) { drin.add(n.id); reihe.push(n.id); }
+    }
+    // (4) Freie Plätze mit den nächstbesten Treffern füllen, die ein Suchwort deutlich tragen – die Auswahl ist nur eine
+    //     Wortsuche; was Gabi (mit KI) davon braucht, entscheidet sie selbst
+    for (const t of treffer) {
+      if (reihe.length >= maxKnoten) break;
+      if (!drin.has(t.id) && Object.values(t.je).some((p) => p >= 0.5)) { drin.add(t.id); reihe.push(t.id); }
     }
     const ergebnis = [];
     let rest = maxZeichen;
@@ -450,125 +579,274 @@
     }
     return zeilen;
   }
+  const NUMMER_WORT = new Set(["telefonnummer", "telefonnr", "telnr", "rufnummer", "handynummer", "nummer", "nr", "tel"].flatMap((w) => [w, stamm(w)]));
+  /** Die Posten einer Aufzählung: Kommas und Strichpunkte außerhalb von Klammern trennen. */
+  function posten(text) {
+    const teile = [];
+    let tiefe = 0;
+    let start = 0;
+    const t = String(text || "");
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      if (c === "(") tiefe += 1;
+      else if (c === ")") tiefe = Math.max(0, tiefe - 1);
+      else if ((c === "," || c === ";") && tiefe === 0) { teile.push(t.slice(start, i)); start = i + 1; }
+    }
+    teile.push(t.slice(start));
+    return teile.map((x) => x.trim()).filter(Boolean);
+  }
   /** Steht ein Wort aus dem Wortfeld des Suchworts in dieser Wortliste? */
   const imWortfeld = (suchwort, wortliste) => (FELD_ZU_WORT.get(suchwort) || []).some((v) => v !== suchwort && wortliste.some((x) => passung(v, x) >= 0.7));
   /** Steht das Suchwort (oder ein Wort aus seinem Wortfeld) in dieser Wortliste? */
   const kommtVor = (suchwort, wortliste) => wortliste.some((x) => passung(suchwort, x) >= 0.45) || imWortfeld(suchwort, wortliste);
-  /** … und zwar deutlich: wörtlich, als Wortanfang oder über das Wortfeld – nicht nur als Teil eines längeren Worts. */
-  const kommtDeutlichVor = (suchwort, wortliste) => wortliste.some((x) => passung(suchwort, x) >= 0.7) || imWortfeld(suchwort, wortliste);
+  /** … wörtlich: genau, als Wortanfang, mit Endung oder als Grundwort – ohne Wortfeld. */
+  const woertlich = (suchwort, wortliste) => wortliste.some((x) => passung(suchwort, x) >= 0.7);
+  /** … deutlich: wörtlich oder über das Wortfeld – nicht nur als Teil eines längeren Worts. */
+  const kommtDeutlichVor = (suchwort, wortliste) => woertlich(suchwort, wortliste) || imWortfeld(suchwort, wortliste);
+
+  /**
+   * Welchen Eintrag meint ein Text („die Telefonzeiten“, „den Preis für Osteopathie“)? Der Eintrag muss ein Inhaltswort in
+   * Titel oder Tags tragen (auch über das Wortfeld); Titel zählt doppelt, ein Titel nur aus den genannten Wörtern gewinnt.
+   * Kein solcher Eintrag: null – lieber nachfragen als den falschen ändern.
+   */
+  function zielFinden(text, knoten) {
+    const liste = (Array.isArray(knoten) ? knoten : []).filter((k) => k && k.id && k.titel).map((k) => ({ k, titel: inhaltsStaemme(k.titel), tags: inhaltsStaemme((Array.isArray(k.tags) ? k.tags : []).join(" ")) }));
+    const { such } = frageWoerter(text, new Set(liste.flatMap((v) => [...v.titel, ...v.tags])));
+    let bester = null;
+    let wert = 0;
+    for (const v of liste) {
+      const imTitel = such.filter((s) => kommtDeutlichVor(s, v.titel)).length;
+      const inTags = such.filter((s) => !kommtDeutlichVor(s, v.titel) && kommtDeutlichVor(s, v.tags)).length;
+      if (!imTitel && !inTags) continue;
+      const ganz = v.titel.length > 0 && v.titel.every((t) => such.some((s) => passung(s, t) >= 0.7));
+      const w = imTitel * 2 + inTags + (ganz ? 1.5 : 0);
+      if (w > wert) { wert = w; bester = v.k; }
+    }
+    return bester;
+  }
 
   /**
    * Antwort rein aus den übergebenen Kontext-Knoten (Demo-Modus und lokaler Betrieb ohne KI): passende Zeilen wörtlich,
    * Entwürfe und offene Punkte gekennzeichnet. Es steht nie etwas in der Antwort, das nicht in einem der Knoten steht.
    *
-   * Grundsatz: Die Antwort muss die Frage ganz abdecken – lieber eine Lücke als eine Antwort am Thema vorbei.
-   *  - Jedes Inhaltswort der Frage steht deutlich in einem der genannten Knoten. Der beste Knoten trägt, was in ihm steht;
-   *    weitere nur, was sie im Titel oder Tag tragen (zwei Knoten mit je einem Wort irgendwo im Text sind keine Antwort).
-   *  - Eine Eigenschaft (Preis, Zeiten, Adresse, Kontakt …) zählt nur beim gefragten Thema selbst oder als offener Punkt:
-   *    „Was kostet Akupunktur?“ ist mit dem Preis der Osteopathie nicht beantwortet.
-   *  - Wörter für die Praxis selbst („Praxis“, optional ihr Name über nebensache) müssen nicht vorkommen.
-   *  - Fehlt etwas, steht aber ein offener Punkt genau zum Thema im Brain: „Das ist im Brain noch offen“. Sonst:
-   *    „Dazu steht noch nichts im Brain.“ und die Frage als Lücke.
+   * Grundsatz: lieber eine Lücke als eine Antwort am Thema vorbei.
+   *  1. Thema: Wörter der Frage, die im Brain vorkommen und keine Eigenschaft meinen. Ein Wissens-Eintrag kommt nur in die
+   *     Antwort, wenn er das ganze Thema trägt (bei mehreren Themenwörtern wörtlich, nicht über ein Wortfeld).
+   *  2. Eigenschaft (Preis, Zeiten, Adresse, Kontakt …): zählt nur beim Thema selbst oder als offener Punkt –
+   *     „Was kostet Akupunktur?“ ist mit dem Preis der Osteopathie nicht beantwortet.
+   *  3. Unbekannt: ein Wort, das nirgends in der Auswahl steht. Dann gibt es nur eine Antwort, wenn der beste Eintrag zwei
+   *     bekannte Wörter trägt (eines davon im Text) und das unbekannte kein großgeschriebenes Hauptwort ist („… mit Sauna?“).
+   *  4. Nebensache: „Praxis“, „Patient“ und (über nebensache) der Name der Praxis sowie Zahlen müssen nicht vorkommen.
+   *  5. Fehlt etwas, steht aber ein offener Punkt genau dazu im Brain: „Das ist im Brain noch offen“. Sonst:
+   *     „Dazu steht noch nichts im Brain.“ und die Frage als Lücke.
    */
   function antwortAusKontext(frage, kontextKnoten, { nebensache = [] } = {}) {
     const liste = (Array.isArray(kontextKnoten) ? kontextKnoten : []).filter((k) => k && k.id && k.titel);
     const luecke = { text: NICHTS_IM_BRAIN, quellen: [], luecke: einzeilig(frage) };
     if (!liste.length) return luecke;
     const vorbereitet = liste.map((k, rang) => {
-      const kopf = inhaltsStaemme(`${k.titel} ${(Array.isArray(k.tags) ? k.tags : []).join(" ")}`);
-      const zeilen = zeilenVon(k.inhalt, k.titel).map((text) => ({ text, w: inhaltsStaemme(text) }));
-      return { k, rang, kopf, zeilen, alle: [...kopf, ...zeilen.flatMap((z) => z.w)] };
+      const titel = inhaltsStaemme(k.titel);
+      const kopf = [...titel, ...inhaltsStaemme((Array.isArray(k.tags) ? k.tags : []).join(" "))];
+      const zeilen = zeilenVon(k.inhalt, k.titel).map((text) => {
+        // „Etikett: Wert“ – das Etikett sagt, wovon die Zeile handelt („Inhaber: …“, „Für wen: …“)
+        const m = /^([^:]{2,40}):\s/.exec(text);
+        const teile = posten(text);
+        return { text, w: inhaltsStaemme(text), etikett: m ? inhaltsStaemme(m[1]) : [], etikettSatz: m ? normal(m[1]) : "", posten: teile.length >= 4 ? teile.map((p) => ({ w: inhaltsStaemme(p) })) : null };
+      });
+      const text = zeilen.flatMap((z) => z.w);
+      return { k, rang, titel, kopf, zeilen, text, alle: [...kopf, ...text], offen: k.status === "zu_klaeren" };
     });
-    const { such, zusatz } = frageWoerter(frage, new Set(vorbereitet.flatMap((v) => v.alle)));
-    if (!such.length) return luecke;
-    // worum es gehen muss: alles außer den Wörtern für die Praxis selbst (bleibt sonst nichts, zählen auch die)
-    const neben = new Set([...ALLGEMEIN, ...(Array.isArray(nebensache) ? nebensache : [])].flatMap((w) => woerter(w)));
-    const ohneNeben = such.filter((s) => !neben.has(s));
-    const pflicht = ohneNeben.length ? ohneNeben : such;
-    const thema = pflicht.filter((s) => !EIGENSCHAFT.has(s));
+    const { such, zusatz, gross } = frageWoerter(frage, new Set(vorbereitet.flatMap((v) => v.alle)));
+    // Die Frage nennt wörtlich ein Etikett aus mehreren Wörtern („Für wen ist die Praxis?“ ↔ „Für wen: …“): diese Zeile ist die Antwort
+    const frageText = ` ${normal(frage)} `;
+    const etikettTreffer = () => {
+      for (const v of vorbereitet) {
+        if (v.offen) continue;
+        const z = v.zeilen.find((x) => x.etikettSatz.includes(" ") && frageText.includes(` ${x.etikettSatz} `));
+        if (z) return { text: `**${v.k.titel}:** ${z.text}`, quellen: [v.k.id], luecke: "" };
+      }
+      return null;
+    };
+    if (!such.length) return etikettTreffer() || luecke;
+
+    // worum es gehen muss: alles außer Nebensachen und Zahlen (bleibt sonst nichts, zählen auch die)
+    const neben = new Set([...ALLGEMEIN, ...SCHWACH, ...(Array.isArray(nebensache) ? nebensache : [])].flatMap((w) => woerter(w)));
+    const schwach = new Set(SCHWACH.flatMap((w) => woerter(w)));
+    const istZahl = (s) => /^\d+$/.test(s);
+    let pflicht = such.filter((s) => !neben.has(s) && !istZahl(s));
+    // nur „Praxis“ oder „Patient“ und nichts, was sagt, worum es geht („Für wen ist die Praxis?“): keine geratene Antwort –
+    // außer es ist ein bloßes Stichwort („Praxis“)
+    if (!pflicht.length) pflicht = such.filter((s) => !ALLGEMEIN_STAEMME.has(s) && !schwach.has(s) && !istZahl(s)); // der Name der Praxis zählt dann doch
+    if (!pflicht.length) pflicht = such.filter((s) => schwach.has(s)); // „Wer leitet die Praxis?“
+    if (!pflicht.length && normal(frage).split(" ").length > 2) return etikettTreffer() || luecke;
+    if (!pflicht.length) pflicht = such.filter((s) => !istZahl(s));
+    if (!pflicht.length) pflicht = such;
+    const bekannt = pflicht.filter((s) => vorbereitet.some((v) => kommtDeutlichVor(s, v.alle)));
+    const unbekannt = pflicht.filter((s) => !bekannt.includes(s));
+    if (!bekannt.length) return luecke;
+    const thema = bekannt.filter((s) => !EIGENSCHAFT.has(s));
+    const eigenschaft = bekannt.filter((s) => EIGENSCHAFT.has(s));
+    const themaTraegt = thema.length >= 2 ? woertlich : kommtDeutlichVor;
     // Fragewörter sagen, was gemeint ist („wo“ → Standort, „wann“ → Zeiten): wer das im Titel oder Tag trägt, rückt nach vorn
     const gemeint = (kopf) => zusatz.some((w) => kopf.some((x) => x.includes(w)));
 
+    // Eine Eigenschaft zählt nur beim Thema: Handelt der Eintrag selbst vom Thema (Titel, Tag), zählt alles darin. Steht das
+    // Thema nur im Text – etwa in einer Aufzählung –, muss die Eigenschaft beim selben Posten stehen
+    // („Atemtherapie, …, Osteopathie (85 €), …“ nennt keinen Preis für die Atemtherapie).
+    const beimThema = (v, s) => {
+      // offene Punkte tragen eine Eigenschaft, wo immer sie steht; ein Eintrag, der sie im Titel oder Tag führt, als Ganzes
+      if (v.offen || !thema.length || kommtDeutlichVor(s, v.kopf) || thema.some((t) => themaTraegt(t, v.kopf))) return kommtDeutlichVor(s, v.alle);
+      return v.zeilen.some((z) => (z.posten || [z]).some((p) => thema.some((t) => themaTraegt(t, p.w)) && kommtDeutlichVor(s, p.w)));
+    };
     const bewertet = vorbereitet.map((v) => {
-      const deckt = such.filter((s) => kommtDeutlichVor(s, v.alle)); // welche Wörter der Frage dieser Knoten trägt
-      const imKopf = such.filter((s) => kommtDeutlichVor(s, v.kopf)); // … und welche davon schon in Titel oder Tags
+      const deckt = bekannt.filter((s) => (EIGENSCHAFT.has(s) ? beimThema(v, s) : themaTraegt(s, v.alle)));
+      const imKopf = bekannt.filter((s) => kommtDeutlichVor(s, v.kopf));
+      const imTitel = bekannt.filter((s) => woertlich(s, v.titel));
+      const imText = bekannt.filter((s) => kommtDeutlichVor(s, v.text));
+      // der Titel besteht nur aus Wörtern der Frage: das ist der Eintrag zum Thema („Manuelle Therapie“)
+      const titelGanz = v.titel.length > 0 && v.titel.every((t) => such.some((s) => passung(s, t) >= 0.7));
       const zeilen = v.zeilen.map((z) => ({ text: z.text, treffer: such.filter((s) => kommtVor(s, z.w)).length }));
-      const staerke = deckt.length / such.length + imKopf.length * 0.25 + (gemeint(v.kopf) ? 0.25 : 0);
-      // wörtlich im Titel (ohne Tags, ohne Wortfeld): „Standort“ in „… an welchem Standort …“
-      const imTitel = such.filter((s) => inhaltsStaemme(v.k.titel).some((x) => passung(s, x) >= 0.7));
-      return { k: v.k, rang: v.rang, kopf: v.kopf, alle: v.alle, zeilen, deckt, imKopf, imTitel, offen: v.k.status === "zu_klaeren", staerke };
+      // eine Zeile „Etikett: Wert“, deren Etikett gefragt ist („Philosophie: …“, „Telefon: …“)
+      // (ein Etikett, das nur den Titel wiederholt – „Team – Training“ / „Training: …“ –, sagt nichts Eigenes)
+      // und nur, wenn das ganze Etikett gefragt ist – „Website“ fragt nicht nach „Schwerpunkte laut Website: …“)
+      const etikett = v.zeilen.some((z) => z.etikett.length > 0 && !z.etikett.every((w) => v.titel.includes(w)) && z.etikett.every((w) => bekannt.some((s) => kommtDeutlichVor(s, [w]))));
+      // „Telefonnummer?“: der Eintrag mit einer Nummer geht vor den mit den Telefonzeiten
+      const nummer = bekannt.some((s) => NUMMER_WORT.has(s)) && v.zeilen.some((z) => /\+?\d[\d ()/-]{6,}\d/.test(z.text) && !/\d{1,2}:\d{2}/.test(z.text.replace(/\+?\d[\d ()/-]{6,}\d/g, "")));
+      // wörtlich schlägt Wortfeld: „Praxismanagerin“ steht bei der Praxismanagerin, nicht beim Inhaber
+      const genau = bekannt.filter((s) => woertlich(s, v.alle)).length / bekannt.length;
+      const staerke = deckt.length / bekannt.length + imKopf.length * 0.25 + (gemeint(v.kopf) ? 0.4 : 0) + (titelGanz ? 0.5 : 0) + (etikett ? 0.3 : 0) + (nummer ? 0.8 : 0) + genau * 0.1
+        + such.filter((s) => neben.has(s) && woertlich(s, v.titel)).length * 0.1 + such.filter((s) => schwach.has(s) && woertlich(s, v.text)).length * 0.15;
+      return { k: v.k, rang: v.rang, titel: v.titel, kopf: v.kopf, alle: v.alle, roh: v.zeilen, zeilen, deckt, imKopf, imTitel, imText, etikett, gemeint: gemeint(v.kopf), offen: v.offen, staerke, ganzesThema: thema.every((s) => deckt.includes(s)) };
     });
-    // in Frage kommt, wer etwas vom Gefragten trägt – im Titel/Tag oder mit mindestens der halben Frage – und (als Wissen)
-    // beim Thema bleibt: nur die gefragte Eigenschaft zu kennen, aber von etwas anderem, reicht nicht
-    const passend = bewertet
-      .filter((b) => b.deckt.some((s) => pflicht.includes(s))
-        && (pflicht.length === 1 || b.imKopf.length >= 1 || b.deckt.length / such.length >= 0.5)
-        && (b.offen || !thema.length || b.deckt.some((s) => thema.includes(s))))
-      .sort((a, b) => b.staerke - a.staerke || Number(a.offen) - Number(b.offen) || a.rang - b.rang); // bei Gleichstand: Wissen vor offenen Punkten
-    if (!passend.length) return luecke;
+    const nachRang = (a, b) => b.staerke - a.staerke || Number(a.offen) - Number(b.offen) || a.rang - b.rang; // bei Gleichstand: Wissen vor offenen Punkten
+    // in Frage kommt, wer das ganze Thema trägt – ohne Thema: wer eine der gefragten Eigenschaften im Titel oder Tag trägt
+    // (dass irgendwo im Text „offene Punkte“ steht, macht einen Eintrag nicht zur Antwort auf „Habt ihr offen?“)
+    const passend = bewertet.filter((b) => b.deckt.length && b.ganzesThema && (thema.length || b.imKopf.length || b.etikett)).sort(nachRang);
+    const offenePunkte = bewertet.filter((b) => b.offen && b.deckt.length).sort(nachRang);
 
-    const erster = passend[0];
-    const beste = passend.filter((b) => b.staerke >= erster.staerke * 0.75);
-    const fakten = beste.filter((b) => !b.offen).slice(0, 3);
+    /** Die Antwort aus den gewählten Einträgen: Wissen wörtlich, offene Punkte mit „noch offen“. */
+    const fertig = (wissen, offenes) => {
+      const teile = [];
+      let laenge = 0;
+      for (const b of wissen) {
+        const { k } = b;
+        let zeilen = b.zeilen.map((z) => z.text);
+        if (zeilen.join(" ").length > 420) {
+          const gute = b.zeilen.filter((z) => z.treffer > 0).slice(0, 4).map((z) => z.text);
+          zeilen = gute.length ? gute : zeilen.slice(0, 3);
+        }
+        const vorsatz = k.status === "entwurf" ? "Laut Entwurf (noch nicht bestätigt) – " : "";
+        const text = zeilen.length <= 1 ? `${vorsatz}**${k.titel}:** ${zeilen[0] || ""}`.trim() : `${vorsatz}**${k.titel}:**\n${zeilen.map((z) => `- ${z}`).join("\n")}`;
+        if (teile.length && laenge + text.length > 900) break;
+        teile.push({ text, id: k.id });
+        laenge += text.length;
+      }
+      const mitWissen = teile.length > 0;
+      for (const b of offenes) {
+        const erste = b.zeilen.length ? ` – ${einzeilig(b.zeilen[0].text, 220)}` : "";
+        teile.push({ text: `${mitWissen ? "Noch offen im Brain" : "Das ist im Brain noch offen"}: **${b.k.titel}**${erste}`, id: b.k.id });
+      }
+      return { text: teile.map((t) => t.text).join("\n\n"), quellen: teile.map((t) => t.id), luecke: "" };
+    };
+
+    // „X und Y“ (zwei Themen, kein Eintrag trägt beide): je Thema der Eintrag, der es im Titel oder Tag führt
+    if (thema.length >= 2 && !eigenschaft.length && !unbekannt.length && !passend.some((b) => !b.offen) && /\s(?:und|oder|sowie)\s/.test(frageText)) {
+      const je = [];
+      for (const t of thema) {
+        const b = bewertet.filter((x) => !x.offen && woertlich(t, x.kopf)).sort(nachRang)[0];
+        if (!b) { je.length = 0; break; }
+        if (!je.includes(b)) je.push(b);
+      }
+      if (je.length && je.length <= 3) return fertig(je, []);
+    }
+
+    const fakten = [];
     const offen = [];
-    const traegt = (b) => (b === erster ? b.deckt : b.imKopf);
-    const gedeckt = new Set(fakten.flatMap(traegt));
-    const fehlt = (woerterListe) => woerterListe.some((s) => pflicht.includes(s) && !gedeckt.has(s));
-    const dazu = (b) => { (b.offen ? offen : fakten).push(b); for (const s of traegt(b)) gedeckt.add(s); };
-    // offene Punkte zuerst die, die mit dem besten Knoten verwandt sind (gemeinsame Wörter in Titel/Tags außer denen der
-    // Frage): zu „Was kostet Akupunktur?“ gehört der offene Punkt zu den Preisen der Leistungen, nicht der zum Jugendtraining
-    const verwandt = (b) => (b === erster ? 99 : b.kopf.filter((x) => !such.includes(x) && erster.kopf.includes(x)).length);
-    const nachVerwandtschaft = (reihe) => reihe.map((b, i) => ({ b, i })).sort((x, y) => (y.b.offen ? verwandt(y.b) : 0) - (x.b.offen ? verwandt(x.b) : 0) || x.i - y.i).map((x) => x.b);
-    // offene Punkte: wenn sie etwas beitragen, wenn es gar kein Wissen gibt – oder einer, wenn nach genau einem Wort gefragt
-    // ist, es wörtlich im Titel des offenen Punkts steht und die Antwort noch kurz ist
-    for (const b of nachVerwandtschaft(beste)) {
-      if (!b.offen || offen.length >= 2) continue;
-      const einWort = pflicht.length === 1 && !offen.length && fakten.length <= 2 && b.imTitel.some((s) => pflicht.includes(s));
-      if (!fakten.length || b === erster || fehlt(traegt(b)) || einWort) dazu(b);
+    const gedeckt = new Set();
+    const dazu = (b) => { if (fakten.includes(b) || offen.includes(b)) return; (b.offen ? offen : fakten).push(b); for (const s of b.deckt) gedeckt.add(s); };
+    const fehlt = () => bekannt.filter((s) => !gedeckt.has(s));
+    // der beste Eintrag: Wissen, das alles Gefragte trägt, geht vor – sonst der stärkste („Wer ist Dr. Pohle?“ steht im
+    // Eintrag zur Akupunktur, auch wenn ein offener Punkt den Namen im Titel trägt)
+    const erster = passend.find((b) => !b.offen && b.deckt.length === bekannt.length) || passend[0] || null;
+    if (erster) {
+      // die Besten – trägt der beste das Gemeinte im Titel („wann“ → „…zeiten“), dann nur noch solche
+      // … und führt er das ganze Thema im Titel oder Tag („Praxis Thumenberger Weg“), dann nur noch Einträge, die das auch tun –
+      // einer, der das Thema bloß im Text erwähnt („Standorte“), trägt dann nichts Eigenes bei. Ausnahme: Das Fragewort zeigt
+      // auf ihn und nicht auf den besten („Wer macht Osteopathie?“ → dazu der Team-Eintrag, der die Person nennt).
+      const themaImKopf = (b) => thema.length > 0 && thema.every((t) => themaTraegt(t, b.kopf));
+      const nurKopf = themaImKopf(erster);
+      const beste = passend.filter((b) => b === erster || (b.staerke >= erster.staerke * 0.75 && (!erster.gemeint || b.gemeint || b.etikett)
+        && (!nurKopf || themaImKopf(b) || b.etikett || (b.gemeint && !erster.gemeint))));
+      for (const b of beste) if (!b.offen && fakten.length < 3) dazu(b);
+      // Übersichts-Eintrag („Dazu gehören: A, B“): die genannten Einträge kommen mit, wenn es höchstens drei sind
+      if (!erster.offen) {
+        const zeile = erster.roh.map((z) => z.text).find((t) => /^dazu geh(?:ö|oe)ren\s*:/i.test(t));
+        const namen = zeile ? zeile.replace(/^[^:]*:/, "").split(/[,;]/).map((t) => t.replace(/[.\s]+$/, "").trim().toLowerCase()).filter(Boolean) : [];
+        if (namen.length && namen.length <= 3) for (const b of bewertet) if (!b.offen && fakten.length < 4 && namen.includes(String(b.k.titel).trim().toLowerCase())) dazu(b);
+      }
     }
-    // fehlt noch ein Wort der Frage? Dann darf dazu, wer genau dieses Wort im Titel oder Tag trägt („Akupunktur“ + „Kosten“)
-    for (const b of nachVerwandtschaft(passend)) {
-      if (!fehlt(pflicht)) break;
-      if (fakten.includes(b) || offen.includes(b) || !fehlt(traegt(b))) continue;
-      if (b.offen ? offen.length < 2 : fakten.length < 3) dazu(b);
-    }
-    if (fehlt(pflicht)) {
-      // ein offener Punkt, der das Thema der Frage im Titel trägt: ehrlich sagen, dass genau das noch offen ist.
-      // Thema = ein Wort, das in dieser Auswahl nicht überall steht („Öffnungszeiten“ ja, „Behandlung“ oder „Training“ nein)
-      const selten = (s) => pflicht.includes(s) && bewertet.filter((b) => b.deckt.includes(s)).length <= Math.max(1, Math.floor(bewertet.length / 2));
-      const punkte = passend.filter((b) => b.offen && b.imKopf.some(selten) && b.deckt.filter((s) => pflicht.includes(s)).length / pflicht.length >= 0.5).slice(0, 2);
-      if (!punkte.length) return luecke;
+    // Gefragt ist eine Eigenschaft (Preis, Zeiten …), die kein Wissens-Eintrag beim Thema trägt: Dann genügt der eine Eintrag
+    // zum Thema – weitere (das Team, die Trainingszeiten) lenken nur von dem ab, was fehlt („Was kostet Atemtherapie?“)
+    if (eigenschaft.length && fakten.length > 1 && !fakten.some((b) => eigenschaft.some((s) => b.deckt.includes(s)))) {
+      const bleibt = fakten.includes(erster) ? erster : fakten[0];
       fakten.length = 0;
+      fakten.push(bleibt);
+    }
+    // Offene Punkte. Reihenfolge: der beste Eintrag selbst zuerst; dann keiner, der im Titel einen anderen Eintrag nennt (der
+    // gehört zu jenem); dann die, die mit dem besten Eintrag verwandt sind (gemeinsame Wörter in Titel/Tags außer denen der
+    // Frage); dann nach Stärke.
+    const andereTitel = () => bewertet.filter((b) => !b.offen && !fakten.includes(b) && b.titel.length >= 2).map((b) => b.titel);
+    const nenntAnderen = (b) => andereTitel().some((t) => t.every((w) => b.titel.includes(w)));
+    const verwandt = (b) => (erster && b !== erster ? b.kopf.filter((x) => !such.includes(x) && erster.kopf.includes(x)).length : 0);
+    const geordnet = offenePunkte.map((b, i) => ({ b, i, selbst: Number(b !== erster), fremd: Number(nenntAnderen(b)), v: verwandt(b) }))
+      .sort((x, y) => x.selbst - y.selbst || x.fremd - y.fremd || y.v - x.v || x.i - y.i).map((x) => x.b);
+    if (erster) {
+      for (const b of geordnet) {
+        if (offen.length >= 2 || offen.includes(b)) continue;
+        // (a) es gibt gar kein Wissen, oder der offene Punkt ist selbst der beste Eintrag
+        const allein = !fakten.length && b.ganzesThema && b.staerke >= erster.staerke * 0.75;
+        // (b) nach genau einem Wort gefragt, es steht im Titel des offenen Punkts (ohne Thema auch über das Wortfeld) und die
+        //     Antwort ist noch kurz: „Akupunktur“ → dazu die offene Frage zur Akupunktur
+        const einWort = bekannt.length === 1 && !offen.length && fakten.length <= 2 && !nenntAnderen(b)
+          && (b.imTitel.length > 0 || (!thema.length && kommtDeutlichVor(bekannt[0], b.titel)));
+        // (c) der offene Punkt trägt das ganze Thema und genau das Gemeinte im Titel: „Wo findet das Youngster Training statt?“
+        const gemeintes = b.gemeint && thema.length > 0 && thema.every((t) => b.imKopf.includes(t));
+        if (allein || b === erster || einWort || gemeintes) dazu(b);
+      }
+    }
+    // fehlt noch eine Eigenschaft („… kostet …“)? Dann darf ein offener Punkt dazu, der sie im Titel oder Tag trägt
+    if (fehlt().length && (erster || !thema.length)) {
+      for (const b of geordnet) {
+        if (!fehlt().length || offen.length >= 2) break;
+        if (offen.includes(b) || nenntAnderen(b)) continue;
+        if (b.imKopf.some((s) => fehlt().includes(s))) { offen.push(b); for (const s of b.imKopf) gedeckt.add(s); }
+      }
+    }
+
+    // Ist die Frage damit beantwortet? Alles Bekannte gedeckt – und Unbekanntes nur mit genug Belegen und nie ein Hauptwort
+    const grossUnbekannt = unbekannt.some((s) => gross.includes(s));
+    const belegt = Boolean(erster) && erster.deckt.length >= 2 && erster.imText.length >= 1;
+    const beantwortet = (fakten.length || offen.length) && !fehlt().length && (!unbekannt.length || (belegt && !grossUnbekannt));
+    if (!beantwortet) {
+      // ein offener Punkt, der das Thema der Frage im Titel trägt: ehrlich sagen, dass genau das noch offen ist – aber nur,
+      // wenn die Frage nichts enthält, was das Brain gar nicht kennt, und kein Wissens-Eintrag das Thema schon trägt.
+      // Thema = ein Wort, das in dieser Auswahl nicht überall steht („Öffnungszeiten“ ja, „Training“ nein).
+      // Was das Brain gar nicht kennt, ist ein großgeschriebenes Hauptwort oder ein Name („Massage“, „WLAN“); ein Wort, das
+      // Gabi einordnen kann (ein Wochentag, „Feiertag“), oder ein kleingeschriebenes Füllsel hindert nicht.
+      if (unbekannt.some((s) => gross.includes(s) && !FELD_ZU_WORT.has(s)) || fakten.length) return luecke;
+      const selten = (s) => bewertet.filter((b) => b.deckt.includes(s)).length <= Math.max(1, Math.floor(bewertet.length / 2));
+      const punkte = offenePunkte.filter((b) => b.imKopf.some(selten) && b.deckt.length / bekannt.length >= 0.5 && thema.every((s) => b.deckt.includes(s))).slice(0, 2);
+      if (!punkte.length) return luecke;
       offen.length = 0;
       offen.push(...punkte);
     }
 
-    const teile = [];
-    let laenge = 0;
-    for (const b of fakten) {
-      const { k } = b;
-      let zeilen = b.zeilen.map((z) => z.text);
-      if (zeilen.join(" ").length > 420) {
-        const gute = b.zeilen.filter((z) => z.treffer > 0).slice(0, 4).map((z) => z.text);
-        zeilen = gute.length ? gute : zeilen.slice(0, 3);
-      }
-      const vorsatz = k.status === "entwurf" ? "Laut Entwurf (noch nicht bestätigt) – " : "";
-      const text = zeilen.length <= 1 ? `${vorsatz}**${k.titel}:** ${zeilen[0] || ""}`.trim() : `${vorsatz}**${k.titel}:**\n${zeilen.map((z) => `- ${z}`).join("\n")}`;
-      if (teile.length && laenge + text.length > 900) break;
-      teile.push({ text, id: k.id });
-      laenge += text.length;
-    }
-    const mitWissen = teile.length > 0;
-    for (const b of offen) {
-      const erste = b.zeilen.length ? ` – ${einzeilig(b.zeilen[0].text, 220)}` : "";
-      teile.push({ text: `${mitWissen ? "Noch offen im Brain" : "Das ist im Brain noch offen"}: **${b.k.titel}**${erste}`, id: b.k.id });
-    }
-    return { text: teile.map((t) => t.text).join("\n\n"), quellen: teile.map((t) => t.id), luecke: "" };
+    return fertig(fakten, offen);
   }
 
   return {
     KONTEXT_ARTEN, NICHTS_IM_BRAIN, VERALTET_TAGE,
-    normal, stamm, woerter, inhaltsStaemme, frageWoerter, tippAbstand, passung, erstelleIndex, suchen, filtern, istVeraltet, istNieVerwendet, kuerzen, ohneVerweise,
-    kontextWaehlen, antwortAusKontext,
+    normal, stamm, woerter, inhaltsStaemme, mitgemeint, frageWoerter, tippAbstand, passung, erstelleIndex, suchen, filtern, istVeraltet, istNieVerwendet, kuerzen, ohneVerweise,
+    kontextWaehlen, antwortAusKontext, zielFinden,
   };
 });

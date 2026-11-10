@@ -113,11 +113,13 @@ describe("Normalisierung (deutsch)", () => {
     expect(S.woerter("Zimmer 5 im 2. Stock")).toEqual(["zimm", "5", "2", "stock"]);
   });
 
-  it("Passung zweier Wörter: gleich 1 · Wortanfang 0,7 · Wortteil oder verwandt 0,45 · sonst 0 · Zahlen nur genau", () => {
+  it("Passung (Suchwort, Wort im Bestand): gleich 1 · Wortanfang, Endung, Grundwort 0,7 · Bestimmungswort, Wortteil, verwandt 0,45 · sonst 0 · Zahlen nur genau", () => {
     expect(S.passung("preis", "preis")).toBe(1);
-    expect(S.passung("park", "parkplatz")).toBe(0.7);
-    expect(S.passung("parkplatz", "park")).toBe(0.7); // in beide Richtungen
-    expect(S.passung("stund", "sprechstund")).toBe(0.45); // Teil eines Kompositums
+    expect(S.passung("park", "parkplatz")).toBe(0.7); // getippter Wortanfang
+    // umgekehrt nur schwach: Wer „Parkplatz“ sagt, fragt nicht nach dem „Park“ („Bewegungsbad“ nicht nach „Bewegung“)
+    expect(S.passung("parkplatz", "park")).toBe(0.45);
+    expect(S.passung("telefonisch", "telefon")).toBe(0.7); // … außer es fehlt nur eine Endung
+    expect(S.passung("stund", "sprechstund")).toBe(0.7); // das Gefragte ist das Grundwort („Stunde“ ↔ „Sprechstunde“)
     expect(S.passung("trainier", "training")).toBe(0.45); // verwandt: langer gemeinsamer Anfang
     expect(S.passung("zeit", "trainingszeit")).toBe(0); // zu kurz für einen Wortteil
     expect(S.passung("abc", "abcd")).toBe(0); // zu kurz für einen Wortanfang
@@ -172,7 +174,9 @@ describe("Rangfolge der Suche", () => {
     // das Wortfeld greift auch, wenn der Stamm anders aussieht als das Wort („Preis“ → „prei“, „Inhaber“ → „inhab“)
     expect(S.stamm("preis")).toBe("prei");
     expect(ids(suche(knoten, "Preis", { praefix: false }))).toEqual(["preis", "kosten"]);
-    expect(ids(suche([k("c", "Leitung", "Der Chef ist Philipp"), k("t", "Team", "zwölf")], "Wer ist der Inhaber?"))).toEqual(["c"]);
+    // („wer“ zeigt zusätzlich schwach auf das Team – der Eintrag mit dem Wortfeld-Treffer steht vorn)
+    expect(ids(suche([k("c", "Leitung", "Der Chef ist Philipp"), k("t", "Team", "zwölf")], "Wer ist der Inhaber?"))).toEqual(["c", "t"]);
+    expect(ids(suche([k("c", "Leitung", "Der Chef ist Philipp"), k("t", "Team", "zwölf")], "Inhaber"))).toEqual(["c"]);
     // Fragewörter sagen, wonach gesucht wird: „wo“ → Standort/Adresse, „wie viel“ → Preis
     expect(ids(suche([k("s", "Standorte", "zwei in Nürnberg"), k("x", "Team", "zwölf")], "Wo seid ihr?"))).toEqual(["s"]);
     // ohne jedes Inhaltswort ist das Fragewort die Frage: „Wie viel?“ sucht nach Preisen – samt Wortfeld („Kosten“)
@@ -293,17 +297,38 @@ describe("Kontext-Auswahl für Gabi", () => {
     expect(S.kontextWaehlen()).toEqual([]);
   });
 
-  it("Schwelle: weit abgeschlagene Treffer bleiben draußen", () => {
+  it("Schwelle und Auffüllen: die deutlich passenden zuerst; freie Plätze füllen Einträge, die ein Suchwort wörtlich tragen – bloße Wortteile bleiben draußen", () => {
     const knoten = [
       k("gut", "Osteopathie", "Osteopathie kostet 85 € pro Behandlungseinheit. Osteopathie ist Selbstzahlerleistung."),
       k("schwach", "Team", `${lang("Kollegin", 40)} Eine macht auch Osteopathie.`),
+      k("teil", "Kurse", `${lang("Kurs", 40)} Auch ein Kinderosteopathiekurs.`),
       k("nichts", "Kontakt", "Telefon und E-Mail"),
     ];
     const index = S.erstelleIndex(knoten);
     const [erster, zweiter] = S.suchen(index, "Osteopathie", { praefix: false });
     expect(erster.id).toBe("gut");
     expect(zweiter.punkte).toBeLessThan(erster.punkte * 0.25); // der Testfall liegt wirklich unter der Schwelle
-    expect(ids(S.kontextWaehlen({ frage: "Osteopathie", knoten }))).toEqual(["gut"]);
+    // der abgeschlagene Eintrag kommt trotzdem mit (hinten): Die Auswahl ist nur eine Wortsuche – ob er etwas beiträgt,
+    // entscheidet die Antwortlogik bzw. das Modell. Ein Wortteil („Kinderosteopathiekurs“) genügt dafür nicht.
+    expect(ids(S.kontextWaehlen({ frage: "Osteopathie", knoten }))).toEqual(["gut", "schwach"]);
+    // die Grenzen bleiben: nie mehr als maxKnoten, nie mehr als rund maxZeichen
+    const viele = Array.from({ length: 20 }, (_, i) => k(`o${i}`, `Eintrag ${i}`, "Osteopathie am Rand."));
+    expect(S.kontextWaehlen({ frage: "Osteopathie", knoten: [...knoten.slice(0, 1), ...viele] })).toHaveLength(8);
+    expect(S.kontextWaehlen({ frage: "Osteopathie", knoten: [...knoten.slice(0, 1), ...viele], maxKnoten: 3 })).toHaveLength(3);
+    const dicke = Array.from({ length: 20 }, (_, i) => k(`d${i}`, `Eintrag ${i}`, `${lang("Text", 30)} Osteopathie am Rand.`));
+    const auswahl = S.kontextWaehlen({ frage: "Osteopathie", knoten: dicke });
+    expect(auswahl.length).toBeLessThan(8);
+    expect(auswahl.reduce((n, x) => n + x.titel.length + x.inhalt.length, 0)).toBeLessThanOrEqual(6000 + 80);
+  });
+
+  it("je Suchwort kommt der Eintrag mit, der es am besten trägt – auch wenn ein anderer insgesamt mehr Punkte hat", () => {
+    // „Was kostet die Trainingstherapie?“: Preis-Einträge sammeln viele Punkte, der Eintrag zum Thema darf nicht fehlen
+    const knoten = [
+      k("p1", "Preise Osteopathie", "Osteopathie kostet 85 €. Kosten trägt der Patient. Preis pro Einheit. Was kostet es? Kosten, Kosten."),
+      k("p2", "Preise Youngster", "Was kostet das Youngster Training? Kosten offen. Preis folgt. Kosten, Kosten."),
+      k("mtt", "Medizinische Trainingstherapie", `${lang("Gerät", 60)} unter Anleitung.`),
+    ];
+    expect(ids(S.kontextWaehlen({ frage: "Was kostet die Trainingstherapie?", knoten }))).toContain("mtt");
   });
 
   it("Nachbarn (ein Sprung): ausdrückliche Verweise immer, „gehört zu“ nur wenn der Nachbar selbst zur Frage passt", () => {
@@ -494,12 +519,19 @@ describe("Ein Dutzend Fragen gegen den echten Seed", () => {
   it.each([
     ["Wie sind die Öffnungszeiten?", "s-frage-oeffnungszeiten", "Wann sind die Praxen selbst geöffnet?"],
     ["Gibt es Parkplätze?", "s-frage-parken", "Gibt es an den Standorten Parkplätze – und sind die Praxen barrierefrei?"],
-    ["Behandelt ihr Kassenpatienten?", "s-frage-abrechnung", "Behandelt ihr auch gesetzlich Versicherte – und wie rechnet ihr ab?"],
   ])("%s → noch offen (kein Fakt, keine Lücke)", (frage, id, titel) => {
     const r = frag(frage);
     expect(r.quellen).toEqual([id]);
     expect(r.luecke).toBe("");
     expect(r.text.startsWith(`Das ist im Brain noch offen: **${titel}**`)).toBe(true);
+  });
+
+  it("„Behandelt ihr Kassenpatienten?“ → was dasteht (Privatpraxis), dann der offene Punkt zur Abrechnung", () => {
+    const r = frag("Behandelt ihr Kassenpatienten?");
+    expect(r.quellen).toEqual(["s-praxis", "s-frage-abrechnung"]);
+    expect(r.luecke).toBe("");
+    expect(r.text).toMatch(/Privatpraxis/);
+    expect(r.text).toContain("Noch offen im Brain: **Behandelt ihr auch gesetzlich Versicherte – und wie rechnet ihr ab?**");
   });
 
   it.each(["Kann man bei euch mit Karte zahlen?", "Wie wird das Wetter morgen?", "Bietet ihr Videotermine an?", "Gibt es eine Warteliste für neue Termine?"])("%s → Lücke", (frage) => {
@@ -517,5 +549,161 @@ describe("Ein Dutzend Fragen gegen den echten Seed", () => {
     const r = S.antwortAusKontext("Bietet ihr Hausbesuche an?", kontext);
     expect(r.quellen).toEqual(["s-demo-hausbesuche"]);
     expect(r.text.startsWith("Laut Entwurf (noch nicht bestätigt) – **Hausbesuche (Beispiel-Entwurf):**")).toBe(true);
+  });
+});
+
+// ---------- Antwortregeln nach Prüfrunde 1 (10.11.2026) – an kleinen, erfundenen Einträgen ----------
+describe("Antwort ohne KI: lieber eine Lücke als eine Antwort am Thema vorbei", () => {
+  const offen = (id, titel, inhalt = "nicht angegeben", extra = {}) => k(id, titel, inhalt, { art: "frage", status: "zu_klaeren", ...extra });
+  const antwort = (frage, knoten, opt) => S.antwortAusKontext(frage, knoten, opt);
+  const istLuecke = (r, frage) => { expect(r.text, frage).toBe(S.NICHTS_IM_BRAIN); expect(r.quellen, frage).toEqual([]); expect(r.luecke, frage).toBe(frage); };
+
+  it("eine Eigenschaft zählt nur beim Thema: der Preis in einer Aufzählung gilt nur für seinen Posten", () => {
+    const liste = k("w", "Weitere Behandlungen", "Lymphdrainage, Atemtherapie, Krankengymnastik, Osteopathie (Selbstzahler, 85 € pro Einheit), Kinesio-Tape");
+    const osteo = k("o", "Osteopathie", "Osteopathie: 85 € pro Einheit.", { tags: ["preis"] });
+    // früher: „Was kostet Atemtherapie?“ → der Preis der Osteopathie
+    istLuecke(antwort("Was kostet Atemtherapie?", [liste, osteo]), "Was kostet Atemtherapie?");
+    expect(antwort("Was kostet Osteopathie?", [liste, osteo]).quellen).toEqual(["o"]);
+    expect(antwort("Was kostet Osteopathie?", [liste]).quellen).toEqual(["w"]); // steht der Preis beim Posten selbst, zählt er
+    expect(antwort("Bietet ihr Atemtherapie an?", [liste, osteo]).quellen).toEqual(["w"]); // ohne Eigenschaft genügt das Thema
+    // mit einem offenen Punkt zur Eigenschaft: das Thema und „noch offen“ – nie der fremde Preis als Antwort
+    const preise = offen("p", "Was kosten die übrigen Leistungen?", "Preise: nicht angegeben.", { tags: ["preis"] });
+    const r = antwort("Was kostet Atemtherapie?", [liste, osteo, preise]);
+    expect(r.quellen).toEqual(["w", "p"]);
+    expect(r.text).toContain("Noch offen im Brain: **Was kosten die übrigen Leistungen?**");
+  });
+
+  it("ein großgeschriebenes Wort, das nirgends im Brain steht, macht die Frage zur Lücke – auch wenn der Rest passt", () => {
+    const park = [k("p", "Parken", "Hinter dem Haus sind fünf Parkplätze.", { tags: ["parken"] }), k("s", "Standorte", "Kieslingstraße 82 und Thumenberger Weg 89, beide mit Aufzug.")];
+    expect(antwort("Gibt es Parkplätze?", park).quellen).toEqual(["p"]);
+    for (const frage of ["Gibt es Parkplätze mit Ladesäule?", "Habt ihr eine Sauna?", "Gibt es am Thumenberger Weg einen Aufzug und eine Sauna?"]) istLuecke(antwort(frage, park), frage);
+    // was mitten im Satz großgeschrieben ist, meldet frageWoerter als Hauptwort
+    expect(S.frageWoerter("Gibt es Parkplätze mit Ladesäule?").gross).toEqual(["parkplaetz", "ladesaeul"]);
+    expect(S.frageWoerter("Parkplätze gibt es wo?").gross).toEqual([]); // am Satzanfang sagt die Großschreibung nichts
+  });
+
+  it("nur „Praxis“ und nichts, was sagt, worum es geht: keine geratene Antwort – außer ein Etikett ist wörtlich gefragt", () => {
+    const praxis = [k("x", "Musterpraxis – die Praxis", "Name: Musterpraxis.\nFür wen: Sportler und Schmerzpatienten.\nInhaber: Max Beispiel.\nPhilosophie: Bewegung ist Medizin."), k("g", "Geschichte", "Gegründet 2011.")];
+    // früher: „Für wen ist die Praxis?“ → irgendein Eintrag mit „Praxis“ im Titel
+    expect(antwort("Für wen ist die Praxis?", praxis)).toEqual({ text: "**Musterpraxis – die Praxis:** Für wen: Sportler und Schmerzpatienten.", quellen: ["x"], luecke: "" });
+    istLuecke(antwort("Wie ist die Praxis?", praxis), "Wie ist die Praxis?");
+    expect(antwort("Praxis", praxis).quellen).toEqual(["x"]); // als bloßes Stichwort bleibt es eine Suche
+    expect(antwort("Wer ist der Inhaber?", praxis).quellen).toEqual(["x"]);
+    expect(antwort("Was ist eure Philosophie?", praxis).quellen).toEqual(["x"]);
+  });
+
+  it("„X und Y“: zwei Themen, je ein Eintrag – fehlt eines im Brain, ist es eine Lücke", () => {
+    const zwei = [k("a", "Akupunktur", "Bei Schmerzen."), k("m", "Manuelle Therapie", "Mobilisierende Techniken."), k("z", "Zeiten", "Mo–Fr.")];
+    expect(antwort("Bietet ihr Akupunktur und Manuelle Therapie an?", zwei).quellen).toEqual(["a", "m"]);
+    istLuecke(antwort("Bietet ihr Akupunktur und Massage an?", zwei), "Bietet ihr Akupunktur und Massage an?");
+  });
+
+  it("Übersichts-Eintrag („Dazu gehören: …“): die genannten Einträge kommen mit – höchstens drei", () => {
+    const zwei = [k("a", "Akupunktur", "Bei Schmerzen."), k("m", "Manuelle Therapie", "Mobilisierende Techniken."), k("l", "Leistungen", "Dazu gehören: Akupunktur, Manuelle Therapie.")];
+    expect(antwort("Welche Leistungen bietet ihr an?", zwei).quellen).toEqual(["l", "a", "m"]);
+    const viele = [k("l", "Leistungen", "Dazu gehören: A1, A2, A3, A4."), ...[1, 2, 3, 4].map((i) => k(`a${i}`, `A${i}`, "Text."))];
+    expect(antwort("Welche Leistungen bietet ihr an?", viele).quellen).toEqual(["l"]);
+  });
+
+  it("Wochentage: Spannen („Mo–Do“) meinen die Tage dazwischen; „Wochenende“ und „Tag“ sind Oberbegriffe", () => {
+    const zeiten = [k("t", "Trainingszeiten", "Mo–Do 7:00–19:00, Fr 7:00–18:00, Sa 9:00–14:00 Uhr."), k("tel", "Telefonzeiten", "Mo 7:30–17:00, Fr 7:30–16:00 Uhr.")];
+    expect(S.inhaltsStaemme("Mo–Do 7:00–19:00")).toEqual(expect.arrayContaining(["mo", "di", "mi", "do"]));
+    expect(S.mitgemeint("Mo–Do")).toBe("Mo–Do mo di mi do");
+    expect(S.mitgemeint("Mo - Fr")).toBe("Mo - Fr mo di mi do fr");
+    expect(S.mitgemeint("Montag")).toBe("Montag"); // nichts zu ergänzen
+    // früher Lücke: „Mittwoch“ stand nicht wörtlich da
+    expect(antwort("Kann ich am Mittwoch trainieren?", zeiten).quellen).toEqual(["t"]);
+    expect(antwort("Wann kann ich am Wochenende trainieren?", zeiten).quellen).toEqual(["t"]);
+    expect(antwort("An welchen Tagen kann ich trainieren?", zeiten).quellen).toEqual(["t"]);
+    // Sonntag steht nirgends: Lücke – „Montag“ meint nicht „Sonntag“
+    istLuecke(antwort("Kann ich am Sonntag trainieren?", zeiten), "Kann ich am Sonntag trainieren?");
+  });
+
+  it("Ergänzungsstriche und Bindestriche: „Rücken- und Schulterschmerzen“ enthält „Rückenschmerzen“, „Kinesio-Tape“ ist „Kinesiotape“", () => {
+    const beschwerden = [k("ak", "Akupunktur", "u. a. bei Rücken- und Schulterschmerzen, Kopfschmerz und Migräne."), k("sp", "Sportphysiotherapie", "Bewegungsanalysen und -korrekturen, Kinesio-Tape.")];
+    expect(S.inhaltsStaemme("Rücken- und Schulterschmerzen")).toContain("rueckenschmerz");
+    expect(S.inhaltsStaemme("Bewegungsanalysen und -korrekturen")).toContain("bewegungskorrektur");
+    expect(S.inhaltsStaemme("Kinesio-Tape")).toContain("kinesiotap");
+    expect(antwort("Behandelt ihr Rückenschmerzen?", beschwerden).quellen).toEqual(["ak"]);
+    expect(antwort("Macht ihr Bewegungskorrekturen?", beschwerden).quellen).toEqual(["sp"]);
+    expect(antwort("Kinesiotape?", beschwerden).quellen).toEqual(["sp"]);
+    istLuecke(antwort("Behandelt ihr Knieschmerzen?", beschwerden), "Behandelt ihr Knieschmerzen?");
+    // die Anzeige bleibt wörtlich – das Mitgemeinte dient nur dem Vergleich
+    expect(antwort("Behandelt ihr Rückenschmerzen?", beschwerden).text).toBe("**Akupunktur:** u. a. bei Rücken- und Schulterschmerzen, Kopfschmerz und Migräne.");
+  });
+
+  it("zusammengesetzte Wörter und falsche Freunde: „10er-Karte“ ≠ „Karte“, „Rezept“ ≠ „Rezeption“, „Bewegungsbad“ ≠ „Bewegung“", () => {
+    expect(S.woerter("Gibt es 10er-Karten?")).toEqual(["10erkarten"]); // ein Wort (Wörter mit Ziffern bleiben ungekürzt)
+    expect(S.woerter("Kann ich mit Karte zahlen?")).toEqual(["kart", "zahl"]);
+    const karte = [k("y", "Youngster Training", "mittwochs; 10er-Karten.")];
+    expect(antwort("Gibt es 10er-Karten?", karte).quellen).toEqual(["y"]);
+    istLuecke(antwort("Kann ich mit Karte zahlen?", karte), "Kann ich mit Karte zahlen?");
+    const rez = [k("r", "Rezeption", "Die Rezeption ist von 8 bis 12 Uhr besetzt."), k("b", "Bewegung", "Bewegung ist wichtig.")];
+    istLuecke(antwort("Brauche ich ein Rezept?", rez), "Brauche ich ein Rezept?");
+    istLuecke(antwort("Habt ihr ein Bewegungsbad?", rez), "Habt ihr ein Bewegungsbad?");
+    expect(antwort("Wann ist die Rezeption besetzt?", rez).quellen).toEqual(["r"]);
+  });
+
+  it("gebeugte Füllwörter, Gruß und Anrede tragen nichts: „In welchem …“, „Guten Morgen Gabi, …“", () => {
+    expect(S.woerter("In welchem Haus seid ihr?")).toEqual([]);
+    expect(S.frageWoerter("Guten Morgen Gabi, habt ihr am Samstag auf?").such).toEqual(["samstag", "oeffnungszeit"]);
+    expect(S.frageWoerter("Hey, wo seid ihr?").such).toEqual(["standort"]);
+    expect(S.frageWoerter("Hallo").such).toEqual(["hallo"].filter((w) => S.woerter(w).length)); // „hallo“ ist selbst ein Füllwort
+    expect(S.frageWoerter("Wann macht ihr zu?").such).toEqual(["oeffnungszeit"]);
+    expect(S.frageWoerter("Wem gehört die Praxis?").such).toEqual(["praxi", "inhaber"]);
+  });
+
+  it("gefragt ist eine Nummer: der Eintrag mit der Nummer geht vor den mit den Telefonzeiten", () => {
+    const tel = [k("tz", "Telefonzeiten", "Telefonisch erreichbar: Mo 7:30–17:00 Uhr."), k("kon", "Kontakt", "Telefon: +49 911 23 99 823 · E-Mail: info@example.org")];
+    expect(antwort("Wie ist die Telefonnummer?", tel).quellen[0]).toBe("kon");
+    expect(antwort("Tel nr?", tel).quellen[0]).toBe("kon");
+    expect(antwort("Wann kann ich anrufen?", tel).quellen).toEqual(["tz"]);
+  });
+
+  it("offene Punkte: der beste zuerst; einer, der im Titel einen anderen Eintrag nennt, gehört zu jenem", () => {
+    const eintraege = [
+      k("aku", "Akupunktur", "Bei Schmerzen. Genannt wird Dr. Muster."),
+      offen("o1", "Führt Dr. Muster alle Akupunktur-Behandlungen selbst durch?"),
+      offen("o2", "Was kosten die Leistungen?", "Preise: nicht angegeben.", { tags: ["preis"] }),
+    ];
+    expect(antwort("Akupunktur", eintraege).quellen).toEqual(["aku", "o1"]);
+    expect(antwort("Was kostet Akupunktur?", eintraege).quellen).toEqual(["aku", "o2"]);
+    expect(antwort("Wer ist Dr. Muster?", eintraege).quellen).toEqual(["aku"]); // das Wissen geht vor, der offene Punkt trägt nichts bei
+    // nur offene Punkte: die besten zwei, in ihrer Reihenfolge (früher rutschte der beste hinter die „verwandten“)
+    const nurOffen = Array.from({ length: 4 }, (_, i) => offen(`f${i}`, `Parken offen ${i}?`, ""));
+    expect(antwort("parken", nurOffen).quellen).toEqual(["f0", "f1"]);
+  });
+
+  it("fehlt die gefragte Eigenschaft überall: nur der eine Eintrag zum Thema – und nur zusammen mit einem offenen Punkt dazu", () => {
+    const eintraege = [
+      k("mtt", "Trainingstherapie", "Gerätegestütztes Training unter Anleitung."),
+      k("zeit", "Trainingszeiten", "Zeiten der Trainingstherapie: Mo–Fr 7–19 Uhr."),
+      k("team", "Team", "Anna Beispiel (Trainingstherapie)."),
+    ];
+    const preise = offen("p", "Was kosten die Leistungen?", "Preise: nicht angegeben.", { tags: ["preis"] });
+    istLuecke(antwort("Was kostet die Trainingstherapie?", eintraege), "Was kostet die Trainingstherapie?");
+    expect(antwort("Was kostet die Trainingstherapie?", [...eintraege, preise]).quellen).toEqual(["mtt", "p"]);
+    // ohne Eigenschaft bleibt es bei allem, was das Thema trägt
+    expect(antwort("Trainingstherapie", eintraege).quellen[0]).toBe("mtt");
+  });
+
+  it("führt der beste Eintrag das Thema im Titel, kommen keine Einträge dazu, die es nur im Text erwähnen – außer das Fragewort zeigt auf sie", () => {
+    const eintraege = [
+      k("ost", "Osteopathie", "Selbstzahlerleistung."),
+      k("std", "Standorte", "Osteopathie gibt es nur in der Kieslingstraße."),
+      k("team", "Team", "Nadja Beispiel (auch Osteopathie).", { tags: ["team"] }),
+    ];
+    expect(antwort("Osteopathie", eintraege).quellen).toEqual(["ost"]);
+    expect(antwort("Wer macht Osteopathie?", eintraege).quellen).toEqual(["ost", "team"]); // „wer“ → Team
+    expect(antwort("Wo gibt es Osteopathie?", eintraege).quellen).toEqual(["ost", "std"]); // „wo“ → Standorte
+  });
+
+  it("zielFinden: der Eintrag muss das Gemeinte in Titel oder Tags tragen; ein Titel nur aus den genannten Wörtern gewinnt", () => {
+    const eintraege = [k("kon", "Kontakt und Zeiten", "Telefon 123"), k("tz", "Telefonzeiten", "Mo 8–12"), k("o", "Osteopathie", "85 €", { tags: ["preis"] })];
+    expect(S.zielFinden("die Telefonzeiten", eintraege).id).toBe("tz");
+    expect(S.zielFinden("den Preis der Osteopathie", eintraege).id).toBe("o");
+    expect(S.zielFinden("die Mittagspause", eintraege)).toBeNull();
+    expect(S.zielFinden("", eintraege)).toBeNull();
+    expect(S.zielFinden("die Telefonzeiten", [])).toBeNull();
   });
 });

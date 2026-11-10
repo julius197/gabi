@@ -554,21 +554,74 @@
   const BRAIN_VORSCHLAG_TEXT = "Passt das so? Gespeichert wird erst, wenn du auf „Übernehmen“ tippst.";
   // Eine ausformulierte Frage zur Praxis („Habt ihr …?“, „Wo ist …?“) geht ans Brain. Bloße Stichwörter („Theraband?“)
   // suchen wie bisher erst in den Notizen – steht dort nichts und war es eine Frage, ist es eine Lücke im Brain.
-  const PRAXISFORM = /^(?:und\s+)?(wo|wann|wie|was|wer|wen|wem|welche[rsn]?|wieso|warum|gibt es|gibts|habt ihr|hat die praxis|bietet ihr|bieten wir|kann man|kann ich|macht ihr|machen wir|seit wann|seid ihr|sind wir|nehmt ihr|nehmen wir|ist die praxis|ist das|behandelt ihr|brauche ich|braucht man|arbeitet ihr)\b/i;
+  const PRAXISFORM = /^(?:und\s+)?(wo|wann|wie|was|wer|wen|wem|welche[rsnm]?|wieso|warum|gibt es|gibts|habt ihr|hat die praxis|bietet ihr|bieten wir|kann man|kann ich|macht ihr|machen wir|seit wann|seid ihr|sind wir|nehmt ihr|nehmen wir|ist die praxis|ist das|behandelt ihr|brauche ich|braucht man|arbeitet ihr|muss ich|muss man|darf ich|darf man|haben wir|ab wann|bis wann|in welche[rmn]?|an welche[rmn]?|zu welche[rmn]?|ab welche[rmn]?|für wen)\b/i;
   const ENDET_ALS_FRAGE = /\?\s*$/;
   // Der Name der Praxis steht in fast keinem Eintrag – eine Antwort muss ihn nicht enthalten („Seit wann gibt es PhysioWorks?“)
   const BRAIN_NEBENSACHE = ["PhysioWorks", "Physio Works"];
-  // Mit Brain: Fragen nach Medikamenten, Übungen oder einer Diagnose sind keine Wissenslücke der Praxis. Gabi gibt dazu
-  // nichts aus (Kernregel) – auch dann nicht, wenn jemand so etwas ins Brain geschrieben hat. Eng gefasst, damit
-  // Praxisfragen („Bietet ihr Akupunktur bei Migräne an?“) Praxisfragen bleiben.
-  const BRAIN_RAT = new RegExp([
-    "\\b(ibuprofen|paracetamol|diclofenac|voltaren|novalgin|aspirin|kortison|cortison)\\b",
-    "\\bwelche[sn]? (medikament|schmerzmittel|tablette|salbe)",
-    "\\b(soll|sollte|darf|kann|muss) (ich|er|sie|man|der patient|die patientin)\\b.{0,60}\\b(nehmen|einnehmen|schlucken|spritzen)\\b",
-    "\\bwelche übung(en)?\\b.{0,40}\\b(hilft|helfen|gut|bei|gegen|empfiehl|empfehl)",
-    "\\bwas hilft (bei|gegen)\\b",
-    "\\bwas (hab|habe|hat) (ich|er|sie)\\b(?! .{0,30}\\b(gesagt|gebucht|bezahlt|gewollt)\\b)",
+  // Gruß, Dank und Anrede am Anfang gehören nicht zur Frage: „Hi, wo ist die Praxis?“, „Super, danke! Und wie sind die Telefonzeiten?“
+  const BRAIN_GRUSS = /^\s*(?:(?:hallo|hi|hey|servus|moin|grü(?:ß|ss)\s+(?:gott|dich)|guten\s+(?:morgen|tag|abend)|super|prima|klasse|perfekt|top|ok(?:ay)?|alles\s+klar|danke(?:schön)?|vielen\s+dank|merci)(?![a-zäöüß])[\s,!.–-]*)+(?:(?:gabi|dir)(?![a-zäöüß])[\s,!.:–-]*)?(?:und\s+)?/i;
+  const ECHTER_GRUSS = /^\s*(?:hallo|hi|hey|servus|moin|grü(?:ß|ss)|guten\s+(?:morgen|tag|abend))(?![a-zäöüß])/i;
+  // Fragen nach Patienten ohne Kürzel („Wer hatte Schulterschmerzen?“) meinen die Notizen – nie das Brain, nie eine Lücke
+  const BRAIN_NOTIZFRAGE = /\bnotiz|\bwer hat(?:te)?\b|\bbei wem\b|\bwelche[rmn]? patient|\bwelche patientin/i;
+  // „Was steht heute an?“ und „Welche Termine habe ich heute?“ bleiben der Tagesüberblick (der eigene Tag) –
+  // „Wie buche ich einen Termin?“ ist eine Praxisfrage
+  const BRAIN_UEBERBLICK = new RegExp([
+    "\\bwas steht\\b.*\\ban\\b", "tages?überblick", "^\\W*(?:heute|überblick)\\W*$", "\\bwas (?:liegt|gibt es|ist) heute\\b",
+    "\\b(?:meine?|unsere?) (?:termine?|tag|kalender)\\b", "\\b(?:hab|habe|haben) (?:ich|wir)\\b[^?]*\\btermin", "\\btermin\\w*\\b[^?]*\\b(?:hab|habe|haben) (?:ich|wir)\\b",
+    "\\bwas (?:hab|habe|haben) (?:ich|wir) heute\\b",
   ].join("|"), "i");
+
+  // ---- Kernregel vor Brain: keine Diagnosen, keine Therapie- oder Medikamentenempfehlungen ----
+  // Zwei Riegel, beide nur mit Brain-Kontext: (1) die FRAGE bittet um Rat, (2) die ANTWORT aus dem Brain enthielte einen.
+  // Fragen nach dem Angebot der Praxis („Bietet ihr Akupunktur bei Migräne an?“, „Was macht ihr bei Arthrose?“) sind kein Rat.
+  const BESCHWERDE = "(?:schmerz\\w*|\\bweh\\b|wehtu\\w*|verspann\\w*|entzünd\\w*|geschwollen|schwellung\\w*|bandscheib\\w*|\\bvorfall|arthrose|migräne|kopfweh|fieber|verletz\\w*|zerr\\w*|prell\\w*|\\bbruch\\b|gebrochen|verstauch\\w*|schwindel\\w*|taubheit|kribbel\\w*|hexenschuss|ischias|kr[aä]mpf\\w*|muskelkater|erkält\\w*|grippe|blockade|blockiert|\\bsteif\\w*|rheuma|gicht|osteoporose|skoliose|karpaltunnel|tennisarm|golferarm|fersensporn|beschwerden|symptom\\w*|\\bop\\b|operation|operiert|\\briss\\b|schleudertrauma)";
+  const ARZNEI = "(?:ibuprofen|paracetamol|diclofenac|voltaren|novalgin|metamizol|aspirin|naproxen|tramadol|tilidin|kortison|cortison|schmerzmittel|schmerztablette\\w*|antibiotik\\w*)";
+  const ANGEBOT = /\b(?:bietet ihr|bieten wir|macht ihr|machen wir|habt ihr|haben wir|gibt es|gibts|behandelt ihr|behandeln wir|bei euch|bei uns|in der praxis|in eurer praxis|in unserer praxis|zur akupunktur|zur osteopathie|zum training|zur therapie|zur behandlung)\b/i;
+  const RAT_IMMER = new RegExp([
+    `\\b${ARZNEI}\\b`,
+    "\\bwelche[sn]? (?:medikament|tablette|salbe|spritze)\\w*",
+    "\\b(?:soll|sollte|darf|kann|muss) (?:ich|er|sie|man|der patient|die patientin)\\b.{0,60}\\b(?:nehmen|einnehmen|schlucken|spritzen)\\b",
+    "\\b(?:was|welche \\w+) (?:empfiehlst|empfehlen|rätst|raten|würdest) (?:du|sie)\\b",
+    "\\bwas (?:hab|habe|hat) (?:ich|er|sie)\\b(?! .{0,30}\\b(?:gesagt|gebucht|bezahlt|gewollt)\\b)",
+    "\\b(?:hab|habe) ich (?:einen?|eine)\\b",
+    "\\b(?:soll|sollte) ich\\b.{0,60}\\b(?:lieber|besser|oder)\\b",
+    // („üben“ ohne \\b davor: die Wortgrenze greift in JavaScript vor Umlauten nicht)
+    "\\b(?:darf|soll|sollte|muss) (?:ich|man|er|sie)\\b.{0,60}(?:\\b(?:trainieren|sport|belasten|pausieren|schonen|kühlen|wärmen|dehnen|laufen|joggen|heben)|\\süben)\\b",
+    "\\bwelche (?:dehn)?übung(?:en)?\\b",
+  ].join("|"), "i");
+  const RAT_MIT_BESCHWERDE = new RegExp([
+    "\\bwas (?:hilft|tun|machen|kann (?:ich|man)|soll(?:te)? (?:ich|man)|würdest du)\\b",
+    "\\b(?:hilft|helfen|heilt|heilen|wirkt|bringt)\\b",
+    "\\bist\\b.{0,60}\\b(?:gut|sinnvoll|besser|schlimm|gefährlich|normal|ratsam|geeignet)\\b",
+    "\\bwelche (?:therapie|behandlung)\\b.{0,60}\\b(?:beste\\w*|hilft|helfen|empfiehl\\w*|empfehl\\w*|sinnvoll)\\b",
+    "\\b(?:darf|soll|sollte|muss) (?:ich|man|er|sie)\\b",
+    "\\b(?:hab|habe|hat) (?:ich|er|sie)\\b",
+  ].join("|"), "i");
+  const HAT_BESCHWERDE = new RegExp(BESCHWERDE, "i");
+  /** Bittet die Frage um medizinischen Rat (Diagnose, Übung, Therapie-Wahl, Medikament)? */
+  function istRatFrage(frage) {
+    const t = String(frage || "");
+    if (RAT_IMMER.test(t)) return true;
+    return HAT_BESCHWERDE.test(t) && RAT_MIT_BESCHWERDE.test(t) && !ANGEBOT.test(t);
+  }
+  // … und enthielte die Antwort aus dem Brain einen? (Medikament, Dosierung, Diagnose, Empfehlung zu einer Beschwerde)
+  const RAT_IN_ANTWORT = new RegExp([
+    `\\b${ARZNEI}\\b`,
+    "\\b\\d+(?:[.,]\\d+)?\\s?(?:mg|ml|µg|tropfen)\\b",
+    "\\b(?:\\d+|ein|zwei|drei)\\s?(?:x|×|mal)\\s?(?:täglich|am tag|pro tag)\\b",
+    "\\bdiagnose\\s*:",
+    `\\b(?:empfehl\\w+|empfiehl\\w+|empfohlen|raten wir|sollte[nst]*)\\b[^.\\n]{0,80}${BESCHWERDE}`,
+    `${BESCHWERDE}[^.\\n]{0,80}\\b(?:empfehl\\w+|empfiehl\\w+|empfohlen|raten wir|sollte[nst]*)\\b`,
+  ].join("|"), "i");
+
+  // Bedienung des Brains (nur mit Brain-Kontext) – sonst würden diese Fragen zu Wissenslücken der Praxis
+  const BRAIN_BEDIENUNG = [
+    { muster: /\b(?:melde ich mich ab|mich abmelden|abmelden|ausloggen|logout)\b/, text: "Tipp auf „Testversion“ und dann auf „Abmelden“." },
+    { muster: /\bwie\b.*\b(?:lege?|erstell\w*|schreib\w*|trag\w*)\b.*\b(?:brain|eintrag)\b|\bneuen? (?:brain-)?eintrag\b/, text: "Im Bereich „Brain“ auf „Neu“ tippen, Titel und Inhalt schreiben, speichern. Oder sag mir im Gespräch „Merke dir: …“ – dann mache ich einen Vorschlag, den du mit „Übernehmen“ speicherst." },
+    { muster: /\bwie\b.*(?:\sänder\w*|\b(?:bearbeit\w*|korrigier\w*))\b.*\b(?:brain|eintrag)\b/, text: "Öffne den Eintrag im Bereich „Brain“ und tippe auf „Bearbeiten“. Oder sag mir „Ändere die Telefonzeiten: …“ – ich zeige dir Vorher und Nachher, gespeichert wird erst mit „Übernehmen“." },
+    { muster: /\b(?:export\w*|sicher\w*|backup)\b.*\bbrain\b|\bbrain\b.*\b(?:export\w*|sicher\w*|herunterlad\w*)\b/, text: "Im Bereich „Brain“ über das Menü „Mehr“ (drei Punkte) → „Exportieren“. Du bekommst das Wissen als Markdown-Dateien." },
+    { muster: /\bwas ist (?:das|ein|dein|mein|unser) brain\b|\bwo (?:finde ich|ist) (?:das|mein|dein) brain\b|\bwozu\b.*\bbrain\b/, text: "Das Brain ist das Gedächtnis der Praxis: alles, was ich über PhysioWorks weiß – Standorte, Leistungen, Zeiten, offene Fragen. Du findest es links unter „Brain“ (am Handy im Menü) und kannst dort jeden Eintrag ansehen und ändern. Praxisfragen beantworte ich nur daraus." },
+  ];
 
   /**
    * Ein Gesprächsschritt im Demo-Modus: Absicht erkennen, Werkzeug nutzen, kurz antworten.
@@ -586,7 +639,7 @@
     };
     const patienten = await werkzeuge.ausfuehren("patienten_auflisten", {}, {});
     const kuerzelListe = ((patienten.ergebnis && patienten.ergebnis.patienten) || []).map((p) => p.kuerzel);
-    const a = absichtErkennen(letzte, kuerzelListe);
+    let a = absichtErkennen(letzte, kuerzelListe);
 
     const suche = brain ? brainModul("GabiBrainSuche", "./brain-suche.js") : null;
     const antworten = brain ? brainAntwort || (suche && suche.antwortAusKontext) : null;
@@ -603,32 +656,55 @@
       }
       if (befehl && befehl.art === "aendern") {
         await warte(450);
-        if (!knoten.length) return sag("Dazu steht noch nichts im Brain – ich weiß nicht, welchen Eintrag ich ändern soll. Mit „Merke dir: …“ lege ich einen neuen an.");
-        // welcher Eintrag? Der, der zum Teil vor dem Doppelpunkt passt („die Telefonzeiten“) – nicht zum neuen Inhalt
+        // welcher Eintrag? Der, der zum Teil vor dem Doppelpunkt passt („die Telefonzeiten“) – nicht zum neuen Inhalt.
         const zielText = hilfen.aendernZiel ? hilfen.aendernZiel(befehl.text) : befehl.text;
-        const bester = suche && suche.kontextWaehlen ? suche.kontextWaehlen({ frage: zielText, knoten, maxKnoten: 1 })[0] : null;
-        const ziel = (bester && knoten.find((x) => x.id === bester.id)) || knoten[0];
+        if (/kernregel/i.test(zielText)) return sag("Die Kernregeln stehen fest im Code – über das Brain oder das Gespräch lassen sie sich nicht ändern.");
+        if (/\b(?:persona|regeln?)\b/i.test(zielText)) return sag("Persona und Regeln änderst du direkt im Brain: Eintrag öffnen und auf „Bearbeiten“ tippen. So siehst du genau, was sich ändert – im Gespräch ändere ich sie nicht.");
+        // Der Eintrag muss das Gemeinte in Titel oder Tags tragen – sonst träfe „Ändere die Mittagspause: …“ irgendeinen Eintrag.
+        const ziel = suche && suche.zielFinden ? suche.zielFinden(zielText, knoten) : knoten[0] || null;
+        if (!ziel) return sag("Dazu finde ich keinen Eintrag im Brain – ich weiß nicht, welchen ich ändern soll. Nenn mir den Titel („Ändere die Telefonzeiten: …“) oder leg mit „Merke dir: …“ einen neuen an.");
         senden({ t: "brain_vorschlag", vorschlag: hilfen.aendernOhneKi({ knoten: ziel, wunsch: befehl.text }) });
         return sag(`Ich habe eine Änderung für **${ziel.titel}** vorbereitet. ${BRAIN_VORSCHLAG_TEXT}`);
       }
-      // Praxisfrage? Fakten zur Praxis (nicht die Bedienung der App), Unbekanntes und freie Suchwörter – außer es ist
-      // ausdrücklich von Notizen die Rede („Suche in meinen Notizen: …“, „Was steht in den Notizen zu …?“)
-      const frage = String(letzte || "").trim();
-      const ausNotizen = /\bnotiz/i.test(frage);
-      const praxis = a.art !== "rat" && ((a.art === "praxis" && PRAXIS.some((x) => x.text === a.text)) || a.art === "unbekannt" || (a.art === "suche" && !ausNotizen));
+      // Gruß und Dank am Anfang abtrennen – der Rest ist die Frage („Hey Gabi, habt ihr Parkplätze?“)
+      const ganz = String(letzte || "").trim();
+      const ohneGruss = ganz.replace(BRAIN_GRUSS, "").trim();
+      const frage = ohneGruss.length >= 3 ? ohneGruss : ganz;
+      if (frage !== ganz) a = absichtErkennen(frage, kuerzelListe);
+      // „Hilft mir jemand beim Parken?“ beginnt nur mit den Buchstaben „hi“ – kein Gruß, sondern eine Frage
+      if (a.art === "hallo" && !ECHTER_GRUSS.test(frage)) a = { art: "unbekannt" };
+      // medizinischer Rat: Absage wie ohne Brain – keine Antwort aus dem Brain, keine Lücke (mit Kürzel bleibt es eine Notiz-Frage)
+      if (!a.kuerzel && a.art !== "rat" && istRatFrage(frage)) { await warte(450); return sag(ANTWORT.rat); }
+      const bedienung = a.kuerzel ? null : BRAIN_BEDIENUNG.find((x) => x.muster.test(frage.toLowerCase()));
+      if (bedienung) { await warte(450); return sag(bedienung.text); }
+      // Praxisfrage? Fakten zur Praxis (nicht die Bedienung der App), Unbekanntes und freie Suchwörter – außer es geht um
+      // Notizen oder Patienten. Dazu, was die alten Absichten vorher abfingen: Fragen mit „Termin“ oder „heute“ (außer dem
+      // Tagesüberblick selbst) und Fragen ÜBER Berichte ohne Kürzel („Wie ist ein Verlaufsbericht aufgebaut?“).
+      const zuNotizen = BRAIN_NOTIZFRAGE.test(frage);
+      const praxis = !a.kuerzel && a.art !== "rat" && (
+        (a.art === "praxis" && PRAXIS.some((x) => x.text === a.text)) || a.art === "unbekannt" || (a.art === "suche" && !zuNotizen)
+        || (a.art === "heute" && !BRAIN_UEBERBLICK.test(frage))
+        || (a.art === "bericht" && PRAXISFORM.test(frage) && !/\b(?:schreib|erstell|mach|fass)\w*/i.test(frage)));
       if (praxis) {
-        // medizinischer Rat: ablehnen wie ohne Brain – keine Antwort aus dem Brain und keine Lücke
-        if (BRAIN_RAT.test(frage)) { await warte(450); return sag(ANTWORT.rat); }
-        const r = antworten(letzte, knoten, { nebensache: BRAIN_NEBENSACHE });
-        if (r.quellen.length || a.art !== "suche" || PRAXISFORM.test(frage)) {
+        // Kernregel vor Brain: Einträge, die selbst einen medizinischen Rat enthalten (Medikament, Dosis, Diagnose, Empfehlung
+        // zu einer Beschwerde), gibt Gabi nicht weiter. Der Rest des Brains antwortet wie sonst.
+        const istRat = (k) => RAT_IN_ANTWORT.test(`${(k && k.titel) || ""}\n${(k && k.inhalt) || ""}`);
+        const erlaubt = knoten.filter((k) => !istRat(k));
+        const r = antworten(frage, erlaubt, { nebensache: BRAIN_NEBENSACHE });
+        // Träfe die Frage genau so einen Eintrag (oder stünde doch ein Rat in der Antwort): die Absage – keine Lücke
+        const zurueckgehalten = !r.quellen.length && erlaubt.length < knoten.length
+          && antworten(frage, knoten, { nebensache: BRAIN_NEBENSACHE }).quellen.some((id) => knoten.some((k) => k && k.id === id && istRat(k)));
+        if (zurueckgehalten || (r.quellen.length && RAT_IN_ANTWORT.test(r.text))) { await warte(450); return sag(ANTWORT.rat); }
+        // ohne Treffer: Stichwörter suchen erst in den Notizen; „heute“ und „Bericht“ fallen auf ihren alten Weg zurück
+        const lueckeGleich = (a.art !== "suche" || PRAXISFORM.test(frage)) && a.art !== "bericht" && !(a.art === "heute" && /\bheute\b|überblick/i.test(frage));
+        if (r.quellen.length || lueckeGleich) {
           await warte(450);
           if (r.quellen.length) senden({ t: "quellen", knoten: r.quellen });
           await sag(r.text);
           if (r.luecke) senden({ t: "luecke", frage: r.luecke });
           return undefined;
         }
-        // Stichwörter ohne Treffer im Brain: weiter unten in den Notizen suchen
-        if (ENDET_ALS_FRAGE.test(frage) && r.luecke) brainLuecke = r;
+        if (a.art === "suche" && ENDET_ALS_FRAGE.test(frage) && r.luecke) brainLuecke = r;
       }
     }
 
@@ -917,5 +993,6 @@
     PATIENTEN, NOTIZEN, DIKTATE, FRAGEN, PRAXIS, DEMO_HINWEIS, WERKZEUG_NAMEN, ANTWORT, DemoFehler,
     erstelleApi, browserAblage, speicherAblage, startDaten, demoStrukturieren, normalisieren, suchtext, kuerzelPruefen,
     absichtErkennen, kuerzelFinden, demoWerkzeuge, demoGespraech, demoBerichtInhalt, berichtBauen, entwurfText, berichtText,
+    istRatFrage, RAT_IN_ANTWORT,
   };
 });

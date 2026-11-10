@@ -108,15 +108,27 @@
     };
   }
 
-  /** „Ändere …“ ohne KI: der Wunsch wird an den Eintrag angehängt – zum Anpassen vor dem Übernehmen. */
+  /** Der neue Inhalt in „Ändere X: Y“ (Y). Ohne Doppelpunkt oder Gedankenstrich bleibt der ganze Wunsch stehen. */
+  function aendernInhalt(text) {
+    const t = glatt(text);
+    const m = /^.{3,80}?\s*(?::|–|—|\s-\s)\s*(\S[\s\S]*)$/.exec(t);
+    return m ? m[1].trim() : t;
+  }
+
+  /**
+   * „Ändere …“ ohne KI: der Wunsch wird an den Eintrag angehängt – zum Anpassen vor dem Übernehmen. Bei einem offenen Punkt
+   * („… nicht angegeben“) IST der Wunsch die Antwort: er ersetzt den Platzhalter, die Bezüge („Betrifft: …“) bleiben.
+   */
   function aendernOhneKi({ knoten, wunsch }) {
     const k = knoten || {};
     const alt = String(k.inhalt || "").trim();
+    const neu = alsSatz(aendernInhalt(wunsch));
+    const inhalt = k.status === "zu_klaeren" ? [neu, ...bezugZeilen(alt)] : [alt, neu];
     return {
       typ: "aendern",
       id: String(k.id || ""),
       titel: String(k.titel || "").slice(0, TITEL_MAX),
-      inhalt: [alt, alsSatz(wunsch)].filter(Boolean).join("\n\n").slice(0, INHALT_MAX),
+      inhalt: inhalt.filter(Boolean).join("\n\n").slice(0, INHALT_MAX),
       grund: "aenderung",
       ohneKi: true,
     };
@@ -166,6 +178,6 @@
 
   return {
     TITEL_MAX, INHALT_MAX, DEMO_ANTWORT,
-    befehlErkennen, aendernZiel, vorschlagOhneKi, merkenOhneKi, aendernOhneKi, reihenfolge, frageText, gesundheitText, alsSatz, kuerzen,
+    befehlErkennen, aendernZiel, aendernInhalt, vorschlagOhneKi, merkenOhneKi, aendernOhneKi, reihenfolge, frageText, gesundheitText, alsSatz, kuerzen,
   };
 });
