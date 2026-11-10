@@ -16,7 +16,7 @@ Verträge zwischen den Bausteinen: `BRAIN-BAUPLAN.md`.
 |---|---|
 | 0 Vorab: main geprüft, Branch, Arbeitskopie | ✅ |
 | 1 Bauplan und Log | ✅ `c1ae874` |
-| 2 Modell `brain.js`, Suche `brain-suche.js`, Interview-Hilfen `brain-interview.js` | ✅ gebaut (`d39f887`), Unit-Tests `9f81b8f`, Antwortlogik umgebaut `f6f75c8` |
+| 2 Modell `brain.js`, Suche `brain-suche.js`, Interview-Hilfen `brain-interview.js` | ✅ gebaut (`d39f887`), Unit-Tests `9f81b8f`, Antwortlogik umgebaut `f6f75c8`, zweite Überarbeitung nach Prüfrunde 1 `f214213` |
 | 3 Speicher `brain-speicher.js` | ✅ `98fb09f` (112 Tests) |
 | 4 Seed (Zerlegung, Generator, `brain-seed.js`) | ✅ `e4185de` (35 Tests) |
 | 5 Graph `brain-graph.js` | ✅ `805c38d` (41 Tests) |
@@ -24,9 +24,14 @@ Verträge zwischen den Bausteinen: `BRAIN-BAUPLAN.md`.
 | 7 Ansicht `brain-ansicht.js`, `brain.css`, Einbau in `index.html`/`app.js` | ✅ gebaut (`d39f887`) |
 | 8 Interview, Chat-Befehle, Fähigkeiten-Ansicht, Demo-Assistent (`brain-gespraech.js`, `demo.js`) | ✅ gebaut (`d39f887`) |
 | 9 Doku (README, Roadmap, Vorlage) | ✅ README ergänzt; Roadmap und Vorlage `e4185de` |
-| 10 Tests: `tests/brain.mjs` (Browser), `tests/brain-leistung.mjs`, Unit, Gegenprobe | ⏳ Stand `f6f75c8`: Unit 735 grün · Browser-Kurzlauf Chromium 110/110 · bisherige Browser-Tests `tests/v2.mjs` ohne Schalter 564/564 (vor dem Umbau der Antwortlogik) · Leistung gemessen (unten). Offen: Abschlusslauf aller Tests nach der Prüfrunde, Screenshots nach `screenshots/brain/` |
-| 11 Prüfrunden (höchstens zwei), Korrekturen | ⏳ |
+| 10 Tests: `tests/brain.mjs` (Browser), `tests/brain-leistung.mjs`, Unit, Gegenprobe | ⏳ Stand `f214213`: Unit 811 grün (Gegenprobe gegen `6dd9047`: 61 der neuen Tests schlagen an) · Browser-Tests: letzter voller Lauf vor der Prüfrunde. Offen: Abschlusslauf aller Tests nach den Korrekturen, Screenshots nach `screenshots/brain/` |
+| 11 Prüfrunden (höchstens zwei), Korrekturen | ⏳ Runde 1 gelaufen (5 Prüfer + 5 Gegenprüfer, 60 Funde, siehe „Prüfrunde 1“). Antwortqualität: eingebaut (`f214213`). Die übrigen bestätigten „muss“/„sollte“ (Graph, Handy, Daten/Zwei Tabs, Sicherheit) sind in Arbeit – noch NICHT im Repo |
 | 12 Screenshots, Abschlusslauf, Kurzbericht | ⏳ |
+
+**Stand der Korrekturen am 10.11., 18:40 (falls die Arbeit hier abbricht):** Die vier offenen Gebiete werden in
+getrennten Arbeitskopien außerhalb des Repos bearbeitet und erst nach Zusammenführen und Testlauf hierher übernommen.
+Was im Repo steht, ist immer ein lauffähiger, getesteter Stand. Die Funde selbst (Wortlaut, Urteile der Gegenprüfer)
+stehen zusammengefasst unter „Prüfrunde 1“ – damit lässt sich jede noch fehlende Korrektur neu beginnen.
 
 Testserver während der Arbeit (nur eigene Ports): 8791 = `PORT=8791 GABI_BRAIN=1 node dev/lokal.mjs` (Brain an),
 8792 = `PORT=8792 node dev/lokal.mjs` (ohne Schalter, für `tests/v2.mjs`). 8788 gehört Julius' Vorschau.
@@ -145,6 +150,103 @@ Aus Fork E (Unit-Tests) übernommene Funde, alle mit Test und Gegenprobe. Gegenp
 | Eingetragene Lücke blieb „eingetragen“, auch wenn ihr Eintrag wieder gelöscht war | sollte | `brain.js`: `lueckeStand` – ohne Eintrag ist die Lücke wieder offen |
 | „Merke dir: Wir empfehlen …“ bekam die Absage; „Kannst du dir merken, dass …“ wurde nicht erkannt | kann, gleich mitgemacht | `demo.js`, `brain-interview.js` |
 | Nebenwirkung des Umbaus, beim Nachstellen im Browser gefunden: „Ändere die Telefonzeiten: samstags geschlossen“ traf den Eintrag zu den Öffnungszeiten (gesucht wurde mit dem ganzen Satz, also auch mit dem neuen Inhalt – durch die neuen Wortfelder schlug das durch) | muss | Ziel = der Teil vor dem Doppelpunkt (`aendernZiel`); der Browser stellt diesen Eintrag im Kontext nach vorn, der Demo-Assistent wählt danach |
+
+## Prüfrunde 1 (10.11., Stand des Codes `6dd9047`)
+
+Fünf Prüfer mit getrennten Blickwinkeln, jeder Fund von einem zweiten Agenten gegengeprüft (nur lesend, eigene Ports
+8801–8815, kein Zugriff nach außen). Ergebnis: **60 Funde, alle 60 bestätigt – 5 „muss“, 35 „sollte“, 20 „kann“.**
+(Die zwei „muss“ A1 und S1 sind derselbe Mangel aus zwei Blickwinkeln.) Eingebaut werden nur „muss“ und „sollte“;
+„kann“ steht unter „Später“. Jede Korrektur bekommt einen Fehlertest, der gegen den Stand davor anschlägt.
+
+Was die Prüfer ausdrücklich in Ordnung fanden (Auszug): ohne Schalter lädt keine Brain-Datei; CSP unverändert streng;
+in 33 Ansichten kein eingeschleustes Markup; Worker kapselt den Kontext; importierte Regeln/Persona kommen als Entwurf;
+keine Patienten/Notizen im Brain-Speicher, Kontext oder Export; Graph 60 Bilder/s mit 500 Knoten in beiden Engines,
+0 Bilder in Ruhe; alle Texte außer Platzhaltern ≥ 4,5:1; Antworten ohne KI durchweg wörtlich belegt.
+
+### Antwortqualität (Gabi ohne KI, Weg mit KI aus dem Code)
+
+| Nr. | Stufe | Fund | Gegenprüfung | Stand |
+|---|---|---|---|---|
+| A1 | muss | Rat-Fragen: Absage nur bei wenigen Mustern – sonst Lücke oder Antwort aus dem Brain, bis zur Medikamentenempfehlung | bestätigt | ✅ `f214213` |
+| A2 | sollte | Falsches „Das ist im Brain noch offen“: ein offener Punkt mit halber Deckung verdrängt vorhandenes Wissen | bestätigt | ✅ `f214213` |
+| A3 | sollte | Preisfragen: der Osteopathie-Preis erscheint als Antwort auf den Preis anderer Leistungen | bestätigt | ✅ `f214213` |
+| A4 | sollte | Komposita: Wortanfang zählt als Treffer – falsche Antworten, und der Eintrag mit dem wörtlichen Treffer fällt aus Antwort und Kontext | bestätigt | ✅ `f214213` |
+| A5 | sollte | Praxisfragen mit „Termin“, „heute“, „Überblick“, Gruß am Anfang oder „Bericht“ gehen am Brain vorbei – der Katalog-Test prüft diesen Weg nicht | bestätigt | ✅ `f214213` |
+| A6 | sollte | Zu Unrecht „Dazu steht noch nichts im Brain.“ bei Alltagsformulierungen – jede dieser Fragen landet zudem als falsche Wissenslücke | bestätigt | ✅ `f214213` |
+| A7 | sollte | „Ändere die Öffnungszeiten …“ und „Übernehmen“: der Eintrag bleibt „zu klären“ – Gabi antwortet weiter „noch offen … nicht angegeben“ | bestätigt | teils `f214213` (Wunsch ersetzt den Platzhalter); Bestätigen beim Übernehmen in Arbeit |
+| A8 | sollte | „Ändere …“ trifft einen fremden Eintrag, wenn das Ziel nicht im Brain steht | bestätigt | ✅ `f214213` |
+| A9 | sollte | Weg mit KI: Kontext nur aus der letzten Nachricht per Wortsuche – Folgefragen und Synonyme bekommen leeren oder unpassenden Kontext, das Budget bleibt ungenutzt | bestätigt | teils `f214213` (Kontext füllt freie Plätze, Wortfelder); Folgefragen in Arbeit |
+| A10 | sollte | Fragen, in denen nur „Praxis“ als Inhaltswort bleibt, liefern Geschichte und Adressen statt der Antwort | bestätigt | ✅ `f214213` |
+| A11 | sollte | Notiz-Fragen ohne Kürzel sowie Bedien- und Brain-Fragen werden als Praxisfrage behandelt | bestätigt | ✅ `f214213` (Notiz- und Bedienfragen); „Was ist noch offen?“ in Arbeit |
+| A12 | kann | Markerfilter: „Lücke: keine“ wird als Lücke „keine“ gemeldet; „Quellen: K1 (Titel), K2“ verliert K1; Listenform lässt K-Nummern stehen | bestätigt | später („kann“) |
+
+### Datenschutz, Sicherheit, Prompt-Injektion
+
+| Nr. | Stufe | Fund | Gegenprüfung | Stand |
+|---|---|---|---|---|
+| S1 | muss | Assistent ohne KI gibt Medikamentenempfehlung und Diagnose aus einem Brain-Eintrag wörtlich aus | bestätigt | ✅ `f214213` |
+| S2 | sollte | Fragen mit Patienten-Kürzel werden als Wissenslücke gemerkt, solange die Brain-Ansicht nicht geöffnet war | bestätigt | in Arbeit |
+| S3 | sollte | Unsichtbare Unicode-Zeichen passieren die Bereinigung in Oberfläche und Worker (versteckter Text im brainKontext) | bestätigt | in Arbeit |
+| S4 | sollte | Bösartige Markdown-Datei friert den Import ein (Bereinigung mit quadratischer Laufzeit) | bestätigt | in Arbeit |
+| S5 | sollte | Kein Schutz vor Patientenbezug in Brain-Vorschlägen (Claude-Weg) und in Handeinträgen | bestätigt | in Arbeit |
+| S6 | kann | Brain-Titel gelangen ungekapselt in den Gesprächsverlauf für den Server | bestätigt | später („kann“) |
+| S7 | kann | Marker-Filter wertet jede Antwortzeile mit „Lücke:“ oder „Quellen:“ als Marker – auch ein Zitat aus einem Eintrag | bestätigt | später („kann“) |
+| S8 | kann | Notfall-Kopie einer ungespeicherten Bearbeitung bleibt nach dem Abmelden liegen | bestätigt | später („kann“) |
+| S9 | kann | Drei Zahlenfelder aus der Ablage gehen ohne esc() in innerHTML | bestätigt | später („kann“) |
+| S10 | kann | Brain-Ansicht lädt die ganze Notizliste mit Inhalten, obwohl der Graph nur Datum und Kürzel braucht | bestätigt | später („kann“) |
+| S11 | kann | Ziel-Schutz der Browser-Tests nimmt den ersten Treffer „apiUrl:“ – auch aus einem Kommentar | bestätigt | später („kann“) |
+| S12 | kann | Bestätigte Brain-Regeln wirken ab der siebten und über 400 Zeichen still nicht | bestätigt | später („kann“) |
+
+### Datenmodell, Speicher, zwei Tabs
+
+| Nr. | Stufe | Fund | Gegenprüfung | Stand |
+|---|---|---|---|---|
+| D1 | sollte | Eintrag im anderen Fenster gelöscht: die offene Bearbeitung lässt sich nicht speichern, nach Neuladen ist das Getippte still weg | bestätigt | in Arbeit |
+| D2 | sollte | Rückgängig in Tab A nimmt stillschweigend auch die spätere Änderung aus Tab B zurück | bestätigt | in Arbeit |
+| D3 | sollte | Export → Import bringt Verbindungen von Hand nicht zurück (und setzt „zuletzt geändert“ auf heute) | bestätigt | in Arbeit |
+| D4 | sollte | IndexedDB hängt oder ist kaputt: Gabi wechselt still auf ein zweites, frisch eingespieltes Brain in localStorage | bestätigt | in Arbeit |
+| D5 | sollte | Speicher voll, nur lesen, neuere Fassung: die vorbereiteten Meldungen erreichen die Oberfläche nie – und bei vollem Speicher kann das Brain gar nicht mehr aufgehen | bestätigt | in Arbeit |
+| D6 | sollte | „Brain-Wissen löschen“ beim Abmelden in Tab A: Tab B zeigt ohne Erklärung ein leeres Brain – ein dort angelegter Eintrag verhindert den Seed für immer | bestätigt | in Arbeit |
+| D7 | kann | Import → Rückgängig → Wiederholen: Einträge, die der Import aus dem Papierkorb geholt hatte, bleiben im Papierkorb | bestätigt | später („kann“) |
+| D8 | kann | Seed nachziehen: drei Randfälle (importierter Knoten wird überschrieben, neuer Seed-Knoten friert ein, Entfallenes bleibt bestätigt) | bestätigt | später („kann“) |
+| D9 | kann | Zwei Tabs können denselben Titel anlegen – danach lässt sich keiner der beiden mehr ändern, bis einer umbenannt wird | bestätigt | später („kann“) |
+| D10 | kann | Papierkorb-Dialog: Rückmeldungen verschwinden sofort wieder, und er zeigt nach „Papierkorb leeren“ im anderen Tab weiter die alten Einträge | bestätigt | später („kann“) |
+| D11 | kann | Supabase-Entwurf: der serverseitige Abruf liefert einen anderen Kontext als der Browser | bestätigt | später („kann“) |
+| D12 | kann | Seed: der Osteopathie-Preis steht in zwei Knoten – nach einer Preisänderung nennt Gabi je nach Frage den alten | bestätigt | später („kann“) |
+
+### Graph und Leistung
+
+| Nr. | Stufe | Fund | Gegenprüfung | Stand |
+|---|---|---|---|---|
+| G1 | sollte | Handy: Tipp auf einen Knoten – das Blatt deckt den ganzen Graphen zu, der Knoten wird aus der Fläche geschoben, nach dem Schließen bleibt der Graph verschoben | bestätigt | in Arbeit |
+| G2 | sollte | Doppeltipp/Doppelklick: der zweite Tipp trifft das gerade aufgehende Detail – am Handy ändert er den Status, öffnet „Löschen“ oder den Fokus; Zentrieren klappt dort nie | bestätigt | in Arbeit |
+| G3 | sollte | Handy: Wischen neben einem Knoten zieht und fixiert den Knoten, statt den Ausschnitt zu verschieben | bestätigt | in Arbeit |
+| G4 | sollte | Kamera springt bei jedem Neuzeichnen der Ansicht zurück (Auswahl außer Sicht → Flug zurück; Fokus-Modus → eigener Zoom weg) | bestätigt | in Arbeit |
+| G5 | sollte | „Alles zeigen“ rechnet Minimap und Legende nicht ein – in der Standardansicht liegen Knoten darunter | bestätigt | in Arbeit |
+| G6 | sollte | Nebenfund außerhalb meines Blickwinkels: Detail-Panel und Blatt laufen seitlich über – Text und „Zu klären“ sind rechts abgeschnitten | bestätigt | in Arbeit |
+| G7 | sollte | Schloss für geschützte Knoten erst ab Zoom 0,95 – in der Standardansicht meist unsichtbar, obwohl die Legende es nennt | bestätigt | in Arbeit |
+| G8 | kann | zerstoeren() lässt den Auflösungs-Horcher hängen – jeder zerstörte Graph bleibt samt Zeichenflächen im Speicher | bestätigt | später („kann“) |
+| G9 | kann | Drossel der Pixeldichte kann die Fläche leer zurücklassen – und misst die eigentliche Last nicht | bestätigt | später („kann“) |
+| G10 | kann | Handy: Labels decken kleine Knoten zu; eine Zoomstufe weiter gibt es gar keine Labels | bestätigt | später („kann“) |
+| G11 | kann | Nach einer Größenänderung des Fensters wird nicht neu eingepasst, obwohl die Kamera nie angefasst wurde | bestätigt | später („kann“) |
+| G12 | kann | Gabi-Spur: Aufleuchten kann außerhalb des Ausschnitts liegen; der Sprung vom Chip zentriert auf die ganze Fläche statt auf den freien Bereich | bestätigt | später („kann“) |
+
+### Handy und Barrierefreiheit
+
+| Nr. | Stufe | Fund | Gegenprüfung | Stand |
+|---|---|---|---|---|
+| H1 | muss | Lange Titel in Chips sprengen die Breite: Gespräch scrollt am Handy seitlich, das Detail läuft über (Handy und Laptop) | bestätigt | in Arbeit |
+| H2 | muss | Leiste aus Reitern, Suche und Werkzeugen: 640–692 px scrollt die Seite seitlich, bei 768 und 1024 px bleibt dem Suchfeld kein Platz für Text | bestätigt | in Arbeit |
+| H3 | muss | Touch-Ziele unter 44 px bei Brain-Elementen im Gespräch und in der Fokus-Leiste | bestätigt | in Arbeit |
+| H4 | sollte | Handy: Das Blatt verdeckt den Graphen ganz, der angetippte Knoten fliegt aus dem Bild und bleibt nach dem Schließen draußen | bestätigt | in Arbeit |
+| H5 | sollte | Handy: Ein Wisch im Graphen greift in etwa der Hälfte der Fälle einen Knoten und setzt ihn fest, statt den Ausschnitt zu verschieben | bestätigt | in Arbeit |
+| H6 | sollte | Liste: Enter öffnet das Detail, der Fokus bleibt in der Liste (53 Tab-Schritte bis ins Detail); Schließen aus dem Detail wirft den Fokus auf body | bestätigt | in Arbeit |
+| H7 | sollte | Fokus fällt nach vielen Aktionen auf body, das Detail springt dabei an den Anfang zurück | bestätigt | in Arbeit |
+| H8 | sollte | Esc im Editor mit ungespeicherter Änderung wirkt nicht: die Rückfrage schließt sich nach 1–5 ms selbst | bestätigt | in Arbeit |
+| H9 | sollte | Platzhalter-Texte der Brain-Felder: Kontrast 2,62:1 (Hell) und 3,57:1 (Dunkel) | bestätigt | in Arbeit |
+| H10 | sollte | Graph-Reiter ohne leere Zustände und ohne Trefferzahl: Suche ohne Treffer blendet nur alles ab, Filter ohne Einträge zeigt eine leere Fläche | bestätigt | in Arbeit |
+| H11 | sollte | Lade-Platzhalter nicht in Echt-Höhe: die Bühne springt um 134 px (Handy) bzw. 34 px (Laptop); Werkzeuge im Lade- und Fehlerzustand ohne Wirkung | bestätigt | in Arbeit |
+| H12 | kann | Kleinere Punkte für Hilfstechnik und Verständlichkeit (Sammelpunkt) | bestätigt | später („kann“) |
 
 ## Vorkommnisse
 
