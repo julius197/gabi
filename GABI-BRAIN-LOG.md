@@ -35,7 +35,7 @@ habe ich selbst übernommen, Konflikte aufgelöst und neu getestet.
 
 **Stand:** Alle drei Prioritäten (1 Datenmodell/Speicher/Brain-Ansicht im Demo-Modus · 2 Gabi nutzt das Brain mit
 Kontext, Quellen-Chips, Lücken · 3 Fähigkeiten-Register und Roadmap) sind gebaut, geprüft und committet.
-**Nächster Schritt:** Kurzbericht an Julius; Freigabe-Entscheidungen (siehe Bericht). Nichts weiter bauen.
+**Nächster Schritt:** Julius prüft die Physik beim Ziehen von Hand; Freigabe-Entscheidungen (Staging, Seed). Nichts weiter bauen.
 
 Testserver während der Arbeit (nur eigene Ports): 8791 = `PORT=8791 GABI_BRAIN=1 node dev/lokal.mjs` (Brain an),
 8792 = `PORT=8792 node dev/lokal.mjs` (ohne Schalter, für `tests/v2.mjs`). 8788 gehört Julius' Vorschau.
@@ -85,8 +85,10 @@ Tests: `cd ~/Desktop/gabi-brain/worker && npm test`. Lokaler Brain-Server: `npm 
     `worker/src/brain_abruf.js`) ist nur Code hinter zwei Schaltern (`BRAIN_SPEICHER`, `BRAIN_QUELLE`, beide AUS);
     die Rollen-Vorlage (RLS) steht auskommentiert am Ende der SQL-Datei. Reihenfolge der Umstellung: README
     „Brain in Supabase (Entwurf)“.
-12. **Ziehen im Graph = „ruhig“:** Beim Ziehen wandert nur der Knoten selbst, seine Blätter (Knoten, die nur an ihm
-    hängen) kommen starr mit; das übrige Bild bleibt stehen (kein „Wackelpudding“ über den ganzen Graphen). Ein
+12. **Ziehen im Graph = „lebendig“ (seit 11.11., vorher „ruhig“ – siehe „Physik beim Ziehen“):** Die Nachbarn federn
+    mit und schwingen aus, bis zwei Kanten weit; das übrige Bild bleibt stehen (kein „Wackelpudding“ über den ganzen
+    Graphen). Im Menü „Mehr“ abschaltbar („Physik beim Ziehen: aus“ = das alte Verhalten: nur der Knoten, seine Blätter
+    starr mit). Bei „Bewegung reduzieren“ bewegt sich nur der gezogene Knoten. Ein
     losgelassener Knoten ist festgesetzt (kleiner Punkt, auch nach dem Neuladen). Lösen: Knopf „Lösen“ im Detail oder
     „Neu anordnen“ in der Werkzeugleiste (löst alle und rechnet frisch). Kanten haben keine Pfeilspitzen (ruhigeres
     Bild; die Richtung steht im Detail unter „Verweise“ und „Rückverweise“).
@@ -297,6 +299,44 @@ zwischen zwei Zustandswechseln (nicht bei „Bewegung reduzieren“); das Ein-/A
 **Ursache** (belegt mit dem neuen Test gegen `0ddae03`: 105 Seitenwechsel, 15–36 Überlappungen, 128–168 Labels über dem Rand, Labels bis 2,8 s halbtransparent): `labelsWaehlen` lief in jedem Bild neu – Seite (rechts/unten/links), Sichtbarkeit und Kollision wurden bei jedem Zoomschritt frisch entschieden, Teile durften über den Rand ragen oder überlappt „erzwungen“ werden, Ein-/Ausblenden war exponentiell (lange Halbzustände). Die Kürzung des Textes (`kurz`) war schon zoomfest; das Wechseln kam vom Auftauchen/Verschwinden.
 **Fix** (nur `brain-graph.js`): Entscheidung (Sichtbarkeit, Seite, Kürzung) fällt einmal, 150 ms nach der letzten Zoom-/Pan-/Zieh-/Layout-Bewegung; dazwischen folgen die Labels nur ihrem Knoten. Standardseite rechts, Seitenwechsel höchstens einmal pro Sekunde. Ein Label liegt ganz im Bild oder gar nicht, keine Überlappung (Gewinner: Verbindungen, dann Kennung); zwischen zwei Entscheidungen kann ein Label nur ausgeblendet werden, nie dazukommen. Ein-/Ausblenden linear in 150 ms, bei „Bewegung reduzieren“ sofort. Naben haben keinen Sonderplatz mehr. Layout und Physik unberührt.
 **Test:** `tests/brain-labels-zoom.mjs` (ersetzt die alte Messung): 80 Mausrad-Schritte, je Schritt Seite/Text/Deckkraft/Rechteck. Neuer Stand 24/24 grün, `0ddae03` 14 von 24 rot. Unit 909, Graph 274/274, Brain-Kurzlauf 220/220, Leistung unverändert (60 Bilder/s, 0 in Ruhe). Grenzen: Überlappung und Rand sind für Labels geprüft, die stehen sollen (Ziel 1); ein ausblendendes Label steht bis zu 150 ms an seiner letzten gültigen Stelle. Während einer Bewegung kommen keine neuen Labels hinzu – sie erscheinen 150 ms nach dem Loslassen.
+
+### Physik beim Ziehen, Obsidian-artig (11.11.)
+**Wo die Simulation vorher endete:** Das Kraft-Layout (eigene Umsetzung in `brain-graph.js`, im Web Worker) ordnete den Graphen
+einmal und kühlte dann ab (Wärme alpha → 0, `ruht()`), danach wurde nichts mehr gerechnet. Ziehen lief im Modus „ruhig“
+(Entscheidung 12): nur der Knoten wanderte, seine Blätter kamen starr mit, die Simulation wurde gar nicht geweckt. Ein
+Modus „lebendig“ war angelegt, aber aus, reichte nur eine Kante weit und dämpfte so stark (Reibung 0,42), dass nichts
+schwang.
+**Entscheidungen:**
+- Standard ist jetzt „lebendig“: Ziehen weckt die Simulation lokal für den Knoten und alles **bis zwei Kanten weit**; der Rest
+  des Bildes steht exakt still. Grund: Ein ganzer Graph, der nach dem Abkühlen neu angewärmt wird, wandert sichtbar
+  (die abgekühlte Lage ist kein Gleichgewicht) – das wäre unruhig, nicht Obsidian.
+- **Anker:** Festgesetzte Knoten bleiben fest, ihre Federn wirken weiter; hinter ihnen endet die Reichweite.
+- Dämpfung beim Ziehen und Nachschwingen 0,2 (statt 0,42): die Nachbarn schwingen sanft aus. Je Rechenschritt bewegt sich
+  ein Knoten höchstens 16 px (keine wilden Ausschläge).
+- **Einschlafen:** Ist nach dem Loslassen jeder Knoten 20 Schritte in Folge langsamer als 0,05 px je Schritt, wird die
+  Wärme auf 0 gesetzt – keine Rechnung, keine Bildschleife (gemessen: 0 Bilder in Ruhe).
+- Was der gezogene Knoten berührt, darf ausweichen, auch außerhalb der Reichweite (sonst blieb er darüber liegen).
+- **Nebenbefund behoben:** Nach jeder Ruhe startete der 6-s-Puls der „Zu klären“-Knoten neu. Nach dem Ziehen hätte das 6 s
+  lang 60 Bilder/s gekostet. Der Puls kommt jetzt nur nach dem Ordnen.
+- „Bewegung reduzieren“: nur der gezogene Knoten bewegt sich (vorher kamen seine Blätter mit). Menü „Mehr“ → „Physik beim
+  Ziehen: an/aus“ (aus = altes Verhalten), lokal gemerkt.
+- Alle Stellschrauben gebündelt in `LAYOUT_STANDARD` (Block „Physik beim Ziehen“): `lokalAlpha`, `ziehTiefe`,
+  `ziehReibung`, `maxSchritt`, `schlafSchritt`, `schlafTicks`. Layout beim ersten Ordnen und Label-Regeln (`a3309e1`)
+  unverändert.
+**Messwerte** (`tests/brain-leistung.mjs`, jetzt mit Ziehen: 3 s eine Nabe im Kreis geführt):
+
+| Engine | Knoten | Bilder/s beim Ziehen (95 % der Bilder unter) | Bilder/s Verschieben/Zoomen | Bilder in Ruhe danach |
+|---|---|---|---|---|
+| Chromium | 100 / 300 / 500 | 60 / 60 / 60 (16,8 / 16,8 / 16,7 ms) | 60 | 0 |
+| WebKit | 100 / 300 / 500 | 60 / 60 / 60 (18 / 17 / 17 ms) | 60 | 0 |
+
+Im Demo-Graphen (1440 px) ist nach dem Loslassen in 0,74–0,80 s Ruhe (Grenze im Test: 4 s).
+**Tests:** Unit `brain-graph.test.js` +8 (Federn, Abstoßung, Dämpfung, Nachschwingen, Einschlafen, Anker, Ausweichen,
+ruhig) → 918 grün; Browser `tests/brain-physik.mjs` (Chromium + WebKit, hell/dunkel, „Bewegung reduzieren“) 64/64.
+**Gegenprobe gegen `a3309e1`:** 8 von 10 neuen bzw. geänderten Unit-Tests rot (Abstoßung und Anker galten schon vorher); Browser 7 rot (nur 3 von 11 Nachbarn folgten, kein
+Nachschwingen, eine Überlagerung blieb, bei „Bewegung reduzieren“ kamen 3 Blätter mit). Gesamtlauf am neuen Stand grün:
+`tests/brain.mjs` 650/650, Label-Test 24/24, Gebiets-Tests 66/174/274/319/94, `tests/v2.mjs` ohne Schalter alle
+bestanden, `wrangler deploy --dry-run` beide Konfigurationen.
 
 ## Vorkommnisse
 

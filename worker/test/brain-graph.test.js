@@ -176,17 +176,19 @@ describe("Kraft-Layout", () => {
     for (const [id, p] of vorher) if (id !== "k005") expect(l.lage(id)).toEqual(p);
   });
 
-  it("„lebendig“ ziehen: nur der Knoten und seine Nachbarn reagieren – der Rest des Bildes steht exakt still", () => {
+  it("„lebendig“ ziehen: Knoten bis zwei Kanten weit reagieren – der Rest des Bildes steht exakt still", () => {
     const d = G.testDaten(200, 3);
     const l = G.erstelleLayout(d);
     l.bisRuhe();
     const nabe = "t-0001";
-    const nachbarn = new Set();
-    for (const k of d.kanten) { if (k.von === nabe) nachbarn.add(k.nach); if (k.nach === nabe) nachbarn.add(k.von); }
+    const nachbarnVon = (id) => { const m = new Set(); for (const k of d.kanten) { if (k.von === id) m.add(k.nach); if (k.nach === id) m.add(k.von); } return m; };
+    const nah = nachbarnVon(nabe);
+    const reichweite = new Set([nabe, ...nah]);
+    for (const id of nah) for (const j of nachbarnVon(id)) reichweite.add(j);
     const vorher = new Map(l.ids.map((id) => [id, l.lage(id)]));
     const p = l.lage(nabe);
     l.ziehen(nabe, p.x + 90, p.y - 40);
-    expect(l.lokal).toBe(nachbarn.size + 1);
+    expect(l.lokal).toBe(reichweite.size);
     l.schritt(120);
     l.loslassen(nabe, true);
     l.bisRuhe();
@@ -194,10 +196,10 @@ describe("Kraft-Layout", () => {
     for (const [id, alt] of vorher) {
       const neu = l.lage(id);
       if (id === nabe) { expect(neu).toMatchObject({ x: p.x + 90, y: p.y - 40, fest: true }); continue; }
-      if (nachbarn.has(id)) { if (Math.hypot(neu.x - alt.x, neu.y - alt.y) > 5) mitbewegt++; continue; }
+      if (reichweite.has(id)) { if (nah.has(id) && Math.hypot(neu.x - alt.x, neu.y - alt.y) > 5) mitbewegt++; continue; }
       expect(neu, id).toEqual(alt); // nicht betroffen: Bit für Bit gleich
     }
-    expect(mitbewegt).toBeGreaterThan(nachbarn.size / 2); // die Nachbarn kommen mit
+    expect(mitbewegt).toBeGreaterThan(nah.size / 2); // die Nachbarn kommen mit
   });
 
   it("ruhig ziehen (Standard der Oberfläche, auch bei „Bewegung reduzieren“): kein Aufwärmen – niemand sonst rührt sich", () => {
@@ -934,5 +936,157 @@ describe("Quelltext: läuft unter der strengen CSP und ohne Bibliothek", () => {
     };
     const kontrast = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
     for (const a of arten) expect(kontrast(G.FARBEN_STANDARD.arten[a], G.FARBEN_STANDARD.hintergrund), a).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ---------- Physik beim Ziehen (Obsidian-artig) ----------
+describe("Physik beim Ziehen: Federn, Dämpfung, Einschlafen", () => {
+  // Kette a – b – c – d: a wird gezogen
+  const kette = (extra = {}) => ({
+    knoten: ["a", "b", "c", "d"].map((id, i) => ({ id, x: i * 60, y: 0, grad: i === 0 || i === 3 ? 1 : 2, ...(extra[id] || {}) })),
+    kanten: [{ von: "a", nach: "b" }, { von: "b", nach: "c" }, { von: "c", nach: "d" }],
+  });
+  const P = G.LAYOUT_STANDARD;
+
+  it("die Stellschrauben stehen gebündelt in LAYOUT_STANDARD und sind sinnvoll gesetzt", () => {
+    expect(P.ziehTiefe).toBeGreaterThanOrEqual(2);
+    expect(P.ziehReibung).toBeLessThan(P.reibung); // beim Ziehen weicher gedämpft als beim Ordnen – es schwingt
+    expect(P.ziehReibung).toBeGreaterThan(0);
+    expect(P.maxSchritt).toBeGreaterThan(0);
+    expect(P.schlafSchritt).toBeGreaterThan(0);
+    expect(P.schlafTicks).toBeGreaterThan(0);
+  });
+
+  it("Federn: wird a weggezogen, folgen b und c (b mehr als c); d liegt hinter der Reichweite und bleibt", () => {
+    const l = G.erstelleLayout(kette());
+    l.bisRuhe();
+    const vor = Object.fromEntries(["a", "b", "c", "d"].map((id) => [id, l.lage(id)]));
+    l.ziehen("a", vor.a.x - 200, vor.a.y);
+    l.schritt(80);
+    const weg = (id) => Math.hypot(l.lage(id).x - vor[id].x, l.lage(id).y - vor[id].y);
+    expect(l.lage("a")).toMatchObject({ x: vor.a.x - 200, y: vor.a.y, fest: true });
+    expect(weg("b")).toBeGreaterThan(20);
+    expect(weg("c")).toBeGreaterThan(1);
+    expect(weg("b")).toBeGreaterThan(weg("c"));
+    expect(weg("d")).toBe(0); // drei Kanten weit: außerhalb von ziehTiefe 2
+  });
+
+  it("Abstoßung: zwei verbundene Knoten, übereinander gezogen, drücken sich wieder auseinander", () => {
+    const l = G.erstelleLayout({ knoten: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 60, y: 0 }], kanten: [{ von: "a", nach: "b" }] });
+    l.bisRuhe();
+    l.ziehen("a", 61, 1);
+    l.schritt(60);
+    const a = l.lage("a");
+    const b = l.lage("b");
+    const r = G.knotenRadius(1) * 2;
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(r * 0.9); // keine Überlagerung
+  });
+
+  it("Dämpfung: kein Schritt größer als maxSchritt, die Bewegung klingt nach dem Loslassen ab", () => {
+    const d = G.testDaten(120, 5);
+    const l = G.erstelleLayout(d);
+    l.bisRuhe();
+    const p = l.lage("t-0001");
+    l.ziehen("t-0001", p.x + 600, p.y + 400); // weiter, ruckartiger Zug
+    let alt = l.lagen();
+    let groesster = 0;
+    for (let s = 0; s < 40; s++) {
+      l.schritt(1);
+      const neu = l.lagen();
+      for (let i = 0; i < l.anzahl; i++) {
+        if (l.ids[i] === "t-0001") continue;
+        groesster = Math.max(groesster, Math.hypot(neu[2 * i] - alt[2 * i], neu[2 * i + 1] - alt[2 * i + 1]));
+      }
+      alt = neu;
+    }
+    expect(groesster).toBeLessThanOrEqual(P.maxSchritt + 1e-3);
+    l.loslassen("t-0001", true);
+    // Bewegung je Schritt in drei Abschnitten nach dem Loslassen: sie nimmt ab
+    const bewegung = () => { const a = l.lagen(); l.schritt(10); const b = l.lagen(); let s = 0; for (let i = 0; i < l.anzahl; i++) s += Math.hypot(b[2 * i] - a[2 * i], b[2 * i + 1] - a[2 * i + 1]); return s; };
+    const b1 = bewegung();
+    l.schritt(30);
+    const b2 = bewegung();
+    l.schritt(30);
+    const b3 = bewegung();
+    expect(b2).toBeLessThan(b1);
+    expect(b3).toBeLessThanOrEqual(b2);
+  });
+
+  it("Nachschwingen: nach dem Loslassen bewegen sich die Nachbarn noch – dann schläft die Simulation ein", () => {
+    const l = G.erstelleLayout(kette());
+    l.bisRuhe();
+    const vor = l.lage("a");
+    l.ziehen("a", vor.x - 150, vor.y + 80);
+    l.schritt(15); // mitten in der Bewegung loslassen
+    l.loslassen("a", true);
+    expect(l.schwingt).toBe(true);
+    const b0 = l.lage("b");
+    l.schritt(5);
+    const b1 = l.lage("b");
+    expect(Math.hypot(b1.x - b0.x, b1.y - b0.y)).toBeGreaterThan(0.5); // schwingt nach
+    const ticks = l.bisRuhe(2000);
+    expect(l.ruht()).toBe(true);
+    expect(l.schwingt).toBe(false);
+    expect(ticks).toBeLessThan(400); // eingeschlafen, lange bevor die Wärme allein abgeklungen wäre
+  });
+
+  it("Einschlafen: ist alles still, stoppt die Schleife ganz – weitere Schritte rechnen nichts", () => {
+    const l = G.erstelleLayout(kette());
+    l.bisRuhe();
+    const p = l.lage("a");
+    l.ziehen("a", p.x - 80, p.y);
+    l.schritt(30);
+    l.loslassen("a", true);
+    l.bisRuhe(2000);
+    expect(l.ruht()).toBe(true);
+    expect(l.alpha).toBe(0);
+    const t = l.ticks;
+    const lagen = Array.from(l.lagen());
+    l.schritt(50);
+    expect(l.ticks).toBe(t); // keine Rechnung mehr
+    expect(Array.from(l.lagen())).toEqual(lagen);
+  });
+
+  it("Anker: ein festgesetzter Knoten bleibt fest, zieht aber an seinen Nachbarn – hinter ihm endet die Reichweite", () => {
+    const l = G.erstelleLayout(kette({ b: { fest: true } }));
+    l.bisRuhe();
+    const vor = Object.fromEntries(["a", "b", "c", "d"].map((id) => [id, l.lage(id)]));
+    l.ziehen("a", vor.a.x - 120, vor.a.y + 60);
+    l.schritt(60);
+    expect(l.lage("b")).toEqual(vor.b); // fest bleibt fest
+    expect(l.lage("c")).toEqual(vor.c); // hinter dem Anker rührt sich nichts
+    expect(l.lokal).toBe(2); // a und der Anker b
+    l.loslassen("a", false);
+    l.bisRuhe(2000);
+    // losgelassen (nicht fest): a federt zurück Richtung Anker b
+    const a = l.lage("a");
+    const abstand = Math.hypot(a.x - vor.b.x, a.y - vor.b.y);
+    expect(abstand).toBeLessThan(Math.hypot(vor.a.x - 120 - vor.b.x, vor.a.y + 60 - vor.b.y));
+  });
+
+  it("was dem gezogenen Knoten in den Weg kommt, weicht aus – auch außerhalb der Reichweite (keine Überlagerung bleibt)", () => {
+    // zwei getrennte Teile: a – b und c – d; a wird genau auf d gezogen
+    const l = G.erstelleLayout({ knoten: [{ id: "a", x: 0, y: 0 }, { id: "b", x: 60, y: 0 }, { id: "c", x: 400, y: 0 }, { id: "d", x: 460, y: 0 }], kanten: [{ von: "a", nach: "b" }, { von: "c", nach: "d" }] });
+    l.bisRuhe();
+    const d0 = l.lage("d");
+    l.ziehen("a", d0.x, d0.y);
+    l.schritt(60);
+    l.loslassen("a", true);
+    l.bisRuhe(2000);
+    const a = l.lage("a");
+    const d = l.lage("d");
+    expect(Math.hypot(a.x - d.x, a.y - d.y)).toBeGreaterThan(G.knotenRadius(1) * 2 * 0.9);
+    expect(l.ruht()).toBe(true);
+  });
+
+  it("ruhig (Bewegung reduzieren / Physik aus): keine Federung, niemand sonst bewegt sich, nichts läuft", () => {
+    const l = G.erstelleLayout(kette());
+    l.bisRuhe();
+    const vor = Object.fromEntries(["b", "c", "d"].map((id) => [id, l.lage(id)]));
+    l.ziehen("a", 500, 500, { ruhig: true });
+    expect(l.ruht()).toBe(true);
+    expect(l.schwingt).toBe(false);
+    l.schritt(20);
+    for (const id of ["b", "c", "d"]) expect(l.lage(id)).toEqual(vor[id]);
   });
 });

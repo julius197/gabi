@@ -77,6 +77,33 @@ async function messung(browser, motor, knoten, { handy = false } = {}) {
   const bewegung = rate(await page.evaluate(() => window.__zeiten), t0, t1);
   const nachBewegung = await page.evaluate(() => window.GabiBrainAnsicht.aktuell.messen());
 
+  // Knoten ziehen (Physik: die Nachbarn federn mit): die stärkste Nabe 3 Sekunden lang im Kreis führen
+  let ziehen = { fps: null, lang: null };
+  if (!handy) {
+    await page.waitForFunction(() => window.GabiBrainAnsicht.aktuell.messen().ruht, null, { timeout: 60000 });
+    const nabe = await page.evaluate(() => {
+      const a = window.GabiBrainAnsicht.aktuell;
+      const f = document.querySelector("canvas.brain-graph-flaeche").getBoundingClientRect();
+      // die ersten Testknoten sind die Naben (testDaten: t-0001 …); die erste, die gut im Bild liegt
+      for (let i = 1; i < 60; i++) {
+        const id = `t-${String(i).padStart(4, "0")}`;
+        const o = a.ort(id);
+        if (o && o.x > f.left + 200 && o.x < f.right - 200 && o.y > f.top + 150 && o.y < f.bottom - 150) return { id, x: o.x, y: o.y };
+      }
+      return null;
+    });
+    if (nabe) {
+      await page.mouse.move(nabe.x, nabe.y);
+      await page.mouse.down();
+      const z0 = await page.evaluate(() => performance.now());
+      const beginn = Date.now();
+      for (let i = 0; Date.now() - beginn < 3000; i++) { const w = i / 14; await page.mouse.move(nabe.x + Math.cos(w) * 70 - 70, nabe.y + Math.sin(w) * 50); await warte(16); }
+      const z1 = await page.evaluate(() => performance.now());
+      await page.mouse.up();
+      ziehen = rate(await page.evaluate(() => window.__zeiten), z0, z1);
+    }
+  }
+
   // In Ruhe: kein Bild (der Puls der „Zu klären“-Knoten ist nach 6 s vorbei)
   await page.waitForFunction(() => window.GabiBrainAnsicht.aktuell.messen().ruht, null, { timeout: 60000 });
   await warte(6500);
@@ -98,7 +125,7 @@ async function messung(browser, motor, knoten, { handy = false } = {}) {
   return {
     motor, geraet: handy ? "Handy" : "Laptop", knoten: nachLayout.knoten, kanten: nachLayout.kanten, worker: nachLayout.worker,
     layoutMs: nachLayout.layoutMs, ticks: nachLayout.ticks, layoutFps: layoutRate.fps, bewegungFps: bewegung.fps, lang: bewegung.lang,
-    p50: nachBewegung.zeichnenP50, p95: nachBewegung.zeichnenP95, ruheBilder: b2 - b1, heap, fehler,
+    p50: nachBewegung.zeichnenP50, p95: nachBewegung.zeichnenP95, ruheBilder: b2 - b1, heap, fehler, ziehFps: ziehen.fps, ziehLang: ziehen.lang,
   };
 }
 
@@ -113,11 +140,11 @@ for (const motor of MOTOREN) {
   }
 }
 
-console.log("| Engine | Gerät | Knoten | Kanten | Layout bis zur Ruhe | Bilder/s im Layout | Bilder/s beim Verschieben und Zoomen | längstes Bild (95 %) | Zeichnen je Bild (Median / 95 %) | Bilder in Ruhe | JS-Speicher |");
-console.log("|---|---|---|---|---|---|---|---|---|---|---|");
+console.log("| Engine | Gerät | Knoten | Kanten | Layout bis zur Ruhe | Bilder/s im Layout | Bilder/s beim Verschieben und Zoomen | längstes Bild (95 %) | Bilder/s beim Ziehen (Physik) | Zeichnen je Bild (Median / 95 %) | Bilder in Ruhe | JS-Speicher |");
+console.log("|---|---|---|---|---|---|---|---|---|---|---|---|");
 for (const z of zeilen) {
-  console.log(`| ${z.motor} | ${z.geraet} | ${z.knoten} | ${z.kanten} | ${z.layoutMs == null ? "–" : `${rund(z.layoutMs / 1000, 2)} s (${z.ticks} Schritte${z.worker ? ", Worker" : ", Hauptfaden"})`} | ${rund(z.layoutFps)} | ${rund(z.bewegungFps)} | ${rund(z.lang)} ms | ${rund(z.p50, 2)} / ${rund(z.p95, 2)} ms | ${z.ruheBilder} | ${z.heap == null ? "–" : `${rund(z.heap)} MB`} |`);
+  console.log(`| ${z.motor} | ${z.geraet} | ${z.knoten} | ${z.kanten} | ${z.layoutMs == null ? "–" : `${rund(z.layoutMs / 1000, 2)} s (${z.ticks} Schritte${z.worker ? ", Worker" : ", Hauptfaden"})`} | ${rund(z.layoutFps)} | ${rund(z.bewegungFps)} | ${rund(z.lang)} ms | ${z.ziehFps == null ? "–" : `${rund(z.ziehFps)} (95 %: ${rund(z.ziehLang)} ms)`} | ${rund(z.p50, 2)} / ${rund(z.p95, 2)} ms | ${z.ruheBilder} | ${z.heap == null ? "–" : `${rund(z.heap)} MB`} |`);
 }
-const schlecht = zeilen.filter((z) => z.fehler.length || z.ruheBilder !== 0 || (z.knoten >= 500 && z.geraet === "Laptop" && z.bewegungFps != null && z.bewegungFps < 50));
+const schlecht = zeilen.filter((z) => z.fehler.length || z.ruheBilder !== 0 || (z.knoten >= 500 && z.geraet === "Laptop" && ((z.bewegungFps != null && z.bewegungFps < 50) || (z.ziehFps != null && z.ziehFps < 50))));
 for (const z of schlecht) console.log(`✗ ${z.motor} ${z.geraet} ${z.knoten}: ${z.fehler.join(" | ") || (z.ruheBilder ? `${z.ruheBilder} Bilder in Ruhe` : `${rund(z.bewegungFps)} Bilder/s`)}`);
 process.exit(schlecht.length ? 1 : 0);

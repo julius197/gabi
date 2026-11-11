@@ -123,7 +123,8 @@ cd worker && npm run brain     # http://localhost:8790 · Zugangscode: test · D
 
 **Was es kann:**
 - **Graph** (eigene Umsetzung, keine Bibliothek): Kraft-Layout im Web Worker, Zoomen (Rad, Pinch), Verschieben, Knoten
-  ziehen und fixieren, Klick öffnet das Detail, Doppelklick zentriert, Fokus-Modus (Nachbarn bis Tiefe 1–3), Minimap,
+  ziehen und fixieren (die Nachbarn federn mit und schwingen aus wie in Obsidian, dann schläft die Physik ein; im Menü
+  „Mehr“ abschaltbar, bei „Bewegung reduzieren“ aus), Klick öffnet das Detail, Doppelklick zentriert, Fokus-Modus (Nachbarn bis Tiefe 1–3), Minimap,
   Legende (= Filter nach Art). Tastatur: Pfeile springen zum Nachbarn, `/` Suche, ⌘/Strg+K Befehlspalette, Esc schließt.
   Die Lage der Knoten wird lokal gemerkt – beim Wiederöffnen liegt der Graph ruhig.
 - **Liste** als gleichwertige Alternative (gruppiert, sortierbar) – auch für Handy und Hilfstechnik.

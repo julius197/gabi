@@ -424,6 +424,7 @@
         ["export-zip", "pdf", "Exportieren (ZIP, eine Datei je Eintrag)", !z.brain.eigene().length],
         ["export-datei", "dokument", "Exportieren (eine Markdown-Datei)", !z.brain.eigene().length],
         ["papierkorb", "muell", `Papierkorb${papierkorb ? ` (${papierkorb})` : ""}`, false],
+        ["physik", "graph", lokal.lesen("brain.physik") === false ? "Physik beim Ziehen: aus" : "Physik beim Ziehen: an", false],
         ["tasten", "info", "Tastenkürzel", false],
       ].map(([a, sym, name, aus]) => `<button class="brain-menue-punkt" type="button" role="menuitem" data-brain="${a}"${aus ? " disabled" : ""}>${symbol(sym)}<span>${esc(name)}</span></button>`).join(""));
     }
@@ -620,6 +621,7 @@
         z.graph = G.erstelle(rahmen, {
           farben,
           wenigBewegung: () => app.wenigBewegung.matches,
+          ziehen: () => (lokal.lesen("brain.physik") === false ? "ruhig" : "lebendig"), // Menü „Physik beim Ziehen“
           workerUrl: `brain-graph.js?v=${encodeURIComponent(app.version)}`,
           positionen: { lesen: () => lokal.lesen("brain.positionen") || {}, schreiben: (p) => lokal.schreiben("brain.positionen", p) },
           beiAuswahl: (id, info) => {
@@ -1438,6 +1440,13 @@
         case "import": $("#brain-datei").click(); break;
         case "export-zip": exportieren("zip"); break;
         case "export-datei": exportieren("datei"); break;
+        case "physik": {
+          const an = lokal.lesen("brain.physik") === false;
+          lokal.schreiben("brain.physik", an);
+          toast(an ? "Physik an: Beim Ziehen federn die Nachbarn mit." : "Physik aus: Beim Ziehen bewegt sich nur der Knoten.");
+          if (z.brain) leisteZeichnen(); // Menütext nachziehen
+          break;
+        }
         case "papierkorb": papierkorbZeigen(); break;
         case "tasten": tastenZeigen(); break;
         default: break;

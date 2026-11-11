@@ -274,10 +274,17 @@
     alphaZerfall: 0.028,   // ≈ 245 Ticks von 1 bis zur Ruhe
     // Was schon liegt, bleibt liegen: Kommen Knoten dazu, rechnen nur die neuen – der Rest des Bildes steht still.
     // (Ein ganzes Nachwärmen ließe alles wandern: Die Ruhelage eines abgekühlten Layouts ist kein Gleichgewicht.)
-    lokalAlpha: 0.3,
     thetaLokal: 0.4,       // wenige Knoten rechnen: genauer (kein Zittern)
-    ziehTiefe: 1,          // „lebendiges“ Ziehen: Nachbarn bis zu dieser Tiefe reagieren mit
-    reibung: 0.42,
+    reibung: 0.42,         // Dämpfung beim Ordnen (so stark, dass nichts schwingt)
+    // ---- Physik beim Ziehen (Obsidian-artig) – alle Stellschrauben hier ----
+    // Gezogen wird „lebendig“: Der Knoten hängt am Zeiger, seine Nachbarn folgen über die Federn der Kanten, schwingen
+    // nach dem Loslassen sanft aus und kommen zur Ruhe. Dann schläft die Simulation ein (keine Rechnung, kein Bild).
+    lokalAlpha: 0.3,       // Wärme beim Ziehen: wie stark Federn und Abstoßung wirken
+    ziehTiefe: 2,          // so viele Kanten weit federn Nachbarn mit; hinter einem festgesetzten Knoten (Anker) endet es
+    ziehReibung: 0.2,      // Dämpfung beim Ziehen und Nachschwingen (kleiner = schwingt länger; ab 0,42 schwingt nichts)
+    maxSchritt: 16,        // größte Bewegung eines Knotens je Rechenschritt (Welt-px): keine wilden Ausschläge
+    schlafSchritt: 0.05,   // ein Knoten, der sich je Schritt weniger bewegt (Welt-px), gilt als ruhig …
+    schlafTicks: 20,       // … sind alle so viele Schritte in Folge ruhig, schläft die Simulation ein
     radiusBasis: 5,
     radiusJeGrad: 2.4,
     radiusMax: 22,
@@ -431,7 +438,8 @@
       for (const i of indizes) if (i >= 0 && i < n) { maske[i] = 1; rand.push(i); }
       for (let t = 0; t < tiefe; t++) {
         const naechste = [];
-        for (const a of rand) for (const b of nachbarn[a]) if (!maske[b]) { maske[b] = 1; naechste.push(b); }
+        // ein festgesetzter Knoten ist ein Anker: Er gehört dazu (seine Federn wirken), aber hinter ihm endet es
+        for (const a of rand) for (const b of nachbarn[a]) if (!maske[b]) { maske[b] = 1; if (!fest[b]) naechste.push(b); }
         rand = naechste;
       }
       const liste = [];
@@ -619,22 +627,38 @@
       const zugY = o.mitte * alpha / form;
       for (let i = 0; i < n; i++) { vx[i] -= x[i] * zugX; vy[i] -= y[i] * zugY; }
       if (o.kollision > 0 && n > 1) kollisionen();
-      const bleibt = 1 - o.reibung;
+      const bleibt = 1 - (schwingen ? o.ziehReibung : o.reibung);
+      const grenze2 = o.maxSchritt * o.maxSchritt;
+      let schnellste = 0; // größtes v² eines beweglichen Knotens in diesem Schritt
       for (let i = 0; i < n; i++) {
         if (fest[i]) { x[i] = fx[i]; y[i] = fy[i]; vx[i] = 0; vy[i] = 0; continue; }
         if (aktiv && !aktiv[i]) { vx[i] = 0; vy[i] = 0; continue; } // nicht betroffen: bleibt genau stehen
         let ax = vx[i] * bleibt;
         let ay = vy[i] * bleibt;
         if (!(ax === ax) || !(ay === ay)) { ax = 0; ay = 0; } // NaN nie weitertragen
+        if (schwingen) {
+          const v2 = ax * ax + ay * ay;
+          if (v2 > grenze2) { const f = o.maxSchritt / Math.sqrt(v2); ax *= f; ay *= f; }
+          if (v2 > schnellste) schnellste = v2;
+        }
         vx[i] = ax;
         vy[i] = ay;
         x[i] += ax;
         y[i] += ay;
       }
+      // Einschlafen: losgelassen und alles fast still → Simulation aus (alpha 0: ruht() gilt, keine Schleife, kein Bild)
+      if (schwingen && alphaZiel === 0) {
+        if (schnellste < o.schlafSchritt * o.schlafSchritt) {
+          ruhigeTicks++;
+          if (ruhigeTicks >= o.schlafTicks) { alpha = 0; schwingen = false; ruhigeTicks = 0; vx.fill(0); vy.fill(0); }
+        } else ruhigeTicks = 0;
+      }
       ticks++;
     }
 
     const ruht = () => alphaZiel === 0 && alpha < o.alphaMin;
+    let schwingen = false; // lebendig gezogen (oder gerade losgelassen): weichere Dämpfung, Begrenzung, Einschlafen
+    let ruhigeTicks = 0;
     aufbauen(eingabe, null);
 
     return {
@@ -683,8 +707,22 @@
           if (inRuhe || aktiv !== null) aktivSetzen([i], !inRuhe, o.ziehTiefe);
           ziehIndex = i;
         }
+        // was dem gezogenen Knoten in den Weg kommt, darf ausweichen – sonst bliebe es unter ihm liegen
+        if (aktiv) {
+          const naehe = [];
+          for (let j = 0; j < n; j++) {
+            if (aktiv[j] || fest[j]) continue;
+            const r = radius[i] + radius[j];
+            const dx = x[j] - wx;
+            const dy = y[j] - wy;
+            if (dx * dx + dy * dy < r * r * 1.44) naehe.push(j);
+          }
+          if (naehe.length) aktivSetzen(naehe, true);
+        }
         alphaZiel = o.lokalAlpha;
         if (alpha < 0.08) alpha = 0.08;
+        schwingen = true;
+        ruhigeTicks = 0;
       },
       loslassen(id, bleibtFest = true) {
         const i = index.get(id);
@@ -699,7 +737,9 @@
         fest[i] = an ? 1 : 0; fx[i] = x[i]; fy[i] = y[i]; vx[i] = 0; vy[i] = 0;
       },
       /** Das ganze Layout aufwärmen (alle Knoten rechnen wieder). */
-      waermen(a = 0.12) { aktivSetzen(null); if (a > alpha) alpha = Math.min(1, a); },
+      waermen(a = 0.12) { aktivSetzen(null); schwingen = false; if (a > alpha) alpha = Math.min(1, a); },
+      /** Läuft gerade die Ziehen-Physik (gezogen oder am Nachschwingen)? */
+      get schwingt() { return schwingen; },
       /** Lagen von außen setzen (z. B. mitgezogene Blätter) – ohne zu fixieren und ohne aufzuwärmen. */
       versetzen(liste) {
         for (const eintrag of liste || []) {
@@ -1203,7 +1243,13 @@
     const fenster = dok.defaultView;
     const jetztMs = () => fenster.performance.now();
     const wenig = () => { try { return Boolean(opt.wenigBewegung && opt.wenigBewegung()); } catch { return false; } };
-    const ZIEHEN_LEBENDIG = opt.ziehen === "lebendig"; // Standard „ruhig“: beim Ziehen bleibt der Rest des Bildes stehen
+    // Ziehen: Standard „lebendig“ (Nachbarn federn mit, wie in Obsidian). opt.ziehen: "lebendig" | "ruhig" oder eine
+    // Funktion, die das liefert (Schalter „Physik beim Ziehen“ im Menü). Bei „Bewegung reduzieren“ immer ruhig.
+    const ziehenLebendig = () => {
+      let art = opt.ziehen;
+      if (typeof art === "function") { try { art = art(); } catch { art = "lebendig"; } }
+      return art !== "ruhig";
+    };
     /** Rückruf der Ansicht: Ein Fehler dort hält den Graph nicht an, bleibt aber in der Konsole sichtbar. */
     const rufe = (name, ...args) => {
       if (typeof opt[name] !== "function") return;
@@ -1264,6 +1310,7 @@
     let fokusZustand = null;    // { id, tiefe, kamera }
     const hervor = new Map();   // Index → { start, dauer }
     let pulsBis = 0;
+    let nurNachZiehen = false; // die Ruhe, auf die gewartet wird, ist nur das Ausschwingen nach dem Ziehen (kein neuer Puls)
     const labelMerk = new Map();  // id → Platz
     // Labels: Sichtbarkeit, Seite und Kürzung werden NICHT bei jedem Bild entschieden, sondern einmal, wenn Zoom, Verschieben
     // und Ziehen 150 ms ruhen (labelStand). Dazwischen folgen die Labels nur ihrem Knoten.
@@ -1536,7 +1583,10 @@
       if (layoutMs === null) layoutMs = Math.round(jetztMs() - layoutBeginn);
       if (!kameraBeruehrt) einpassenJetzt(false);
       lagenSpeichernBald();
-      pulsBis = jetztMs() + PULS_MS;
+      // der Puls der „Zu klären“-Knoten gehört zum Ordnen – nach dem Ausschwingen eines gezogenen Knotens kein neuer
+      // (er hielte sonst 6 s lang die Bildschleife wach)
+      if (!nurNachZiehen) pulsBis = jetztMs() + PULS_MS;
+      nurNachZiehen = false;
     }
     function lagenSpeichernJetzt() {
       fenster.clearTimeout(speicherUhr);
@@ -1673,6 +1723,7 @@
       layoutBeginn = jetztMs();
       layoutMs = null;
       layoutLaeuft = true;
+      nurNachZiehen = false;
       ersteLagen = !K.some((_, i) => hatLage[i]) || ersteLagen;
       const erster = !treiber;
       if (!treiber) treiber = (opt.workerUrl && typeof fenster.Worker === "function" && treiberWorker(opt.workerUrl)) || treiberLokal();
@@ -2365,10 +2416,12 @@
         flaeche.style.cursor = "grabbing";
         if (hover >= 0 && geste.typ === "frei") hoverSetzen(-1);
         if (geste.typ === "knoten") {
-          // Ruhiges Ziehen (Standard): nur der Knoten wandert, seine Blätter (Knoten mit nur dieser einen Kante) kommen
-          // starr mit – der Rest bleibt stehen. „lebendig“: die Nachbarn federn über das Layout mit.
-          geste.ruhig = !ZIEHEN_LEBENDIG || wenig();
-          geste.mit = geste.ruhig && !layoutLaeuft ? nachbarn[geste.i].filter((j) => nachbarn[j].length === 1 && !K[j].fest && hatLage[j]) : null;
+          // „lebendig“ (Standard): die Nachbarn federn über das Layout mit und schwingen aus. Physik aus: nur der Knoten
+          // wandert, seine Blätter (Knoten mit nur dieser einen Kante) kommen starr mit. „Bewegung reduzieren“: nur der
+          // gezogene Knoten bewegt sich – sonst nichts.
+          const reduziert = wenig();
+          geste.ruhig = reduziert || !ziehenLebendig();
+          geste.mit = geste.ruhig && !reduziert && !layoutLaeuft ? nachbarn[geste.i].filter((j) => nachbarn[j].length === 1 && !K[j].fest && hatLage[j]) : null;
         }
       }
       if (geste.typ === "knoten") {
@@ -2380,7 +2433,7 @@
         px[i] = nx;
         py[i] = ny;
         kameraBeruehrt = true; // nach dem Ziehen rückt die Kamera nicht von selbst nach
-        if (!geste.ruhig) layoutLaeuft = true;
+        if (!geste.ruhig && !layoutLaeuft) { layoutLaeuft = true; nurNachZiehen = true; }
         treiber.zieh(K[i].id, nx, ny, geste.ruhig);
       } else {
         kam = { x: geste.kamX - dx / kam.zoom, y: geste.kamY - dy / kam.zoom, zoom: kam.zoom };
@@ -2696,6 +2749,7 @@
         layoutBeginn = jetztMs();
         layoutMs = null;
         layoutLaeuft = true;
+        nurNachZiehen = false;
         if (!treiber) treiber = (opt.workerUrl && typeof fenster.Worker === "function" && treiberWorker(opt.workerUrl)) || treiberLokal();
         treiber.start(layoutEingabe(true), { sofort: wenig() });
         anfordern();
