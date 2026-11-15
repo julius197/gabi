@@ -11,7 +11,7 @@
   },
   {
    "name": "chromium hell 390 02-start",
-   "stellen": 19,
+   "stellen": 20,
    "min": 5.83,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -109,7 +109,7 @@
   },
   {
    "name": "chromium hell 390 08-schublade",
-   "stellen": 7,
+   "stellen": 8,
    "min": 5.55,
    "schwaechste": "Nur auf diesem Gerät · höchstens 50 (#schublade-liste > div.gespraeche-fuss > p, rgb(74,88,106) auf #d6e6f7)",
    "ausnahmen": []
@@ -120,6 +120,18 @@
    "min": 4.97,
    "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 390 09b-einstellungen",
+   "stellen": 22,
+   "min": 6.24,
+   "schwaechste": "Darstellung (form.dialog-form.einstellungen-form > section.einstellungen-abschnitt > #einstellungen-darstellung, rgb(74,88,106) auf #e7eff6)",
+   "ausnahmen": [
+    "deaktiviert: Benutzerkonto",
+    "deaktiviert: Folgt",
+    "deaktiviert: Praxis-Einstellungen",
+    "deaktiviert: Datenschutz"
+   ]
   },
   {
    "name": "chromium hell 390 10-notizen",
@@ -207,7 +219,7 @@
   },
   {
    "name": "chromium hell 1440 02-start",
-   "stellen": 41,
+   "stellen": 42,
    "min": 5.83,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -216,7 +228,7 @@
   },
   {
    "name": "chromium hell 1440 03-entwurf",
-   "stellen": 56,
+   "stellen": 57,
    "min": 4.97,
    "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -233,7 +245,7 @@
   },
   {
    "name": "chromium hell 1440 04-gespeichert-toast",
-   "stellen": 56,
+   "stellen": 57,
    "min": 4.97,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -250,7 +262,7 @@
   },
   {
    "name": "chromium hell 1440 05-antwort-quellen",
-   "stellen": 59,
+   "stellen": 60,
    "min": 4.97,
    "schwaechste": "Diktat · TP-01 · Beispiel (div.nachricht.von-nutzer > div.blase > div.blase-kopf, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -267,7 +279,7 @@
   },
   {
    "name": "chromium hell 1440 06-bericht",
-   "stellen": 58,
+   "stellen": 59,
    "min": 4.97,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -286,7 +298,7 @@
   },
   {
    "name": "chromium hell 1440 07-glas-ueber-verlauf",
-   "stellen": 60,
+   "stellen": 61,
    "min": 4.97,
    "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -305,7 +317,7 @@
   },
   {
    "name": "chromium hell 1440 08-seitenleiste",
-   "stellen": 60,
+   "stellen": 61,
    "min": 4.97,
    "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -330,8 +342,20 @@
    "ausnahmen": []
   },
   {
+   "name": "chromium hell 1440 09b-einstellungen",
+   "stellen": 21,
+   "min": 6.12,
+   "schwaechste": "Später (form.dialog-form.einstellungen-form > section.einstellungen-abschnitt.einstellungen-spaeter > #einstellungen-spaeter, rgb(74,88,106) auf #e5eef6)",
+   "ausnahmen": [
+    "deaktiviert: Benutzerkonto",
+    "deaktiviert: Folgt",
+    "deaktiviert: Praxis-Einstellungen",
+    "deaktiviert: Datenschutz"
+   ]
+  },
+  {
    "name": "chromium hell 1440 10-notizen",
-   "stellen": 43,
+   "stellen": 44,
    "min": 5.83,
    "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -347,7 +371,7 @@
   },
   {
    "name": "chromium hell 1440 12-suche",
-   "stellen": 41,
+   "stellen": 42,
    "min": 5.83,
    "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -356,7 +380,7 @@
   },
   {
    "name": "chromium hell 1440 13-suche-leer",
-   "stellen": 32,
+   "stellen": 33,
    "min": 5.83,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -365,7 +389,7 @@
   },
   {
    "name": "chromium hell 1440 14-patient",
-   "stellen": 39,
+   "stellen": 40,
    "min": 4.97,
    "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -374,7 +398,7 @@
   },
   {
    "name": "chromium hell 1440 15-notiz",
-   "stellen": 43,
+   "stellen": 44,
    "min": 5.83,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -397,7 +421,7 @@
   },
   {
    "name": "chromium hell 1440 18-mikrofon-hilfe",
-   "stellen": 39,
+   "stellen": 40,
    "min": 4.97,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -415,7 +439,7 @@
   },
   {
    "name": "chromium dunkel 390 02-start",
-   "stellen": 19,
+   "stellen": 20,
    "min": 5.79,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -513,7 +537,7 @@
   },
   {
    "name": "chromium dunkel 390 08-schublade",
-   "stellen": 7,
+   "stellen": 8,
    "min": 7.45,
    "schwaechste": "Nur auf diesem Gerät · höchstens 50 (#schublade-liste > div.gespraeche-fuss > p, rgb(176,195,217) auf #092e57)",
    "ausnahmen": []
@@ -524,6 +548,18 @@
    "min": 5.49,
    "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 390 09b-einstellungen",
+   "stellen": 22,
+   "min": 6.97,
+   "schwaechste": "Hell (#einstellungen-thema > label.segment-wahl > span, rgb(195,211,230) auf #15406b)",
+   "ausnahmen": [
+    "deaktiviert: Benutzerkonto",
+    "deaktiviert: Folgt",
+    "deaktiviert: Praxis-Einstellungen",
+    "deaktiviert: Datenschutz"
+   ]
   },
   {
    "name": "chromium dunkel 390 10-notizen",
@@ -611,7 +647,7 @@
   },
   {
    "name": "chromium dunkel 1440 02-start",
-   "stellen": 41,
+   "stellen": 42,
    "min": 5.79,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -620,7 +656,7 @@
   },
   {
    "name": "chromium dunkel 1440 03-entwurf",
-   "stellen": 56,
+   "stellen": 57,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -637,7 +673,7 @@
   },
   {
    "name": "chromium dunkel 1440 04-gespeichert-toast",
-   "stellen": 56,
+   "stellen": 57,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -654,7 +690,7 @@
   },
   {
    "name": "chromium dunkel 1440 05-antwort-quellen",
-   "stellen": 59,
+   "stellen": 60,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -671,7 +707,7 @@
   },
   {
    "name": "chromium dunkel 1440 06-bericht",
-   "stellen": 58,
+   "stellen": 59,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -690,7 +726,7 @@
   },
   {
    "name": "chromium dunkel 1440 07-glas-ueber-verlauf",
-   "stellen": 60,
+   "stellen": 61,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -709,7 +745,7 @@
   },
   {
    "name": "chromium dunkel 1440 08-seitenleiste",
-   "stellen": 60,
+   "stellen": 61,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -734,8 +770,20 @@
    "ausnahmen": []
   },
   {
+   "name": "chromium dunkel 1440 09b-einstellungen",
+   "stellen": 21,
+   "min": 6.97,
+   "schwaechste": "Hell (#einstellungen-thema > label.segment-wahl > span, rgb(195,211,230) auf #15406b)",
+   "ausnahmen": [
+    "deaktiviert: Benutzerkonto",
+    "deaktiviert: Folgt",
+    "deaktiviert: Praxis-Einstellungen",
+    "deaktiviert: Datenschutz"
+   ]
+  },
+  {
    "name": "chromium dunkel 1440 10-notizen",
-   "stellen": 43,
+   "stellen": 44,
    "min": 5.79,
    "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -751,7 +799,7 @@
   },
   {
    "name": "chromium dunkel 1440 12-suche",
-   "stellen": 41,
+   "stellen": 42,
    "min": 5.79,
    "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -760,7 +808,7 @@
   },
   {
    "name": "chromium dunkel 1440 13-suche-leer",
-   "stellen": 32,
+   "stellen": 33,
    "min": 5.79,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -769,7 +817,7 @@
   },
   {
    "name": "chromium dunkel 1440 14-patient",
-   "stellen": 39,
+   "stellen": 40,
    "min": 5.49,
    "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -778,7 +826,7 @@
   },
   {
    "name": "chromium dunkel 1440 15-notiz",
-   "stellen": 43,
+   "stellen": 44,
    "min": 5.79,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -801,7 +849,7 @@
   },
   {
    "name": "chromium dunkel 1440 18-mikrofon-hilfe",
-   "stellen": 39,
+   "stellen": 40,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -819,7 +867,7 @@
   },
   {
    "name": "webkit hell 390 02-start",
-   "stellen": 19,
+   "stellen": 20,
    "min": 5.83,
    "schwaechste": "Platzhalter: Frag Gabi oder diktiere … (div.eingabe-innen > #eingabe > #eingabe-text, rgb(85,100,119) auf #f9fbfd)",
    "ausnahmen": [
@@ -917,7 +965,7 @@
   },
   {
    "name": "webkit hell 390 08-schublade",
-   "stellen": 6,
+   "stellen": 7,
    "min": 5.05,
    "schwaechste": "Nur auf diesem Gerät · höchstens 50 (#schublade-liste > div.gespraeche-fuss > p, rgb(74,88,106) auf #e8edf2)",
    "ausnahmen": []
@@ -928,6 +976,18 @@
    "min": 4.97,
    "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 390 09b-einstellungen",
+   "stellen": 22,
+   "min": 6.22,
+   "schwaechste": "Darstellung (form.dialog-form.einstellungen-form > section.einstellungen-abschnitt > #einstellungen-darstellung, rgb(74,88,106) auf #e9eef4)",
+   "ausnahmen": [
+    "deaktiviert: Benutzerkonto",
+    "deaktiviert: Folgt",
+    "deaktiviert: Praxis-Einstellungen",
+    "deaktiviert: Datenschutz"
+   ]
   },
   {
    "name": "webkit hell 390 10-notizen",
@@ -1015,7 +1075,7 @@
   },
   {
    "name": "webkit hell 1440 02-start",
-   "stellen": 41,
+   "stellen": 42,
    "min": 5.83,
    "schwaechste": "Platzhalter: Frag Gabi oder diktiere … (div.eingabe-innen > #eingabe > #eingabe-text, rgb(85,100,119) auf #f9fbfd)",
    "ausnahmen": [
@@ -1024,7 +1084,7 @@
   },
   {
    "name": "webkit hell 1440 03-entwurf",
-   "stellen": 53,
+   "stellen": 54,
    "min": 4.97,
    "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -1041,7 +1101,7 @@
   },
   {
    "name": "webkit hell 1440 04-gespeichert-toast",
-   "stellen": 52,
+   "stellen": 53,
    "min": 4.97,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -1058,7 +1118,7 @@
   },
   {
    "name": "webkit hell 1440 05-antwort-quellen",
-   "stellen": 55,
+   "stellen": 56,
    "min": 4.97,
    "schwaechste": "Diktat · TP-01 · Beispiel (div.nachricht.von-nutzer > div.blase > div.blase-kopf, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -1075,7 +1135,7 @@
   },
   {
    "name": "webkit hell 1440 06-bericht",
-   "stellen": 57,
+   "stellen": 58,
    "min": 4.97,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -1094,7 +1154,7 @@
   },
   {
    "name": "webkit hell 1440 07-glas-ueber-verlauf",
-   "stellen": 56,
+   "stellen": 57,
    "min": 4.97,
    "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -1113,7 +1173,7 @@
   },
   {
    "name": "webkit hell 1440 08-seitenleiste",
-   "stellen": 56,
+   "stellen": 57,
    "min": 4.97,
    "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -1138,8 +1198,20 @@
    "ausnahmen": []
   },
   {
+   "name": "webkit hell 1440 09b-einstellungen",
+   "stellen": 21,
+   "min": 5.94,
+   "schwaechste": "Darstellung (form.dialog-form.einstellungen-form > section.einstellungen-abschnitt > #einstellungen-darstellung, rgb(74,88,106) auf #eaeff4)",
+   "ausnahmen": [
+    "deaktiviert: Benutzerkonto",
+    "deaktiviert: Folgt",
+    "deaktiviert: Praxis-Einstellungen",
+    "deaktiviert: Datenschutz"
+   ]
+  },
+  {
    "name": "webkit hell 1440 10-notizen",
-   "stellen": 42,
+   "stellen": 43,
    "min": 5.83,
    "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -1155,7 +1227,7 @@
   },
   {
    "name": "webkit hell 1440 12-suche",
-   "stellen": 40,
+   "stellen": 41,
    "min": 5.83,
    "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -1164,7 +1236,7 @@
   },
   {
    "name": "webkit hell 1440 13-suche-leer",
-   "stellen": 31,
+   "stellen": 32,
    "min": 5.83,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -1173,7 +1245,7 @@
   },
   {
    "name": "webkit hell 1440 14-patient",
-   "stellen": 38,
+   "stellen": 39,
    "min": 4.97,
    "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -1182,7 +1254,7 @@
   },
   {
    "name": "webkit hell 1440 15-notiz",
-   "stellen": 42,
+   "stellen": 43,
    "min": 5.83,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
    "ausnahmen": [
@@ -1205,7 +1277,7 @@
   },
   {
    "name": "webkit hell 1440 18-mikrofon-hilfe",
-   "stellen": 38,
+   "stellen": 39,
    "min": 4.97,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
    "ausnahmen": [
@@ -1223,7 +1295,7 @@
   },
   {
    "name": "webkit dunkel 390 02-start",
-   "stellen": 19,
+   "stellen": 20,
    "min": 5.79,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -1321,7 +1393,7 @@
   },
   {
    "name": "webkit dunkel 390 08-schublade",
-   "stellen": 6,
+   "stellen": 7,
    "min": 6.65,
    "schwaechste": "Nur auf diesem Gerät · höchstens 50 (#schublade-liste > div.gespraeche-fuss > p, rgb(176,195,217) auf #0b2c50)",
    "ausnahmen": []
@@ -1332,6 +1404,18 @@
    "min": 5.49,
    "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 390 09b-einstellungen",
+   "stellen": 22,
+   "min": 6.97,
+   "schwaechste": "Hell (#einstellungen-thema > label.segment-wahl > span, rgb(195,211,230) auf #15406b)",
+   "ausnahmen": [
+    "deaktiviert: Benutzerkonto",
+    "deaktiviert: Folgt",
+    "deaktiviert: Praxis-Einstellungen",
+    "deaktiviert: Datenschutz"
+   ]
   },
   {
    "name": "webkit dunkel 390 10-notizen",
@@ -1419,7 +1503,7 @@
   },
   {
    "name": "webkit dunkel 1440 02-start",
-   "stellen": 41,
+   "stellen": 42,
    "min": 5.79,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -1428,7 +1512,7 @@
   },
   {
    "name": "webkit dunkel 1440 03-entwurf",
-   "stellen": 53,
+   "stellen": 54,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -1445,7 +1529,7 @@
   },
   {
    "name": "webkit dunkel 1440 04-gespeichert-toast",
-   "stellen": 52,
+   "stellen": 53,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -1462,7 +1546,7 @@
   },
   {
    "name": "webkit dunkel 1440 05-antwort-quellen",
-   "stellen": 55,
+   "stellen": 56,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -1479,7 +1563,7 @@
   },
   {
    "name": "webkit dunkel 1440 06-bericht",
-   "stellen": 57,
+   "stellen": 58,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -1498,7 +1582,7 @@
   },
   {
    "name": "webkit dunkel 1440 07-glas-ueber-verlauf",
-   "stellen": 56,
+   "stellen": 57,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -1517,7 +1601,7 @@
   },
   {
    "name": "webkit dunkel 1440 08-seitenleiste",
-   "stellen": 56,
+   "stellen": 57,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -1542,8 +1626,20 @@
    "ausnahmen": []
   },
   {
+   "name": "webkit dunkel 1440 09b-einstellungen",
+   "stellen": 21,
+   "min": 6.96,
+   "schwaechste": "Darstellung (form.dialog-form.einstellungen-form > section.einstellungen-abschnitt > #einstellungen-darstellung, rgb(176,195,217) auf #092a4e)",
+   "ausnahmen": [
+    "deaktiviert: Benutzerkonto",
+    "deaktiviert: Folgt",
+    "deaktiviert: Praxis-Einstellungen",
+    "deaktiviert: Datenschutz"
+   ]
+  },
+  {
    "name": "webkit dunkel 1440 10-notizen",
-   "stellen": 42,
+   "stellen": 43,
    "min": 5.79,
    "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -1559,7 +1655,7 @@
   },
   {
    "name": "webkit dunkel 1440 12-suche",
-   "stellen": 40,
+   "stellen": 41,
    "min": 5.79,
    "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -1568,7 +1664,7 @@
   },
   {
    "name": "webkit dunkel 1440 13-suche-leer",
-   "stellen": 31,
+   "stellen": 32,
    "min": 5.79,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -1577,7 +1673,7 @@
   },
   {
    "name": "webkit dunkel 1440 14-patient",
-   "stellen": 38,
+   "stellen": 39,
    "min": 5.49,
    "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
@@ -1586,7 +1682,7 @@
   },
   {
    "name": "webkit dunkel 1440 15-notiz",
-   "stellen": 42,
+   "stellen": 43,
    "min": 5.79,
    "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
    "ausnahmen": [
@@ -1609,11 +1705,523 @@
   },
   {
    "name": "webkit dunkel 1440 18-mikrofon-hilfe",
-   "stellen": 38,
+   "stellen": 39,
    "min": 5.49,
    "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
    "ausnahmen": [
     "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 Brain 20-brain-graph",
+   "stellen": 26,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 Brain 21-brain-detail",
+   "stellen": 28,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 Brain 22-brain-mehr",
+   "stellen": 33,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Rückgängig",
+    "deaktiviert: Wiederholen"
+   ]
+  },
+  {
+   "name": "chromium hell 390 Brain 23-brain-liste",
+   "stellen": 57,
+   "min": 5.35,
+   "schwaechste": "Praxiswissen (#brain-liste > section.brain-gruppe > #brain-gruppe-praxiswissen, rgb(74,88,106) auf #c1e5f5)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 Brain 24-brain-luecken",
+   "stellen": 33,
+   "min": 4.97,
+   "schwaechste": "Ins Brain eintragen (li.karte.brain-luecke > div.knopf-reihe.links > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Platzhalter: Suchen …"
+   ]
+  },
+  {
+   "name": "chromium hell 390 Brain 25-brain-faehigkeiten",
+   "stellen": 46,
+   "min": 5.37,
+   "schwaechste": "5 (div.brain-abschnitt-kopf > h2 > span.zahl.stumm, rgb(74,88,106) auf #c1e5f5)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Platzhalter: Suchen …"
+   ]
+  },
+  {
+   "name": "chromium hell 390 Brain 26-schublade-brain",
+   "stellen": 7,
+   "min": 6.25,
+   "schwaechste": "Sie erscheinen hier – nur auf diesem Ger (div.gespraeche-leer > p > span, rgb(74,88,106) auf #e8eff5)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 1440 Brain 20-brain-graph",
+   "stellen": 69,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 Brain 21-brain-detail",
+   "stellen": 100,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 Brain 22-brain-mehr",
+   "stellen": 76,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fcf)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Rückgängig",
+    "deaktiviert: Wiederholen",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 Brain 23-brain-liste",
+   "stellen": 114,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 Brain 24-brain-luecken",
+   "stellen": 61,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Filter",
+    "deaktiviert: Platzhalter: Im Brain suchen …"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 Brain 25-brain-faehigkeiten",
+   "stellen": 104,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Filter",
+    "deaktiviert: Platzhalter: Im Brain suchen …"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 Brain 20-brain-graph",
+   "stellen": 26,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 Brain 21-brain-detail",
+   "stellen": 28,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 Brain 22-brain-mehr",
+   "stellen": 33,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Rückgängig",
+    "deaktiviert: Wiederholen"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 Brain 23-brain-liste",
+   "stellen": 57,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 Brain 24-brain-luecken",
+   "stellen": 33,
+   "min": 5.49,
+   "schwaechste": "Ins Brain eintragen (li.karte.brain-luecke > div.knopf-reihe.links > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Platzhalter: Suchen …"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 Brain 25-brain-faehigkeiten",
+   "stellen": 46,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Platzhalter: Suchen …"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 Brain 26-schublade-brain",
+   "stellen": 7,
+   "min": 7.89,
+   "schwaechste": "Sie erscheinen hier – nur auf diesem Ger (div.gespraeche-leer > p > span, rgb(176,195,217) auf #082b51)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 1440 Brain 20-brain-graph",
+   "stellen": 69,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 Brain 21-brain-detail",
+   "stellen": 100,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 Brain 22-brain-mehr",
+   "stellen": 76,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Rückgängig",
+    "deaktiviert: Wiederholen",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 Brain 23-brain-liste",
+   "stellen": 114,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 Brain 24-brain-luecken",
+   "stellen": 61,
+   "min": 5.49,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Filter",
+    "deaktiviert: Platzhalter: Im Brain suchen …"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 Brain 25-brain-faehigkeiten",
+   "stellen": 104,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Filter",
+    "deaktiviert: Platzhalter: Im Brain suchen …"
+   ]
+  },
+  {
+   "name": "webkit hell 390 Brain 20-brain-graph",
+   "stellen": 26,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 Brain 21-brain-detail",
+   "stellen": 28,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 Brain 22-brain-mehr",
+   "stellen": 33,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Rückgängig",
+    "deaktiviert: Wiederholen"
+   ]
+  },
+  {
+   "name": "webkit hell 390 Brain 23-brain-liste",
+   "stellen": 57,
+   "min": 5.35,
+   "schwaechste": "Praxiswissen (#brain-liste > section.brain-gruppe > #brain-gruppe-praxiswissen, rgb(74,88,106) auf #c1e5f5)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 Brain 24-brain-luecken",
+   "stellen": 33,
+   "min": 4.97,
+   "schwaechste": "Ins Brain eintragen (li.karte.brain-luecke > div.knopf-reihe.links > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Platzhalter: Suchen …"
+   ]
+  },
+  {
+   "name": "webkit hell 390 Brain 25-brain-faehigkeiten",
+   "stellen": 46,
+   "min": 5.37,
+   "schwaechste": "5 (div.brain-abschnitt-kopf > h2 > span.zahl.stumm, rgb(74,88,106) auf #c1e5f5)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Platzhalter: Suchen …"
+   ]
+  },
+  {
+   "name": "webkit hell 390 Brain 26-schublade-brain",
+   "stellen": 7,
+   "min": 6.15,
+   "schwaechste": "Sie erscheinen hier – nur auf diesem Ger (div.gespraeche-leer > p > span, rgb(74,88,106) auf #eaeff4)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 1440 Brain 20-brain-graph",
+   "stellen": 69,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 Brain 21-brain-detail",
+   "stellen": 100,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 Brain 22-brain-mehr",
+   "stellen": 76,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Rückgängig",
+    "deaktiviert: Wiederholen",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 Brain 23-brain-liste",
+   "stellen": 114,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 Brain 24-brain-luecken",
+   "stellen": 61,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Filter",
+    "deaktiviert: Platzhalter: Im Brain suchen …"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 Brain 25-brain-faehigkeiten",
+   "stellen": 104,
+   "min": 4.97,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Filter",
+    "deaktiviert: Platzhalter: Im Brain suchen …"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 Brain 20-brain-graph",
+   "stellen": 26,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 Brain 21-brain-detail",
+   "stellen": 28,
+   "min": 4.68,
+   "schwaechste": "PhysioWorks (div.kopf-marke > a.marke > span.marke-unter, rgb(147,200,251) auf #0c3259)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 Brain 22-brain-mehr",
+   "stellen": 33,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Rückgängig",
+    "deaktiviert: Wiederholen"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 Brain 23-brain-liste",
+   "stellen": 57,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 Brain 24-brain-luecken",
+   "stellen": 33,
+   "min": 5.49,
+   "schwaechste": "Ins Brain eintragen (li.karte.brain-luecke > div.knopf-reihe.links > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Platzhalter: Suchen …"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 Brain 25-brain-faehigkeiten",
+   "stellen": 46,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Platzhalter: Suchen …"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 Brain 26-schublade-brain",
+   "stellen": 7,
+   "min": 7.91,
+   "schwaechste": "Sie erscheinen hier – nur auf diesem Ger (div.gespraeche-leer > p > span, rgb(176,195,217) auf #092a4e)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 1440 Brain 20-brain-graph",
+   "stellen": 69,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 Brain 21-brain-detail",
+   "stellen": 100,
+   "min": 5.31,
+   "schwaechste": "Verweist auf (div.brain-detail-rumpf > section.brain-teil > h3.augenbraue, rgb(176,195,217) auf #0b2d52)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 Brain 22-brain-mehr",
+   "stellen": 76,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Rückgängig",
+    "deaktiviert: Wiederholen",
+    "Legenden-Zeichen (Grafik)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 Brain 23-brain-liste",
+   "stellen": 114,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 Brain 24-brain-luecken",
+   "stellen": 61,
+   "min": 5.49,
+   "schwaechste": "Neu (div.brain-werkzeuge > button.knopf.primaer > span, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Filter",
+    "deaktiviert: Platzhalter: Im Brain suchen …"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 Brain 25-brain-faehigkeiten",
+   "stellen": 104,
+   "min": 5.31,
+   "schwaechste": "3 (#brain-reiter > button.brain-reiter-knopf > span.badge.warn, rgb(255,192,120) auf #364f64)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)",
+    "deaktiviert: Filter",
+    "deaktiviert: Platzhalter: Im Brain suchen …"
    ]
   }
  ],
@@ -1633,7 +2241,7 @@
    "name": "chromium hell 390 Kopfzeile",
    "mit": {
     "mittel": 0.01,
-    "max": 0.89
+    "max": 1
    },
    "ohne": {
     "mittel": 0.62,
@@ -1781,6 +2389,11 @@
      "sel": "#dialog-info",
      "filter": "none",
      "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
     }
    ],
    "uebergang": "0s"
@@ -1810,6 +2423,11 @@
     },
     {
      "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
      "filter": "none",
      "alpha": 1
     }
@@ -1843,6 +2461,11 @@
      "sel": "#dialog-info",
      "filter": "none",
      "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
     }
    ],
    "uebergang": "0s"
@@ -1872,6 +2495,11 @@
     },
     {
      "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
      "filter": "none",
      "alpha": 1
     }
@@ -1905,6 +2533,11 @@
      "sel": "#dialog-info",
      "filter": "none",
      "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
     }
    ],
    "uebergang": "0s"
@@ -1936,9 +2569,158 @@
      "sel": "#dialog-info",
      "filter": "none",
      "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
     }
    ],
    "uebergang": "0s"
+  },
+  {
+   "name": "chromium hell: Glas-Effekt aus (Einstellungen)",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0.12s, 0.12s, 0.12s, 0.12s, 0.12s"
+  },
+  {
+   "name": "chromium dunkel: Glas-Effekt aus (Einstellungen)",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0.12s, 0.12s, 0.12s, 0.12s, 0.12s"
+  },
+  {
+   "name": "webkit hell: Glas-Effekt aus (Einstellungen)",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0.12s, 0.12s, 0.12s, 0.12s, 0.12s"
+  },
+  {
+   "name": "webkit dunkel: Glas-Effekt aus (Einstellungen)",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0.12s, 0.12s, 0.12s, 0.12s, 0.12s"
   },
   {
    "name": "chromium hell: ohne backdrop-filter (Rückfall)",
@@ -1965,6 +2747,11 @@
     },
     {
      "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
      "filter": "none",
      "alpha": 1
     }
@@ -1998,6 +2785,11 @@
      "sel": "#dialog-info",
      "filter": "none",
      "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
     }
    ],
    "uebergang": "0s"
@@ -2029,6 +2821,11 @@
      "sel": "#dialog-info",
      "filter": "none",
      "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
+     "filter": "none",
+     "alpha": 1
     }
    ],
    "uebergang": "0s"
@@ -2058,6 +2855,11 @@
     },
     {
      "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-einstellungen",
      "filter": "none",
      "alpha": 1
     }
@@ -2195,8 +2997,8 @@
    "titel": "Red Hat Display",
    "titelGewicht": "700",
    "res": [
-    "red-hat-display-latin-700-normal.woff2",
-    "dm-sans-latin-wght-normal.woff2"
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
    ]
   },
   {
