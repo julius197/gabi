@@ -183,7 +183,8 @@ async function demoAblauf(geraet, schema) {
   pruefe((await page.textContent("#test-badge")).includes("Demo"), `${name}: Demo-Modus, Badge statt Banner`);
   pruefe((await page.locator(".vorschlag").count()) === 4, `${name}: Begrüßung mit 4 Schnellaktionen`);
   const dunkel = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  pruefe(schema === "dark" ? dunkel === "rgb(12, 18, 19)" : dunkel === "rgb(243, 243, 240)", `${name}: Farben folgen dem System (${dunkel})`);
+  // v2.3: PhysioWorks-Grund – Hell #EDF4FA, Dunkel Marine #072D53 (vorher #F3F3F0 / #0C1213)
+  pruefe(schema === "dark" ? dunkel === "rgb(7, 45, 83)" : dunkel === "rgb(237, 244, 250)", `${name}: Farben folgen dem System (${dunkel})`);
   await bild("01", "start");
 
   // Diktat per Push-to-Talk
