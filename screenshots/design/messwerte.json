@@ -1,0 +1,2373 @@
+{
+ "kontrast": [
+  {
+   "name": "chromium hell 390 01-zugang",
+   "stellen": 11,
+   "min": 4.97,
+   "schwaechste": "G (div.zugang-inhalt > div.zugang-marke > div.zugang-zeichen, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 02-start",
+   "stellen": 19,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 03-entwurf",
+   "stellen": 25,
+   "min": 4.97,
+   "schwaechste": "Speichern (article.karte.gespraechs-karte > footer.karte-fuss > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 04-gespeichert-toast",
+   "stellen": 36,
+   "min": 4.97,
+   "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fcf)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 05-antwort-quellen",
+   "stellen": 29,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 06-bericht",
+   "stellen": 30,
+   "min": 5.83,
+   "schwaechste": "Platzhalter: Frag Gabi oder diktiere … (div.eingabe-innen > #eingabe > #eingabe-text, rgb(85,100,119) auf #f9fbfd)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 07-glas-ueber-verlauf",
+   "stellen": 26,
+   "min": 4.97,
+   "schwaechste": "Was wollte TP-01? (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 08-schublade",
+   "stellen": 7,
+   "min": 5.55,
+   "schwaechste": "Nur auf diesem Gerät · höchstens 50 (#schublade-liste > div.gespraeche-fuss > p, rgb(74,88,106) auf #d6e6f7)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 390 09-dialog-info",
+   "stellen": 17,
+   "min": 4.97,
+   "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 390 10-notizen",
+   "stellen": 21,
+   "min": 5.69,
+   "schwaechste": "Neuer Test-Patient (#ordner-inhalt > div.raster > button.patient-karte.neu-karte, rgb(21,86,159) auf #d7e7f4)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 11-dialog-neuer-patient",
+   "stellen": 9,
+   "min": 4.97,
+   "schwaechste": "Anlegen (#patient-form > div.dialog-knoepfe > #patient-anlegen, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 390 12-suche",
+   "stellen": 20,
+   "min": 5.83,
+   "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 13-suche-leer",
+   "stellen": 10,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 14-patient",
+   "stellen": 18,
+   "min": 4.97,
+   "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 15-notiz",
+   "stellen": 23,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 390 16-dialog-rueckfrage",
+   "stellen": 5,
+   "min": 6.74,
+   "schwaechste": "Löschen (form.dialog-form > div.dialog-knoepfe > #frage-ja, rgb(155,15,8) auf #ede2e6)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 390 17-offline",
+   "stellen": 6,
+   "min": 4.97,
+   "schwaechste": "Nochmal versuchen (div.karte > div.knopf-reihe > #offline-erneut, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 390 18-mikrofon-hilfe",
+   "stellen": 20,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 01-zugang",
+   "stellen": 11,
+   "min": 4.97,
+   "schwaechste": "G (div.zugang-inhalt > div.zugang-marke > div.zugang-zeichen, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 02-start",
+   "stellen": 41,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 03-entwurf",
+   "stellen": 56,
+   "min": 4.97,
+   "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 04-gespeichert-toast",
+   "stellen": 56,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 05-antwort-quellen",
+   "stellen": 59,
+   "min": 4.97,
+   "schwaechste": "Diktat · TP-01 · Beispiel (div.nachricht.von-nutzer > div.blase > div.blase-kopf, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 06-bericht",
+   "stellen": 58,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 07-glas-ueber-verlauf",
+   "stellen": 60,
+   "min": 4.97,
+   "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 08-seitenleiste",
+   "stellen": 60,
+   "min": 4.97,
+   "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 09-dialog-info",
+   "stellen": 16,
+   "min": 4.97,
+   "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 1440 10-notizen",
+   "stellen": 43,
+   "min": 5.83,
+   "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 11-dialog-neuer-patient",
+   "stellen": 9,
+   "min": 4.97,
+   "schwaechste": "Anlegen (#patient-form > div.dialog-knoepfe > #patient-anlegen, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 1440 12-suche",
+   "stellen": 41,
+   "min": 5.83,
+   "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 13-suche-leer",
+   "stellen": 32,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 14-patient",
+   "stellen": 39,
+   "min": 4.97,
+   "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 15-notiz",
+   "stellen": 43,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium hell 1440 16-dialog-rueckfrage",
+   "stellen": 5,
+   "min": 6.74,
+   "schwaechste": "Löschen (form.dialog-form > div.dialog-knoepfe > #frage-ja, rgb(155,15,8) auf #ede2e6)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 1440 17-offline",
+   "stellen": 5,
+   "min": 4.97,
+   "schwaechste": "Nochmal versuchen (div.karte > div.knopf-reihe > #offline-erneut, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium hell 1440 18-mikrofon-hilfe",
+   "stellen": 39,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 01-zugang",
+   "stellen": 11,
+   "min": 5.49,
+   "schwaechste": "G (div.zugang-inhalt > div.zugang-marke > div.zugang-zeichen, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 02-start",
+   "stellen": 19,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 03-entwurf",
+   "stellen": 25,
+   "min": 5.49,
+   "schwaechste": "Speichern (article.karte.gespraechs-karte > footer.karte-fuss > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 04-gespeichert-toast",
+   "stellen": 36,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 05-antwort-quellen",
+   "stellen": 29,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 06-bericht",
+   "stellen": 30,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 07-glas-ueber-verlauf",
+   "stellen": 26,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 08-schublade",
+   "stellen": 7,
+   "min": 7.45,
+   "schwaechste": "Nur auf diesem Gerät · höchstens 50 (#schublade-liste > div.gespraeche-fuss > p, rgb(176,195,217) auf #092e57)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 390 09-dialog-info",
+   "stellen": 17,
+   "min": 5.49,
+   "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 390 10-notizen",
+   "stellen": 21,
+   "min": 5.79,
+   "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 11-dialog-neuer-patient",
+   "stellen": 9,
+   "min": 5.49,
+   "schwaechste": "Anlegen (#patient-form > div.dialog-knoepfe > #patient-anlegen, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 390 12-suche",
+   "stellen": 20,
+   "min": 5.79,
+   "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 13-suche-leer",
+   "stellen": 10,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 14-patient",
+   "stellen": 18,
+   "min": 5.49,
+   "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 15-notiz",
+   "stellen": 23,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390 16-dialog-rueckfrage",
+   "stellen": 5,
+   "min": 7.63,
+   "schwaechste": "Löschen (form.dialog-form > div.dialog-knoepfe > #frage-ja, rgb(255,180,174) auf #263051)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 390 17-offline",
+   "stellen": 6,
+   "min": 5.49,
+   "schwaechste": "Nochmal versuchen (div.karte > div.knopf-reihe > #offline-erneut, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 390 18-mikrofon-hilfe",
+   "stellen": 20,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 01-zugang",
+   "stellen": 11,
+   "min": 5.49,
+   "schwaechste": "G (div.zugang-inhalt > div.zugang-marke > div.zugang-zeichen, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 02-start",
+   "stellen": 41,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 03-entwurf",
+   "stellen": 56,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 04-gespeichert-toast",
+   "stellen": 56,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 05-antwort-quellen",
+   "stellen": 59,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 06-bericht",
+   "stellen": 58,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 07-glas-ueber-verlauf",
+   "stellen": 60,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 08-seitenleiste",
+   "stellen": 60,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 09-dialog-info",
+   "stellen": 16,
+   "min": 5.49,
+   "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 1440 10-notizen",
+   "stellen": 43,
+   "min": 5.79,
+   "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 11-dialog-neuer-patient",
+   "stellen": 9,
+   "min": 5.49,
+   "schwaechste": "Anlegen (#patient-form > div.dialog-knoepfe > #patient-anlegen, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 1440 12-suche",
+   "stellen": 41,
+   "min": 5.79,
+   "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 13-suche-leer",
+   "stellen": 32,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 14-patient",
+   "stellen": 39,
+   "min": 5.49,
+   "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 15-notiz",
+   "stellen": 43,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440 16-dialog-rueckfrage",
+   "stellen": 5,
+   "min": 7.63,
+   "schwaechste": "Löschen (form.dialog-form > div.dialog-knoepfe > #frage-ja, rgb(255,180,174) auf #263051)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 1440 17-offline",
+   "stellen": 5,
+   "min": 5.49,
+   "schwaechste": "Nochmal versuchen (div.karte > div.knopf-reihe > #offline-erneut, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "chromium dunkel 1440 18-mikrofon-hilfe",
+   "stellen": 39,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 01-zugang",
+   "stellen": 11,
+   "min": 4.97,
+   "schwaechste": "G (div.zugang-inhalt > div.zugang-marke > div.zugang-zeichen, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 02-start",
+   "stellen": 19,
+   "min": 5.83,
+   "schwaechste": "Platzhalter: Frag Gabi oder diktiere … (div.eingabe-innen > #eingabe > #eingabe-text, rgb(85,100,119) auf #f9fbfd)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 03-entwurf",
+   "stellen": 25,
+   "min": 4.97,
+   "schwaechste": "Speichern (article.karte.gespraechs-karte > footer.karte-fuss > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 04-gespeichert-toast",
+   "stellen": 29,
+   "min": 4.97,
+   "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 05-antwort-quellen",
+   "stellen": 29,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 06-bericht",
+   "stellen": 30,
+   "min": 5.29,
+   "schwaechste": "Gabi kann sich irren – bitte prüfen. Nur (#eingabe-bereich > div.eingabe-innen > p.eingabe-fuss, rgb(59,72,88) auf #e8eef6)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 07-glas-ueber-verlauf",
+   "stellen": 26,
+   "min": 4.97,
+   "schwaechste": "Was wollte TP-01? (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 08-schublade",
+   "stellen": 6,
+   "min": 5.05,
+   "schwaechste": "Nur auf diesem Gerät · höchstens 50 (#schublade-liste > div.gespraeche-fuss > p, rgb(74,88,106) auf #e8edf2)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 390 09-dialog-info",
+   "stellen": 17,
+   "min": 4.97,
+   "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 390 10-notizen",
+   "stellen": 21,
+   "min": 5.69,
+   "schwaechste": "Neuer Test-Patient (#ordner-inhalt > div.raster > button.patient-karte.neu-karte, rgb(21,86,159) auf #d7e7f4)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 11-dialog-neuer-patient",
+   "stellen": 9,
+   "min": 4.97,
+   "schwaechste": "Anlegen (#patient-form > div.dialog-knoepfe > #patient-anlegen, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 390 12-suche",
+   "stellen": 20,
+   "min": 5.83,
+   "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 13-suche-leer",
+   "stellen": 10,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 14-patient",
+   "stellen": 18,
+   "min": 4.97,
+   "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 15-notiz",
+   "stellen": 23,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 390 16-dialog-rueckfrage",
+   "stellen": 5,
+   "min": 6.49,
+   "schwaechste": "Die Notiz vom 15.11.2026 (TP-01) wird en (#dialog-frage > form.dialog-form > #frage-text, rgb(59,72,88) auf #ebeff3)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 390 17-offline",
+   "stellen": 6,
+   "min": 4.97,
+   "schwaechste": "Nochmal versuchen (div.karte > div.knopf-reihe > #offline-erneut, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 390 18-mikrofon-hilfe",
+   "stellen": 20,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 01-zugang",
+   "stellen": 11,
+   "min": 4.97,
+   "schwaechste": "G (div.zugang-inhalt > div.zugang-marke > div.zugang-zeichen, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 02-start",
+   "stellen": 41,
+   "min": 5.83,
+   "schwaechste": "Platzhalter: Frag Gabi oder diktiere … (div.eingabe-innen > #eingabe > #eingabe-text, rgb(85,100,119) auf #f9fbfd)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 03-entwurf",
+   "stellen": 53,
+   "min": 4.97,
+   "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 04-gespeichert-toast",
+   "stellen": 52,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 05-antwort-quellen",
+   "stellen": 55,
+   "min": 4.97,
+   "schwaechste": "Diktat · TP-01 · Beispiel (div.nachricht.von-nutzer > div.blase > div.blase-kopf, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 06-bericht",
+   "stellen": 57,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 07-glas-ueber-verlauf",
+   "stellen": 56,
+   "min": 4.97,
+   "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 08-seitenleiste",
+   "stellen": 56,
+   "min": 4.97,
+   "schwaechste": "Knie rechts. Patientin berichtet weniger (#nachrichten > div.nachricht.von-nutzer > div.blase, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 09-dialog-info",
+   "stellen": 16,
+   "min": 4.97,
+   "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 1440 10-notizen",
+   "stellen": 42,
+   "min": 5.83,
+   "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 11-dialog-neuer-patient",
+   "stellen": 9,
+   "min": 4.97,
+   "schwaechste": "Anlegen (#patient-form > div.dialog-knoepfe > #patient-anlegen, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 1440 12-suche",
+   "stellen": 40,
+   "min": 5.83,
+   "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 13-suche-leer",
+   "stellen": 31,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 14-patient",
+   "stellen": 38,
+   "min": 4.97,
+   "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 15-notiz",
+   "stellen": 42,
+   "min": 5.83,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(21,86,159) auf #d6e7fb)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit hell 1440 16-dialog-rueckfrage",
+   "stellen": 5,
+   "min": 6.5,
+   "schwaechste": "Die Notiz vom 15.11.2026 (TP-01) wird en (#dialog-frage > form.dialog-form > #frage-text, rgb(59,72,88) auf #e9eef2)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 1440 17-offline",
+   "stellen": 5,
+   "min": 4.97,
+   "schwaechste": "Nochmal versuchen (div.karte > div.knopf-reihe > #offline-erneut, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit hell 1440 18-mikrofon-hilfe",
+   "stellen": 38,
+   "min": 4.97,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(255,255,255) auf #1a6fd0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 01-zugang",
+   "stellen": 11,
+   "min": 5.49,
+   "schwaechste": "G (div.zugang-inhalt > div.zugang-marke > div.zugang-zeichen, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 02-start",
+   "stellen": 19,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 03-entwurf",
+   "stellen": 25,
+   "min": 5.19,
+   "schwaechste": "PhysioWorks (div.kopf-marke > a.marke > span.marke-unter, rgb(147,200,251) auf #093056)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 04-gespeichert-toast",
+   "stellen": 29,
+   "min": 4.68,
+   "schwaechste": "PhysioWorks (div.kopf-marke > a.marke > span.marke-unter, rgb(147,200,251) auf #0e3359)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 05-antwort-quellen",
+   "stellen": 29,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 06-bericht",
+   "stellen": 30,
+   "min": 4.68,
+   "schwaechste": "PhysioWorks (div.kopf-marke > a.marke > span.marke-unter, rgb(147,200,251) auf #0a3057)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 07-glas-ueber-verlauf",
+   "stellen": 26,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 08-schublade",
+   "stellen": 6,
+   "min": 6.65,
+   "schwaechste": "Nur auf diesem Gerät · höchstens 50 (#schublade-liste > div.gespraeche-fuss > p, rgb(176,195,217) auf #0b2c50)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 390 09-dialog-info",
+   "stellen": 17,
+   "min": 5.49,
+   "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 390 10-notizen",
+   "stellen": 21,
+   "min": 5.79,
+   "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 11-dialog-neuer-patient",
+   "stellen": 9,
+   "min": 5.49,
+   "schwaechste": "Anlegen (#patient-form > div.dialog-knoepfe > #patient-anlegen, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 390 12-suche",
+   "stellen": 20,
+   "min": 5.79,
+   "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 13-suche-leer",
+   "stellen": 10,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 14-patient",
+   "stellen": 18,
+   "min": 5.49,
+   "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 15-notiz",
+   "stellen": 23,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390 16-dialog-rueckfrage",
+   "stellen": 5,
+   "min": 7.64,
+   "schwaechste": "Löschen (form.dialog-form > div.dialog-knoepfe > #frage-ja, rgb(255,180,174) auf #27304f)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 390 17-offline",
+   "stellen": 6,
+   "min": 5.49,
+   "schwaechste": "Nochmal versuchen (div.karte > div.knopf-reihe > #offline-erneut, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 390 18-mikrofon-hilfe",
+   "stellen": 20,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 01-zugang",
+   "stellen": 11,
+   "min": 5.49,
+   "schwaechste": "G (div.zugang-inhalt > div.zugang-marke > div.zugang-zeichen, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 02-start",
+   "stellen": 41,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 03-entwurf",
+   "stellen": 53,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 04-gespeichert-toast",
+   "stellen": 52,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 05-antwort-quellen",
+   "stellen": 55,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 06-bericht",
+   "stellen": 57,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 07-glas-ueber-verlauf",
+   "stellen": 56,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 08-seitenleiste",
+   "stellen": 56,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "deaktiviert: TP-01",
+    "deaktiviert: Knie rechts",
+    "deaktiviert: TP-02",
+    "deaktiviert: Schulter links",
+    "deaktiviert: TP-03",
+    "deaktiviert: LWS",
+    "deaktiviert: Neuer Test-Patient",
+    "deaktiviert: Beispieldiktat nehmen",
+    "deaktiviert: Verlaufsbericht",
+    "deaktiviert: Zusammenfassung",
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 09-dialog-info",
+   "stellen": 16,
+   "min": 5.49,
+   "schwaechste": "Verstanden (form.dialog-form > #info-knoepfe > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 1440 10-notizen",
+   "stellen": 42,
+   "min": 5.79,
+   "schwaechste": "01 (div.raster > a.patient-karte > span.patient-kachel, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 11-dialog-neuer-patient",
+   "stellen": 9,
+   "min": 5.49,
+   "schwaechste": "Anlegen (#patient-form > div.dialog-knoepfe > #patient-anlegen, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 1440 12-suche",
+   "stellen": 40,
+   "min": 5.79,
+   "schwaechste": "TP-01 (a.notiz-karte > div.notiz-karte-kopf > span.badge.akzent, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 13-suche-leer",
+   "stellen": 31,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 14-patient",
+   "stellen": 38,
+   "min": 5.49,
+   "schwaechste": "Behandlung diktieren (div.leser-kopf > div.leser-aktionen > button.knopf.primaer, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 15-notiz",
+   "stellen": 42,
+   "min": 5.79,
+   "schwaechste": "Demo (#kopf > div.kopf-marke > #test-badge, rgb(147,200,251) auf #11436f)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440 16-dialog-rueckfrage",
+   "stellen": 5,
+   "min": 7.64,
+   "schwaechste": "Löschen (form.dialog-form > div.dialog-knoepfe > #frage-ja, rgb(255,180,174) auf #27304f)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 1440 17-offline",
+   "stellen": 5,
+   "min": 5.49,
+   "schwaechste": "Nochmal versuchen (div.karte > div.knopf-reihe > #offline-erneut, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": []
+  },
+  {
+   "name": "webkit dunkel 1440 18-mikrofon-hilfe",
+   "stellen": 38,
+   "min": 5.49,
+   "schwaechste": "G (#nachrichten > div.nachricht.von-gabi > div.avatar, rgb(4,24,46) auf #3391f0)",
+   "ausnahmen": [
+    "Markenpunkt „.“ (Logo)"
+   ]
+  }
+ ],
+ "glas": [
+  {
+   "name": "chromium hell 390 Eingabe-Band",
+   "mit": {
+    "mittel": 0.02,
+    "max": 0.89
+   },
+   "ohne": {
+    "mittel": 0.71,
+    "max": 42.74
+   }
+  },
+  {
+   "name": "chromium hell 390 Kopfzeile",
+   "mit": {
+    "mittel": 0.01,
+    "max": 0.89
+   },
+   "ohne": {
+    "mittel": 0.62,
+    "max": 44.11
+   }
+  },
+  {
+   "name": "chromium hell 1440 Eingabe-Band",
+   "mit": {
+    "mittel": 0.03,
+    "max": 1
+   },
+   "ohne": {
+    "mittel": 0.57,
+    "max": 41.63
+   }
+  },
+  {
+   "name": "chromium dunkel 390 Eingabe-Band",
+   "mit": {
+    "mittel": 0.01,
+    "max": 1
+   },
+   "ohne": {
+    "mittel": 0.53,
+    "max": 36.22
+   }
+  },
+  {
+   "name": "chromium dunkel 390 Kopfzeile",
+   "mit": {
+    "mittel": 0.01,
+    "max": 0.89
+   },
+   "ohne": {
+    "mittel": 0.51,
+    "max": 35.3
+   }
+  },
+  {
+   "name": "chromium dunkel 1440 Eingabe-Band",
+   "mit": {
+    "mittel": 0.02,
+    "max": 0.89
+   },
+   "ohne": {
+    "mittel": 0.45,
+    "max": 35.63
+   }
+  },
+  {
+   "name": "webkit hell 390",
+   "hinweis": "Testbrowser zeichnet backdrop-filter nicht (Kontrollprobe) – nicht messbar"
+  },
+  {
+   "name": "webkit hell 1440",
+   "hinweis": "Testbrowser zeichnet backdrop-filter nicht (Kontrollprobe) – nicht messbar"
+  },
+  {
+   "name": "webkit dunkel 390",
+   "hinweis": "Testbrowser zeichnet backdrop-filter nicht (Kontrollprobe) – nicht messbar"
+  },
+  {
+   "name": "webkit dunkel 1440",
+   "hinweis": "Testbrowser zeichnet backdrop-filter nicht (Kontrollprobe) – nicht messbar"
+  },
+  {
+   "name": "chromium hell 320 Eingabe-Band",
+   "mit": {
+    "mittel": 0.03,
+    "max": 1
+   },
+   "ohne": {
+    "mittel": 0.83,
+    "max": 42.74
+   }
+  },
+  {
+   "name": "chromium hell 320 Kopfzeile",
+   "mit": {
+    "mittel": 0.01,
+    "max": 0.89
+   },
+   "ohne": {
+    "mittel": 0.61,
+    "max": 35.41
+   }
+  },
+  {
+   "name": "chromium hell 768 Eingabe-Band",
+   "mit": {
+    "mittel": 0.04,
+    "max": 0.89
+   },
+   "ohne": {
+    "mittel": 0.69,
+    "max": 42.81
+   }
+  },
+  {
+   "name": "chromium hell 768 Kopfzeile",
+   "mit": {
+    "mittel": 0.07,
+    "max": 1.19
+   },
+   "ohne": {
+    "mittel": 2.63,
+    "max": 34.87
+   }
+  },
+  {
+   "name": "webkit hell 320",
+   "hinweis": "Testbrowser zeichnet backdrop-filter nicht (Kontrollprobe) – nicht messbar"
+  },
+  {
+   "name": "webkit hell 768",
+   "hinweis": "Testbrowser zeichnet backdrop-filter nicht (Kontrollprobe) – nicht messbar"
+  }
+ ],
+ "deckend": [
+  {
+   "name": "chromium hell: „Bewegung reduzieren“",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "chromium dunkel: „Bewegung reduzieren“",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "webkit hell: „Bewegung reduzieren“",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "webkit dunkel: „Bewegung reduzieren“",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "chromium hell: „Transparenz reduzieren“",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "chromium dunkel: „Transparenz reduzieren“",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "chromium hell: ohne backdrop-filter (Rückfall)",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "chromium dunkel: ohne backdrop-filter (Rückfall)",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "webkit hell: ohne backdrop-filter (Rückfall)",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  },
+  {
+   "name": "webkit dunkel: ohne backdrop-filter (Rückfall)",
+   "flaechen": [
+    {
+     "sel": ".kopf",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe-bereich::before",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".eingabe",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": ".vorschlag",
+     "filter": "none",
+     "alpha": 1
+    },
+    {
+     "sel": "#dialog-info",
+     "filter": "none",
+     "alpha": 1
+    }
+   ],
+   "uebergang": "0s"
+  }
+ ],
+ "schriften": [
+  {
+   "name": "chromium hell 390",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "chromium hell 1440",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "chromium dunkel 390",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "chromium dunkel 1440",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "webkit hell 390",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "webkit hell 1440",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "webkit dunkel 390",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "red-hat-display-latin-700-normal.woff2",
+    "dm-sans-latin-wght-normal.woff2"
+   ]
+  },
+  {
+   "name": "webkit dunkel 1440",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "chromium hell 320",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "chromium hell 768",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "webkit hell 320",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  },
+  {
+   "name": "webkit hell 768",
+   "dm": [
+    "loaded"
+   ],
+   "rh": [
+    "loaded"
+   ],
+   "inter": false,
+   "checkDm": true,
+   "checkRh": true,
+   "text": "DM Sans",
+   "titel": "Red Hat Display",
+   "titelGewicht": "700",
+   "res": [
+    "dm-sans-latin-wght-normal.woff2",
+    "red-hat-display-latin-700-normal.woff2"
+   ]
+  }
+ ],
+ "anfragen": [],
+ "grund": [
+  {
+   "name": "chromium hell 390",
+   "sprung": 1.54,
+   "roh": 3,
+   "kontrolle": 6.03
+  },
+  {
+   "name": "chromium hell 768",
+   "sprung": 1.23,
+   "roh": 3,
+   "kontrolle": 6.39
+  },
+  {
+   "name": "chromium hell 1440",
+   "sprung": 0.92,
+   "roh": 3,
+   "kontrolle": 6.06
+  },
+  {
+   "name": "chromium dunkel 390",
+   "sprung": 1.5,
+   "roh": 3,
+   "kontrolle": 6.18
+  },
+  {
+   "name": "chromium dunkel 768",
+   "sprung": 1.19,
+   "roh": 3,
+   "kontrolle": 6.16
+  },
+  {
+   "name": "chromium dunkel 1440",
+   "sprung": 0.97,
+   "roh": 3,
+   "kontrolle": 6.16
+  },
+  {
+   "name": "webkit hell 390",
+   "sprung": 1.8,
+   "roh": 3,
+   "kontrolle": 6.63
+  },
+  {
+   "name": "webkit hell 768",
+   "sprung": 1.48,
+   "roh": 3,
+   "kontrolle": 6.2
+  },
+  {
+   "name": "webkit hell 1440",
+   "sprung": 1.06,
+   "roh": 3,
+   "kontrolle": 6.06
+  },
+  {
+   "name": "webkit dunkel 390",
+   "sprung": 1.82,
+   "roh": 3,
+   "kontrolle": 6.25
+  },
+  {
+   "name": "webkit dunkel 768",
+   "sprung": 1.69,
+   "roh": 3,
+   "kontrolle": 6.22
+  },
+  {
+   "name": "webkit dunkel 1440",
+   "sprung": 1.27,
+   "roh": 3,
+   "kontrolle": 6.16
+  }
+ ]
+}

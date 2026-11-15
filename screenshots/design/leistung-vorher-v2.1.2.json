@@ -1,0 +1,173 @@
+{
+ "chromium": "neue Headless-Variante mit GPU (Metal)",
+ "ergebnisse": [
+  {
+   "name": "390 px hell",
+   "glas": true,
+   "art": "skript",
+   "nachrichten": 50,
+   "karten": 6,
+   "bilder": 991,
+   "max": 16.8,
+   "top3": [
+    16.8,
+    16.8,
+    16.8
+   ],
+   "p95": 16.8,
+   "median": 16.7,
+   "ueber33": 0,
+   "ausgelassen": 0,
+   "lang": 0,
+   "langMax": 0,
+   "hoehe": 9904
+  },
+  {
+   "name": "390 px hell",
+   "glas": true,
+   "art": "mausrad",
+   "nachrichten": 50,
+   "karten": 6,
+   "bilder": 807,
+   "max": 33.4,
+   "top3": [
+    33.4,
+    33.4,
+    33.4
+   ],
+   "p95": 16.8,
+   "median": 16.7,
+   "ueber33": 0,
+   "ausgelassen": 16,
+   "lang": 0,
+   "langMax": 0,
+   "hoehe": 9904
+  },
+  {
+   "name": "390 px hell",
+   "glas": false,
+   "art": "skript",
+   "nachrichten": 50,
+   "karten": 6,
+   "bilder": 991,
+   "max": 16.8,
+   "top3": [
+    16.8,
+    16.8,
+    16.8
+   ],
+   "p95": 16.7,
+   "median": 16.7,
+   "ueber33": 0,
+   "ausgelassen": 0,
+   "lang": 0,
+   "langMax": 0,
+   "hoehe": 9904
+  },
+  {
+   "name": "390 px hell",
+   "glas": false,
+   "art": "mausrad",
+   "nachrichten": 50,
+   "karten": 6,
+   "bilder": 810,
+   "max": 33.4,
+   "top3": [
+    33.4,
+    33.4,
+    33.4
+   ],
+   "p95": 16.8,
+   "median": 16.7,
+   "ueber33": 0,
+   "ausgelassen": 17,
+   "lang": 0,
+   "langMax": 0,
+   "hoehe": 9904
+  },
+  {
+   "name": "1440 px hell",
+   "glas": true,
+   "art": "skript",
+   "nachrichten": 50,
+   "karten": 6,
+   "bilder": 765,
+   "max": 16.8,
+   "top3": [
+    16.8,
+    16.8,
+    16.8
+   ],
+   "p95": 16.7,
+   "median": 16.7,
+   "ueber33": 0,
+   "ausgelassen": 0,
+   "lang": 0,
+   "langMax": 0,
+   "hoehe": 7652
+  },
+  {
+   "name": "1440 px hell",
+   "glas": true,
+   "art": "mausrad",
+   "nachrichten": 50,
+   "karten": 6,
+   "bilder": 650,
+   "max": 33.4,
+   "top3": [
+    33.3,
+    33.3,
+    33.4
+   ],
+   "p95": 16.8,
+   "median": 16.7,
+   "ueber33": 0,
+   "ausgelassen": 6,
+   "lang": 0,
+   "langMax": 0,
+   "hoehe": 7652
+  },
+  {
+   "name": "1440 px hell",
+   "glas": false,
+   "art": "skript",
+   "nachrichten": 50,
+   "karten": 6,
+   "bilder": 765,
+   "max": 16.8,
+   "top3": [
+    16.8,
+    16.8,
+    16.8
+   ],
+   "p95": 16.7,
+   "median": 16.7,
+   "ueber33": 0,
+   "ausgelassen": 0,
+   "lang": 0,
+   "langMax": 0,
+   "hoehe": 7652
+  },
+  {
+   "name": "1440 px hell",
+   "glas": false,
+   "art": "mausrad",
+   "nachrichten": 50,
+   "karten": 6,
+   "bilder": 646,
+   "max": 33.4,
+   "top3": [
+    33.4,
+    33.4,
+    33.4
+   ],
+   "p95": 16.8,
+   "median": 16.7,
+   "ueber33": 0,
+   "ausgelassen": 6,
+   "lang": 0,
+   "langMax": 0,
+   "hoehe": 7652
+  }
+ ]
+}

@@ -192,8 +192,8 @@ describe("Versionsstempel", () => {
     for (const m of eigene) expect(`${m[1]}?v=${m[2]}`).toBe(`${m[1]}?v=${version}`);
   });
 
-  it("die Fassung mit Brain heißt 2.2.0-brain – und passt unverändert in eine Adresse", () => {
-    expect(version).toBe("2.2.0-brain");
+  it("die Fassung mit Brain und Design heißt 2.4.0 – und passt unverändert in eine Adresse", () => {
+    expect(version).toBe("2.4.0");
     expect(encodeURIComponent(version)).toBe(version);
     // jede eigene Datei in index.html trägt den Stempel – keine ohne, keine mit einem alten (nur die fremde Bibliothek hat ihre eigene Nummer)
     const eigene = geladen.filter(([datei]) => !datei.startsWith("vendor/") && /\.(js|css)$/.test(datei));

@@ -641,6 +641,177 @@ Gegenproben:
   ```
 - Jetzt am echten iPhone möglich: Eingabefeld (Cursor, Platzhalter), Schublade, Abmelden mit Häkchen, Fokus.
 
+## v2.3 – Design im PhysioWorks-Stil mit Glas (15.11.2026, Branch `gabi-v2-3-design`, nicht live)
+
+Auftrag von Julius (15.11.2026): Oberfläche im PhysioWorks-Stil mit „glassy“ Look, gründlich getestet. Kein Push, kein
+Deploy, keine Live-Änderung, Worker unverändert, nur Testdaten. Keine Funktionsänderung.
+
+**Ausgangsstand:** Einen Branch `gabi-v2-2` (Prompt 3: „Bitte prüfen“/Notiz per Gespräch) gibt es nicht – weder lokal
+noch im Remote, auch kein Hinweis in den Handoffs. Darum von `main` abgezweigt (b2a21d8 = Live-Stand v2.1.2).
+Gearbeitet in einem eigenen Worktree mit eigenem Server (Port 8789): Die Vorschau gegen den Live-Worker
+(`npm run vorschau`, Port 8788, seit 09.11. offen) liefert die Dateien aus `~/Desktop/gabi` – die blieb während der
+Arbeit unberührt. Erst am Ende ist `~/Desktop/gabi` auf `gabi-v2-3-design` umgestellt (zum Ansehen mit
+`npm run lokal`; zurück mit `git checkout main`).
+
+### Was neu ist
+- **Tokens an einer Stelle** (`style.css`, Abschnitt 1): zuerst die PhysioWorks-Grundfarben `--pw-blau` #3391F0,
+  `--pw-marine` #072D53, `--pw-grund` #EDF4FA, `--pw-karte` #F8FAFD, `--pw-flaeche` #DFE7F2, `--pw-text` #1B1E21
+  (+ `--pw-cyan` #62CFF4 für die zweite Lichtfläche), daraus alle Rollen (Text-Stufen, Akzent, Glas, Schatten, Fokus,
+  Warn/Fehler) – je für Hell und Dunkel. Außerhalb der Tokens steht keine Farbe mehr fest im CSS; einzige Ausnahme ist
+  das Abdunkeln in `::backdrop` (ältere Safari erben dort keine Variablen, Werte im Token-Block notiert).
+- **Schriften lokal:** DM Sans als variable Schrift (ein File, 37 KB, latin, alle Gewichte 400–700) und Red Hat Display
+  nur fett 700 (15 KB) für Überschriften, Wortmarke, Karten- und Patiententitel. Aus @fontsource 5.3.0 (npm, nur
+  diese zwei Dateien + OFL-Lizenzen in `assets/fonts/`), beide vorgeladen. Inter ist entfernt. CSP `font-src 'self'`
+  unverändert.
+- **Grund:** ruhiger Verlauf #EDF4FA → #DFE7F2 (Dunkel: Marine #072D53 → #05213F), darüber drei große weiche
+  Lichtflächen (Akzentblau oben rechts, helles Cyan links, Akzentblau unten). Fest hinter allem (`body::before`,
+  `position: fixed`), keine Animation.
+- **Glas** (halbtransparent, `backdrop-filter: blur(18px) saturate(160%)`, feine helle Innenkante, flacher Schatten):
+  Kopfzeile (Handy), Seitenleiste (Laptop), Eingabe-Band mit Chips und Eingabefeld, Schnellaktionen, Entwurfs- und
+  Berichtskarten, Zugangs- und Offline-Karte, Dialoge, Schublade, Toasts.
+- **Weiße Karten** (#F8FAFD, 10 px Ecken, sehr flache Schatten) für Patienten, Notizen und den Notiz-Leser;
+  Knöpfe, Chips und Eingabefeld bleiben rund.
+- **Grün entfällt überall** → Blau: Akzent, Schein hinter leeren Zuständen, Häkchen, Fokusring, Chips, Mikrofon,
+  eigene Blase, Avatar, Streifen, Markenpunkt, Toast-Symbol, PDF.
+- **Marke:** „Gabi.“ bleibt Text (Red Hat Display, Marine, Punkt in #3391F0), Untertitel „PHYSIOWORKS“. Kein Logo,
+  keine Fotos von der Website.
+- **Favicon und Apple-Touch-Icon:** #3391F0 mit weißem G und Marine-Punkt (gleiche Form wie vorher).
+- **PDF:** Akzentstreifen Cyan → #3391F0 → #1A6FD0, „TESTVERSION“-Pill #15569F auf #E4EFFC, Aufzählungspunkte und
+  Verlaufsdaten blau, Grautöne blaugrau. Schrift bleibt Helvetica, Testbanner „Testversion – Testdaten“ bleibt.
+- **Version 2.3.0** (`VERSION` in `app.js` und alle `?v=` in `index.html`), damit Pages nach einem späteren Release
+  sofort die neuen Dateien lädt.
+
+### Entscheidungen
+1. **Akzent #3391F0 nur für Flächen und Symbole.** Weiß darauf hat nur 3,26:1, Marine darauf 4,27:1 – zu wenig für
+   Schrift. Darum: Knöpfe mit Text, eigene Blase und Avatar in #1A6FD0 mit Weiß (4,97:1); Text in Akzentfarbe
+   #15569F (≥ 4,8:1 auch über der stärksten Lichtfläche). Dunkel: Knöpfe #3391F0 mit dunkler Schrift #04182E (5,49:1),
+   Akzent-Text #93C8FB. Fokusring #1A6FD0 bzw. #7DBBF7 (≥ 3:1 auf Grund und Flächen; #3391F0 hätte auf dem Grund nur
+   2,93:1).
+2. **Lichtflächen als Verläufe statt `filter: blur()`:** Kosinus-Abfall in 11 Stufen wie beim bisherigen Schein – sieht
+   aus wie stark weichgezeichnete Flächen, kostet aber keine Unschärfe-Rechnung über den ganzen Bildschirm und zeichnet
+   nie nach. Keine Kanten (gemessen in `tests/design.mjs` Teil G; Chromium dithert die Verläufe mit einem feinen Muster,
+   siehe „Tests angepasst“).
+3. **Text auf Kopfzeile und Eingabe-Band hält 4,5:1 auch ohne Unschärfe:** Playwright-WebKit zeichnet
+   `backdrop-filter` nicht (siehe „Testgrenzen“). Dort liegt der Verlauf nur abgetönt und scharf unter dem Glas. Damit
+   die Schrift auch dann lesbar bleibt (z. B. wenn ein Browser die Unschärfe auslässt): Tönung 78 % (Hell) bzw. 82 %
+   (Dunkel), Untertitel „PHYSIOWORKS“ in Marine (Dunkel: #93C8FB), Hinweiszeile unter dem Feld in Text-2, Hinweise in
+   Marine, Eingabefeld und Chips im Dunkeln fast deckend.
+4. **Handy: höchstens 2–3 Unschärfe-Ebenen übereinander.** Unschärfe nur in Kopfzeile und Eingabe-Band (eine Ebene für
+   Chips, Feld und Hinweis), dazu offene Dialoge, Schublade und Toasts. Karten und Schnellaktionen im Verlauf sind
+   unter 640 px Glas ohne `backdrop-filter` (dahinter liegt nur der ruhige Grund – gleicher Eindruck, keine Ebene pro
+   Karte beim Scrollen). Eigene Blasen deckend. Hinter Dialogen wird nur abgedunkelt, nicht mehr zusätzlich 2 px
+   unscharf.
+5. **Deckend:** ohne `backdrop-filter`-Unterstützung (`@supports not`), bei „Transparenz reduzieren“ und bei „Bewegung
+   reduzieren“ sind alle Glasflächen deckend in denselben Farben. „Bewegung reduzieren“ nimmt jetzt auch die Übergänge
+   ganz weg (vorher 120 ms), Ein-/Ausblenden bleibt kurz wie bisher.
+6. **Kontrast-Korrekturen am Bestand:** Verworfene Entwürfe nicht mehr per `opacity: 0.7` (Schrift fiel unter 4,5:1),
+   sondern als durchsichtige Karte mit Rand und Text-3. Kopfzeile der eigenen Blase („Diktat · TP-01 · Beispiel“)
+   ohne 90 % Deckkraft (4,34 → 4,97:1). Fehlerrot Hell #9B0F08 (vorher #C4170E), Dunkel #FFB4AE.
+7. **Einzige Kontrast-Ausnahme** (neben deaktivierten Knöpfen, WCAG 1.4.3): der Markenpunkt „.“ hinter „Gabi“ in
+   #3391F0 – Logo, trägt keine Information.
+8. **Tastatur-Fokus in der Gesprächsliste** zeigt jetzt dieselbe Fläche wie Zeigen (Stift und Papierkorb liegen auf
+   deckender Fläche; auf Glas passte der alte Übergang auf `--bg` nicht). Reine Darstellung.
+
+### Tests angepasst
+- `tests/v2.mjs` Block 1: erwartete Hintergrundfarbe Hell `rgb(237, 244, 250)` statt `rgb(243, 243, 240)`, Dunkel
+  `rgb(7, 45, 83)` statt `rgb(12, 18, 19)`.
+- `tests/v2.mjs` Block 2b (Schein ohne Kante): misst jetzt **den Schein allein**. Grund: Der Grund ist seit v2.3 ein
+  Verlauf mit drei Lichtflächen, und Chromium dithert jeden Verlauf mit einem feinen, regelmäßigen Muster (je Schicht
+  etwa ±1 Stufe). Über fünf Schichten springen Nachbarpixel um 3–4 Stufen (z. B. Rot Zeile für Zeile 219 ↔ 223), obwohl
+  nirgends eine Kante ist – über 9 px gemittelt bleibt jeder Schritt unter 1 Stufe. Der alte Test erwartete einen flachen
+  Grund und schlug darum an (größter Schritt 3–4 statt ≤ 2). Gegenproben: Grund + Schein ohne Lichtflächen ≤ 1–2;
+  Lichtflächen als weichgezeichnete Schatten statt Verläufe ändern nichts (3–4). Für die Messung bekommt der Grund kurz
+  seine flache Grundfarbe (per CSSOM, CSP unverändert), Messung und Schwelle (≤ 2) sind dieselben. Den Verlauf selbst
+  prüft `tests/design.mjs` Teil G mit einer Messung, die das Muster wegmittelt, und einer eingebauten Kontrollkante.
+- Unit-Tests: nichts angepasst – sie prüfen Regeln, die geblieben sind (Version, Häkchen, Ergebniszeile, Dialog-Fokus).
+
+### Neue Tests
+- `tests/design.mjs` (A–F, siehe Kopf der Datei): Kontrast jeder sichtbaren Textstelle gegen ihren echten Hintergrund –
+  Bild ohne Text, Pixel im Textrahmen gegen die Textfarbe, 2-%-Perzentil, Deckkraft der Vorfahren eingerechnet. Zwei
+  Durchgänge: Inhalt und Glas-Ebenen; bei den Glas-Ebenen bleibt der Verlauf dahinter sichtbar, also wird Text auf Glas
+  mit dem gemessen, was darunter liegt. Platzhalter, Feldinhalte und Auswahllisten zählen mit. Dazu Schriften
+  (document.fonts), kein Fremd-Request und kein CSP-Verstoß, kein seitliches Scrollen bei 320/390/768/1440 px,
+  Glas-Unschärfe (Kantenstärke unter Kopfzeile und Band mit vs. ohne `backdrop-filter`), deckende Varianten. 18
+  Hauptansichten × Chromium/WebKit × Hell/Dunkel × 390/1440 px als Screenshots in `screenshots/design/`.
+- `tests/design-leistung.mjs`: Gespräch mit ≥ 50 Nachrichten (Fragen mit Quellen, Diktate mit Entwurfskarten, Berichte),
+  ganz hinunter und wieder hinauf – Bild für Bild per Skript (1200 px/s) und per Mausrad; Abstand zwischen zwei Bildern
+  (requestAnimationFrame) und lange Frames (long-animation-frame); Vergleich ohne Unschärfe.
+
+### Messwerte
+Alle Werte aus `screenshots/design/messwerte.json` und `leistung.json` (finaler Lauf, 15.11.2026).
+- **Kontrast:** 3 952 Textstellen in 144 Ansichten (18 Ansichten × Chromium/WebKit × Hell/Dunkel × 390/1440 px), alle
+  ≥ 4,5:1. Kleinster Wert je Gruppe: Chromium Hell 4,97 (Weiß auf #1A6FD0, z. B. „Speichern“, Avatar „G“), Chromium
+  Dunkel 5,49 (#04182E auf #3391F0), WebKit Hell 4,97, WebKit Dunkel 4,68 („PHYSIOWORKS“ in der Kopfzeile, gemessen mit
+  scharfem Text dahinter – WebKit zeichnet die Unschärfe nicht, also der ungünstigste Fall). Ausgenommen: deaktivierte
+  Bedienelemente (392 Stellen über alle Ansichten, z. B. ausgegraute Auswahl-Chips) und der Markenpunkt (108).
+- **Schriften:** DM Sans und Red Hat Display in jedem Lauf „loaded“, beide Dateien geladen; Text „DM Sans“, Überschrift
+  „Red Hat Display“ 700; Inter nirgends mehr.
+- **Kein Fremd-Request:** alle Anfragen an die eigene Adresse; kein CSP-Verstoß der App (WebKit-Auswahlliste siehe
+  Testgrenzen).
+- **Kein seitliches Scrollen:** bei 320, 390, 768 und 1440 px in allen 18 Ansichten, Chromium und WebKit.
+- **Glas wirkt (Chromium):** Kantenstärke des Verlaufs unter dem Glas (eigener Inhalt ausgeblendet) – mit Unschärfe
+  höchstens 0,9–1,2 Stufen, ohne Unschärfe 35–44 Stufen (Kopfzeile und Eingabe-Band, 320/390/768/1440, Hell/Dunkel).
+  WebKit: nicht messbar (Testgrenze).
+- **Grund ohne Kante:** größter Sprung zwischen 8×8-Mitteln 0,9–1,8 Stufen (Schwelle 3), roh springt das Dither-Muster
+  um bis zu 3; die eingebaute Kontrollkante wurde mit 6,0–6,6 Stufen sicher erkannt.
+- **Deckend:** „Bewegung reduzieren“ (Chromium + WebKit), „Transparenz reduzieren“ (Chromium per CDP) und der
+  `@supports not`-Rückfall (eingespielt, Chromium + WebKit): Kopfzeile, Band, Eingabefeld, Schnellaktion und Dialog
+  ohne `backdrop-filter`, Fläche deckend (Alpha 1), Übergänge 0 s.
+- **Scroll-Leistung** (Chromium, neue Headless-Variante mit GPU/Metal, Gespräch mit 50 Nachrichten und 6 Karten, ganz
+  hinunter und wieder hinauf, Last des Macs 3–5):
+  | | Bild für Bild (1200 px/s) | Mausrad |
+  |---|---|---|
+  | 390 px, mit Glas | 983 Bilder, längstes 16,8 ms, 0 ausgelassen | 807 Bilder, längstes 33,4 ms, 21× ein Bild ausgelassen |
+  | 390 px, Unschärfe aus | 983 Bilder, 16,8 ms, 0 | 810 Bilder, 33,4 ms, 21× |
+  | 390 px, alter Stand v2.1.2 | 991 Bilder, 16,8 ms, 0 | 807 Bilder, 33,4 ms, 16× |
+  | 1440 px, mit Glas | 765 Bilder, 16,8 ms, 0 | 646 Bilder, 33,4 ms, 4× |
+  | 1440 px, Unschärfe aus | 765 Bilder, 16,8 ms, 0 | 645 Bilder, 33,4 ms, 6× |
+  | 1440 px, alter Stand v2.1.2 | 765 Bilder, 16,8 ms, 0 | 650 Bilder, 33,4 ms, 6× |
+
+  Kein Bildabstand über 34 ms, keine langen Frames (≥ 50 ms). Die einzelnen 33,4-ms-Abstände beim Mausrad (= genau ein
+  ausgelassenes Bild bei 60 Hz) gibt es gleich oft ohne Unschärfe und im alten Stand – sie kommen vom eingespielten
+  Mausrad, nicht vom Glas. Gemessen am Mac, nicht auf einem Handy (siehe Offen 15).
+
+### Testgrenzen
+- **Playwright-WebKit zeichnet `backdrop-filter` headless gar nicht** (Kontrollprobe ohne App: Text hinter einer
+  Unschärfe-Fläche bleibt scharf). Die WebKit-Screenshots zeigen das Glas darum nur abgetönt – so sieht es in echtem
+  Safari nicht aus. Ein iOS-Simulator ist auf dem Mac nicht installiert (kein Xcode). Die Glas-Wirkung in Safari habe ich
+  also nicht selbst gesehen; die WebKit-Kontraste gelten für den ungünstigeren Fall ohne Unschärfe.
+- **Die alte Chromium-Headless-Shell** zeichnet `backdrop-filter` nach manchen Stil-Umschaltungen nicht mehr (Bild ohne
+  Unschärfe, obwohl die Seite sie hat; gemessen). `tests/design.mjs` und `tests/design-leistung.mjs` nutzen darum die
+  neue Headless-Variante mit GPU (`channel: "chromium"`, Metal); `GABI_CHROMIUM_SHELL=1` schaltet zurück.
+- **WebKit meldet beim Einsetzen der Sortier-Auswahl CSP-Verstöße** (`style-src-attr`, Ziel `<select>`): WebKit gibt
+  der Auswahl eigene Inline-Stile, die `style-src 'self'` blockt. Schon in v2.1.2 genauso (gegen `main` geprüft),
+  harmlos; der Test zählt sie getrennt. Playwright-Screenshots erzeugen in WebKit eigene CSP-Meldungen (eingefügtes
+  `<style>`) – der CSP-Teil läuft darum ohne Screenshots.
+- **Zeitkritische Schritte von `tests/v2.mjs` unter Last:** Während der Arbeit lief der Mac mit Last 9–29 (10 Kerne;
+  andere Sitzungen: eine VM, Clip-Aufnahmen mit Playwright und ffmpeg, ein RUGGED-Agent mit 100 % CPU). Dabei brachen
+  einzelne zeitkritische Schritte ab – jedes Mal ein anderer: Push-to-Talk „schließende iPhone-Tastatur“ (Block 2, 2×),
+  „Wegziehen nach oben“ (Block 2, 1×), „Neuladen mitten in der Antwort“ (Block 3b, 2×, Warten auf strömende Antwort).
+  Gegenproben: Der unveränderte Test gegen den unveränderten `main` (v2.1.2) brach unter derselben Last noch früher ab
+  (Block 1, erste Mikrofon-Aufnahme). Einzeln laufen die Schritte immer (Push-to-Talk-Block 3/3 komplett grün, Diktat
+  gegen `main` 6/6). Mit Farben, Glas oder Schrift haben sie nichts zu tun. Darum ist der Gesamtlauf in Teilen belegt
+  (siehe „Getestet“) statt in einem einzigen grünen Durchgang.
+
+### Getestet (v2.3)
+- **Unit-Tests:** 159 von 159 grün (unverändert).
+- **`tests/design.mjs` (A–G, finaler Lauf):** 427 von 427 grün, 6 Hinweise „WebKit-Glasprobe nicht messbar“.
+- **`tests/design-leistung.mjs`:** 4 von 4 grün (siehe Tabelle).
+- **`tests/v2.mjs` (bisherige Ende-zu-Ende-Tests):** Unter der hohen Last kein einzelner durchgehender Lauf; belegt in
+  Teilen, alle mit dem finalen Stand:
+  - Gesamtlauf bis Block 3 (Blöcke 1, 2, 2b, 3): 315 grün, 1 rot (Push-to-Talk „Wegziehen nach oben“ unter Last 22),
+    danach Abbruch in 3b (Warten auf eine strömende Antwort, 30 s).
+  - Push-to-Talk-Block aus Block 2 einzeln: 3 Läufe, je 12 von 12 grün.
+  - Blöcke 3b, 3c und 4 bis 4b als Nachlauf aus derselben Datei: 54 + 65 grün, 0 rot.
+  - Block 5 (`tests/eingabefelder.mjs`, Chromium + WebKit, 320/390/1440, Hell/Dunkel): 133 von 133 grün – Cursor,
+    Platzhalter und „gyÄÖ“ mit den neuen Schriften ohne Anschnitt.
+  - Schein-Messung (Block 2b) mit der Anpassung: 18 von 18 grün (Schritte ≤ 2, Schein 7–11 Stufen).
+- **PDF:** Notiz und Bericht in Node erzeugt und angesehen (Streifen, Pill, Punkte blau; Helvetica; Testbanner).
+- **Sichtprüfung:** alle 144 Screenshots als Kontaktbögen, dazu einzelne Bilder in voller Größe (Glas-Ausschnitte von
+  Kopfzeile und Band). Behoben dabei: Kopf der eigenen Blase zu blass, verworfener Entwurf zu blass, Schatten der
+  Seitenleiste lief in den Inhalt. Die alten Bilder unter `screenshots/*.jpg` zeigen noch v2.1.
+- **Nicht geprüft:** echtes Safari/iPhone (siehe Testgrenzen), echte Claude-Antworten (unverändert, kein Worker-Diff).
+
 ## Offen
 
 1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
@@ -718,3 +889,12 @@ Gegenproben:
       Segmente nutzen.
     - Live-Lauf: `GABI_LIVE=1 node tests/v2.mjs` von diesem Branch misst in Block 5 das Live-Frontend v2.1 (ohne den Fix)
       und wäre dort rot. Block 5 live erst nach dem Frontend-Release werten.
+15. **Glas in echtem Safari und auf dem iPhone ansehen** (v2.3): Playwright-WebKit zeichnet `backdrop-filter` nicht,
+    ein iOS-Simulator ist nicht installiert. Die Kontraste halten auch ohne Unschärfe (gemessen). Am iPhone prüfen:
+    Kopfzeile und Eingabe-Band beim Scrollen (Text dahinter unscharf, nichts ruckelt), Schublade, Dialoge. Die
+    Leistung ist nur am Mac gemessen; auf älteren iPhones wären Kopfzeile + Band die einzigen Unschärfe-Ebenen.
+16. **Brain-Ansicht nicht umgebaut** (v2.3): `gabi-brain` liegt nicht in diesem Stand (eigener Branch). Beim
+    Zusammenführen bekommt das Brain die neuen Tokens; eigene Farben dort (Graph, Knoten) dann auf `--pw-*` umstellen.
+17. **v2.2 fehlt** (v2.3): Einen Branch `gabi-v2-2` („Bitte prüfen“/Notiz per Gespräch) gab es nicht, darum basiert
+    `gabi-v2-3-design` auf `main`. Wird v2.2 später gebaut, sind beim Zusammenführen Konflikte in `style.css`,
+    `index.html` und `VERSION` zu erwarten (Version dann 2.3.x oder höher wählen).

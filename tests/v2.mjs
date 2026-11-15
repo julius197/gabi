@@ -2,7 +2,8 @@
 //  1  Demo-Modus komplett: Handy (390 px) und Laptop (1440 px), jeweils Hell und Dunkel – mit Screenshots
 //     (auch Seitenleiste bzw. Schublade mit dem Gesprächsverlauf)
 //  2  Robustheit: 320 px, automatisch Demo, Offline, Mikrofon verweigert, Stopp, Fehler + „Nochmal versuchen“, Vorlesen
-//  2b v2.1: Schein ohne Kante (Pixelmessung, 390/768/1440, Hell/Dunkel), ruhige Wechsel (10 schnelle Runden, gezählt),
+//  2b v2.1: Schein ohne Kante (Pixelmessung, 390/768/1440, Hell/Dunkel; v2.3: Schein allein, Grund dafür flach), ruhige
+//     Wechsel (10 schnelle Runden, gezählt),
 //     v2.1.1: Häkchen „Gespeichert“ zeichnet nur einmal (nie bei Rückkehr, Wechsel, Neuladen; reduziert: gar nicht),
 //     Gesprächsverlauf (Laptop), Schublade (Handy, 320 px), zwei Tabs, Übernahme aus v2.0
 //     v2.1.1: Übernahme aus dem Notizordner und mit zwei Tabs, derselbe Entwurf in zwei Tabs (speichern/verwerfen/zu spät),
@@ -187,7 +188,8 @@ async function demoAblauf(geraet, schema) {
   pruefe((await page.textContent("#test-badge")).includes("Demo"), `${name}: Demo-Modus, Badge statt Banner`);
   pruefe((await page.locator(".vorschlag").count()) === 4, `${name}: Begrüßung mit 4 Schnellaktionen`);
   const dunkel = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  pruefe(schema === "dark" ? dunkel === "rgb(12, 18, 19)" : dunkel === "rgb(243, 243, 240)", `${name}: Farben folgen dem System (${dunkel})`);
+  // v2.3: PhysioWorks-Grund – Hell #EDF4FA, Dunkel Marine #072D53 (vorher #F3F3F0 / #0C1213)
+  pruefe(schema === "dark" ? dunkel === "rgb(7, 45, 83)" : dunkel === "rgb(237, 244, 250)", `${name}: Farben folgen dem System (${dunkel})`);
   await bild("01", "start");
 
   // Diktat per Push-to-Talk
@@ -850,8 +852,18 @@ for (const [fall, antwort, text] of [
 // ---------------------------------------------------------------------------
 // 2b v2.1 A: Schein hinter leeren Zuständen – weich in alle Richtungen, keine Kante (Pixelmessung über die ganze Breite)
 // ---------------------------------------------------------------------------
-/** Größter Helligkeitsschritt zwischen Nachbarpixeln: Zeile durch die Mitte (ohne Text/Knöpfe) und Spalte über/unter dem Inhalt. */
+/** Größter Helligkeitsschritt zwischen Nachbarpixeln: Zeile durch die Mitte (ohne Text/Knöpfe) und Spalte über/unter dem Inhalt.
+ *  v2.3: Gemessen wird der Schein allein. Der Grund ist seit v2.3 ein Verlauf mit Lichtflächen (body::before), und Chromium
+ *  dithert jeden Verlauf mit einem feinen Muster (je Schicht ±1 Stufe) – über fünf Schichten springen Nachbarpixel um 3–4
+ *  Stufen, ohne dass irgendwo eine Kante ist (über 9 px gemittelt < 1 Stufe). Für die Messung bekommt der Grund darum kurz
+ *  seine flache Grundfarbe (per CSSOM, die CSP bleibt streng), danach wieder den Verlauf. Den Verlauf selbst prüft
+ *  tests/design.mjs (Teil G). Messung und Schwelle (≤ 2) sind unverändert. */
 async function scheinMessen(page, auswahl) {
+  const flach = await page.evaluate(() => {
+    const blatt = [...document.styleSheets].find((s) => (s.href || "").includes("style.css"));
+    return blatt.insertRule("body::before { background: var(--bg) !important; }", blatt.cssRules.length);
+  });
+  await warte(120);
   const r = await page.evaluate((sel) => {
     const leer = document.querySelector(sel);
     const lr = leer.getBoundingClientRect();
@@ -860,6 +872,7 @@ async function scheinMessen(page, auswahl) {
     return { l: lr.left, r: lr.right, t: lr.top, b: lr.bottom, hl: Math.max(0, haupt.left), inhalt, ueberlauf: getComputedStyle(leer).overflow, verlauf: getComputedStyle(leer, "::before").backgroundImage };
   }, auswahl);
   const px = await pixelLesen(await page.screenshot());
+  await page.evaluate((i) => { [...document.styleSheets].find((s) => (s.href || "").includes("style.css")).deleteRule(i); }, flach);
   const y = (r.t + r.b) / 2;
   const frei = (x, yy) => !r.inhalt.some((t) => yy >= t.t - 6 && yy <= t.b + 6 && x >= t.l - 10 && x <= t.r + 10);
   let zeile = 0;
