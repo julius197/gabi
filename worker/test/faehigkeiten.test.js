@@ -73,7 +73,7 @@ describe("Register: Form und Vollständigkeit", () => {
     // die Zuordnung, wie sie die Oberfläche zeigt
     expect(Object.fromEntries(alle.map((n) => [n, faehigkeitZu(n).id]))).toEqual({
       patienten_auflisten: "patienten-liste", notizen_suchen: "notizen-suchen", notiz_lesen: "notizen-suchen", heute_ueberblick: "heute-ueberblick",
-      notiz_entwurf_erstellen: "diktat-entwurf", bericht_erstellen: "bericht", brain_eintrag_vorschlagen: "brain-merken", brain_aenderung_vorschlagen: "brain-aendern",
+      notiz_entwurf_erstellen: "diktat-entwurf", notiz_aenderung_vorschlagen: "notiz-per-gespraech-aendern", bericht_erstellen: "bericht", brain_eintrag_vorschlagen: "brain-merken", brain_aenderung_vorschlagen: "brain-aendern",
     });
   });
 
@@ -107,7 +107,7 @@ describe("Register: Stufen und Status", () => {
     for (const w of BRAIN_WERKZEUGE) expect(faehigkeitZu(w.name), w.name).toMatchObject({ status: "entwurf", phase: 3, stufe: "vorschlagen" });
     for (const f of FAEHIGKEITEN.filter((x) => x.id.startsWith("brain-") || x.id === "praxisfragen")) expect(f, f.id).toMatchObject({ status: "entwurf", phase: 3 });
     const geplant = FAEHIGKEITEN.filter((f) => f.status === "geplant");
-    expect(geplant.map((f) => f.id)).toEqual(["bitte-pruefen-erledigen", "notiz-per-gespraech-aendern", "praxis-interlink", "patientenportal", "telefon-rezeptionistin", "automationen"]);
+    expect(geplant.map((f) => f.id)).toEqual(["bitte-pruefen-erledigen", "praxis-interlink", "patientenportal", "telefon-rezeptionistin", "automationen"]);
     for (const f of geplant) {
       expect([...f.werkzeuge, ...f.aktionen, ...f.befehle], f.id).toEqual([]);
       expect(f.phase, f.id).toBeGreaterThanOrEqual(4);
@@ -145,6 +145,7 @@ describe("Kein Werkzeug speichert, ändert oder löscht", () => {
       heute_ueberblick: {},
       notiz_entwurf_erstellen: { kuerzel: "TP-01", diktat: "Knie rechts, Flexion 95 Grad" },
       bericht_erstellen: { kuerzel: "TP-01", art: "verlauf" },
+      notiz_aenderung_vorschlagen: { id: notiz.id, aenderungen: [{ abschnitt: "befund", vorher: "Flexion Knie rechts 95°", nachher: "Flexion Knie rechts 110°" }] },
       brain_eintrag_vorschlagen: { titel: "Parken", inhalt: "Drei Parkplätze im Hof." },
       brain_aenderung_vorschlagen: { eintrag: "K1", inhalt: "Telefon: 0911 111" },
     };

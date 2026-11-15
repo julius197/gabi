@@ -77,12 +77,14 @@ const anfrageAn = (fetchMock, i = 0) => JSON.parse(fetchMock.mock.calls[i][1].bo
 const werkzeugeMit = (brain) => erstelleWerkzeuge({ speicher: arbeitsspeicher(), strukturieren: vi.fn(), brain });
 
 // ---------- Ohne Brain: unverändert ----------
-describe("Ohne Brain bleibt alles wie in Worker 2.0.1", () => {
+// v2.5 (15.11.2026): Prompt und Werkzeugliste bewusst erweitert – Werkzeug notiz_aenderung_vorschlagen, Regeln zum Ändern
+// von Notizen, Bedienung der Änderungskarte und der Prüfliste. Die Fingerabdrücke unten sind der neue, freigegebene Stand.
+describe("Ohne Brain bleibt alles wie in Worker 2.0.1 (seit v2.5: mit Änderungsvorschlag)", () => {
   it("CHAT_PROMPT ist Wort für Wort der alte (Fingerabdruck ohne den Wissensblock)", () => {
     expect(CHAT_PROMPT.split(WISSEN)).toHaveLength(2);
     const rahmen = CHAT_PROMPT.replace(WISSEN, "§WISSEN§");
-    expect(rahmen).toHaveLength(4919);
-    expect(sha(rahmen)).toBe("34e9656c0667870ebb8ff008da4fa27b795524d6dc4737720393971dd5682dc5");
+    expect(rahmen).toHaveLength(6212);
+    expect(sha(rahmen)).toBe("22191e9c5db7adb1a6b57e9eb6f23a96266f0f66286eb9f69da9f66aca103f32");
   });
 
   it("die Anfrage an die KI ist Byte für Byte die alte: System, Werkzeuge, Nachrichten (Fingerabdruck der ganzen Anfrage)", async () => {
@@ -96,14 +98,14 @@ describe("Ohne Brain bleibt alles wie in Worker 2.0.1", () => {
     expect(b.tools).toEqual(WERKZEUGE);
     expect(b.messages).toEqual(verlauf);
     b.system[0].text = b.system[0].text.replace(WISSEN, "§WISSEN§");
-    expect(sha(JSON.stringify(b))).toBe("ebe2395794fbcc2130bedfa416d318358ae8974db2689d25dc32152e779607c9");
+    expect(sha(JSON.stringify(b))).toBe("4c291dda80e4bff3a5ff2b870739946637702608e2bbeb463a6b301a8d628437");
     expect(s.ereignisse).toEqual([{ t: "text", d: "Hallo" }]); // kein Filter, keine zusätzlichen Ereignisse
   });
 
   it("Werkzeuge ohne Brain: dieselbe Liste (dasselbe Objekt), Brain-Werkzeuge unbekannt", async () => {
     const w = werkzeugeMit(null);
     expect(w.definitionen).toBe(WERKZEUGE);
-    expect(WERKZEUGE.map((x) => x.name)).toEqual(["patienten_auflisten", "notizen_suchen", "notiz_lesen", "heute_ueberblick", "notiz_entwurf_erstellen", "bericht_erstellen"]);
+    expect(WERKZEUGE.map((x) => x.name)).toEqual(["patienten_auflisten", "notizen_suchen", "notiz_lesen", "heute_ueberblick", "notiz_entwurf_erstellen", "notiz_aenderung_vorschlagen", "bericht_erstellen"]);
     const r = await w.ausfuehren("brain_eintrag_vorschlagen", { titel: "Parken", inhalt: "Hof" }, {});
     expect(r).toMatchObject({ fehler: true, meldung: "Unbekanntes Werkzeug." });
   });

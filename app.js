@@ -20,7 +20,7 @@
   // Seite und Skript aus verschiedenen Versionen (Browser-Cache: alte index.html, neue Dateien – oder v1 → v2):
   // einmal je Version frisch laden; hilft das nicht, ein Hinweis mit Knopf statt einer leeren Seite.
   // VERSION muss zum ?v= in index.html passen (ein Test prüft das).
-  const VERSION = "2.4.0";
+  const VERSION = "2.5.0";
   const MERKER = `gabi.frisch-geladen.${VERSION}`;
   let geladenAls = null;
   try { geladenAls = new URL(document.currentScript.src).searchParams.get("v"); } catch { geladenAls = null; }
@@ -44,6 +44,7 @@
   try { sessionStorage.removeItem(MERKER); } catch { /* egal */ } // geklappt: beim nächsten Versionswechsel wieder erlaubt
 
   const K = window.GabiKern;
+  const NL = window.GabiNotizLogik; // v2.5: Prüfliste („Bitte prüfen“ erledigbar) und Änderungsvorschläge
   const PDF = window.GabiPdf;
   const DEMO = window.GabiDemo;
   const AUFNAHME = window.GabiAufnahme;
@@ -1618,7 +1619,7 @@
       for (const [key] of K.ABSCHNITTE) strukturiert[key] = K.stichpunkte(s[key]);
       strukturiert.unklar = K.stichpunkte(s.unklar);
       lokaleAntwort(`Aus der Vorversion war noch ein Entwurf für **${p.kuerzel}** offen. Prüf ihn bitte – gespeichert wird erst, wenn du auf „Speichern“ tippst.`,
-        [{ typ: "entwurf", id: neueId(), patient_id: p.id, kuerzel: p.kuerzel, pseudonym: p.pseudonym || "", rohtext, strukturiert }], g);
+        [{ typ: "entwurf", id: neueId(), patient_id: p.id, kuerzel: p.kuerzel, pseudonym: p.pseudonym || "", rohtext, strukturiert: NL.mitStellen(strukturiert) }], g);
     } else if (rohtext.trim()) {
       // ohne Nutzernachricht wäre das Gespräch „leer“ und ginge beim Neuladen verloren – deshalb ausdrücklich bewahren
       lokaleAntwort(`Aus der Vorversion war noch ein Diktat offen, das nicht gespeichert wurde:\n\n${rohtext.trim()}\n\nDu kannst es kopieren und hier noch einmal schicken.`, [], g, { bewahren: true });
@@ -1764,7 +1765,7 @@
       ausstehend.clear();
       if (!sichtbar.length) return;
       const unten = nahUnten();
-      const mitKarte = sichtbar.find((x) => (x.karten || []).some((k) => k.typ === "entwurf" || k.typ === "bericht"));
+      const mitKarte = sichtbar.find((x) => (x.karten || []).some((k) => k.typ === "entwurf" || k.typ === "bericht" || k.typ === "aenderung"));
       for (const x of sichtbar) nachrichtNeuZeichnen(x);
       if (!unten || el.chat.hidden) return;
       if (mitKarte) nachrichtZeigen(mitKarte); else nachUntenRollen();
@@ -1889,7 +1890,8 @@
         break;
       }
       case "entwurf":
-        if (e.entwurf) gabi.karten.push({ typ: "entwurf", id: neueId(), ...e.entwurf, strukturiert: e.entwurf.strukturiert || {} });
+        // v2.5: die „(unklar)“-Stellen gleich ihren Prüfpunkten zuordnen – so erkennt die Prüfliste später Korrekturen
+        if (e.entwurf) gabi.karten.push({ typ: "entwurf", id: neueId(), ...e.entwurf, strukturiert: NL.mitStellen(e.entwurf.strukturiert || {}) });
         gabi.wartet = true;
         if (g === chat.gespraech && chat.modus && chat.modus.typ === "diktat") modusSetzen(null); // ein Diktat = ein Entwurf; danach normale Fragen
         break;
@@ -1897,6 +1899,15 @@
         if (e.bericht) gabi.karten.push({ typ: "bericht", id: neueId(), bericht: e.bericht });
         gabi.wartet = true;
         break;
+      case "aenderung": {
+        // v2.5: Änderungsvorschlag an einer gespeicherten Notiz – gespeichert wird erst mit „Übernehmen“
+        const a = e.aenderung;
+        if (a && a.notiz_id && Array.isArray(a.aenderungen) && a.aenderungen.length) {
+          gabi.karten.push({ typ: "aenderung", id: neueId(), notiz_id: a.notiz_id, patient_id: a.patient_id, kuerzel: a.kuerzel, erstellt_am: a.erstellt_am, stand: a.stand, abschnitte: a.abschnitte || {}, aenderungen: a.aenderungen });
+        }
+        gabi.wartet = true;
+        break;
+      }
       case "abgelehnt":
         gabi.text = String(e.text || "");
         gabi.wartet = false;
@@ -1913,7 +1924,7 @@
       default:
         return;
     }
-    if (e.t === "entwurf" || e.t === "bericht") {
+    if (e.t === "entwurf" || e.t === "bericht" || e.t === "aenderung") {
       patientenLaden().catch(() => {});
       // die Karte gleich auf dem Gerät sichern: Chromium meldet ein Neuladen erst nach pagehide als Abbruch – ohne das wäre
       // die schon gezeigte Karte danach weg (gespeichert noch als „unterwegs“: nach dem Neuladen „unterbrochen“, Karte bleibt)
@@ -1928,8 +1939,8 @@
    * „Gespeichert“ und Korrekturen wäre weg – und entwurfInAblage erkennt die neue nicht (doppelte Notiz).
    */
   function karteDerAntwort(n) {
-    const k = (n.karten || []).find((x) => x.typ === "entwurf" || x.typ === "bericht");
-    return k ? (k.typ === "bericht" ? "Bericht" : "Entwurf") : "";
+    const k = (n.karten || []).find((x) => x.typ === "entwurf" || x.typ === "bericht" || x.typ === "aenderung");
+    return k ? (k.typ === "bericht" ? "Bericht" : k.typ === "aenderung" ? "Änderungsvorschlag" : "Entwurf") : "";
   }
 
   async function wiederholen(gabi) {
@@ -2023,6 +2034,7 @@
     if (k.typ === "auswahl") return auswahlHtml(k);
     if (k.typ === "entwurf") return entwurfHtml(k, n);
     if (k.typ === "bericht") return berichtHtml(k);
+    if (k.typ === "aenderung") return aenderungHtml(k, n);
     if (k.typ === "hilfe") {
       return `<div class="hinweis-box warn" data-karte="${esc(k.id)}">
         <div class="hinweis-box-kopf">${symbol("mikro")}<span>${esc(k.titel)}</span></div>
@@ -2079,6 +2091,55 @@
       <textarea class="eingabefeld" data-abschnitt="unklar" rows="${Math.max(2, zeilen)}" placeholder="Ein Punkt pro Zeile">${esc(wert)}</textarea></label></section>`;
   }
 
+  /**
+   * v2.5 „Bitte prüfen“ als Liste zum Abhaken: Zähler „2 von 3 erledigt“, Erledigtes dezent durchgestrichen. Ist die
+   * „(unklar)“-Stelle im Text korrigiert, ist der Punkt von selbst erledigt (Häkchen gesetzt, nicht abwählbar).
+   */
+  function prueflisteHtml(s) {
+    const st = NL.status(s);
+    if (!st.gesamt) return "";
+    const alles = st.erledigt === st.gesamt;
+    const zeilen = st.punkte.map((p) => `<li class="pruefpunkt${p.erledigt ? " erledigt" : ""}${p.auto ? " auto" : ""}">
+        <label class="pruef-haken"><input type="checkbox" data-pruefpunkt="${esc(p.punkt)}"${p.erledigt ? " checked" : ""}${p.auto ? " disabled" : ""}><span class="pruef-kasten" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <span class="pruef-text">${K.mitUnklar(p.punkt)}${p.auto ? '<span class="pruef-auto">im Text korrigiert</span>' : ""}</span></label></li>`).join("");
+    return `<section class="abschnitt pruefen${alles ? " alles-erledigt" : ""}" data-pruefliste>
+      <div class="pruefen-kopf"><h3 class="augenbraue">${symbol(alles ? "haken" : "warn", "klein")}Bitte prüfen</h3><span class="pruefen-zaehler">${st.erledigt} von ${st.gesamt} erledigt</span></div>
+      <ul class="pruefliste">${zeilen}</ul></section>`;
+  }
+
+  /** v2.5 Änderungsvorschlag: betroffene Abschnitte, nur die geänderten Zeilen hervorgehoben (Vorher/Nachher). */
+  function aenderungHtml(k, n = {}) {
+    const titel = Object.fromEntries(K.ABSCHNITTE);
+    const datum = k.erstellt_am ? K.datum(k.erstellt_am) : "";
+    const meta = k.uebernommen ? "übernommen" : k.verworfen ? "verworfen" : k.fehlt ? "Notiz gelöscht" : k.veraltet ? "passt nicht mehr" : "noch nicht übernommen";
+    const kopf = `<header class="karte-kopf"><span class="karte-kachel">${symbol("stift")}</span>
+      <div class="karte-kopf-text"><span class="karte-titel">Änderungsvorschlag · ${esc(k.kuerzel || "")}</span><span class="karte-meta">${datum ? `Notiz vom ${esc(datum)} · ` : ""}${meta}</span></div></header>`;
+    if (k.uebernommen) {
+      return `<article class="karte gespraechs-karte karte-aenderung erledigt mit-streifen" data-karte="${esc(k.id)}">${kopf}
+        <div class="karte-zustand ok"><span class="haken"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>In die Notiz übernommen</span></div>
+        <div class="knopf-reihe links"><a class="knopf sekundaer klein" href="#/notizen/n/${esc(k.uebernommen)}">${symbol("dokument")}Notiz ansehen</a></div></article>`;
+    }
+    if (k.verworfen) return `<article class="karte gespraechs-karte karte-aenderung erledigt verworfen" data-karte="${esc(k.id)}" tabindex="-1">${kopf}<div class="karte-zustand">Vorschlag verworfen – die Notiz bleibt, wie sie ist.</div></article>`;
+    const zeile = (z) => {
+      if (z.art === "gleich") return `<li class="diff-zeile gleich">${K.mitUnklar(z.text)}</li>`;
+      if (z.art === "neu") return `<li class="diff-zeile neu"><span class="diff-marke">Neu</span><ins>${K.mitUnklar(z.text)}</ins></li>`;
+      if (z.art === "weg") return `<li class="diff-zeile weg"><span class="diff-marke">Entfällt</span><del>${K.mitUnklar(z.text)}</del></li>`;
+      const d = z.diff;
+      return `<li class="diff-zeile geaendert"><span class="diff-marke">Vorher</span><del>${K.mitUnklar(d.vorn)}<mark class="diff-teil">${K.mitUnklar(d.alt)}</mark>${K.mitUnklar(d.hinten)}</del>
+        <span class="diff-marke">Nachher</span><ins>${K.mitUnklar(d.vorn)}<mark class="diff-teil">${K.mitUnklar(d.neu)}</mark>${K.mitUnklar(d.hinten)}</ins></li>`;
+    };
+    const abschnitte = NL.vorherNachher(k.abschnitte, k.aenderungen).map((a) => `<section class="abschnitt"><h3 class="augenbraue">${esc(titel[a.abschnitt] || a.abschnitt)}</h3><ul class="diff-liste">${a.zeilen.map(zeile).join("")}</ul></section>`).join("");
+    const gesperrt = n.laeuft ? ' disabled title="Gabi schreibt noch …"' : "";
+    const hinweis = k.fehlt ? '<div class="hinweis-box warn"><div class="hinweis-box-kopf">' + symbol("warn") + "<span>Diese Notiz gibt es nicht mehr – sie wurde gelöscht.</span></div></div>"
+      : k.veraltet ? '<div class="hinweis-box warn"><div class="hinweis-box-kopf">' + symbol("warn") + "<span>Die Notiz wurde inzwischen geändert – dieser Vorschlag passt nicht mehr. Frag Gabi bitte noch einmal.</span></div></div>"
+        : '<p class="karte-hinweis">Das Original-Diktat bleibt unverändert.</p>';
+    const fuss = k.fehlt || k.veraltet
+      ? `<button class="knopf leise klein" type="button" data-aktion="aenderung-verwerfen">Schließen</button>`
+      : `<button class="knopf primaer klein" type="button" data-aktion="aenderung-uebernehmen"${gesperrt}>${symbol("haken")}Übernehmen</button>
+         <button class="knopf sekundaer klein" type="button" data-aktion="aenderung-verwerfen"${gesperrt}>Verwerfen</button>`;
+    return `<article class="karte gespraechs-karte karte-aenderung mit-streifen" data-karte="${esc(k.id)}">${kopf}<div class="abschnitte">${abschnitte}</div>${hinweis}<footer class="karte-fuss">${fuss}</footer></article>`;
+  }
+
   function punkteHtml(liste) {
     return `<ul class="punkte">${liste.map((p) => `<li>${K.mitUnklar(p)}</li>`).join("")}</ul>`;
   }
@@ -2113,7 +2174,7 @@
     const pruefenWert = k.bearbeitung && typeof k.bearbeitung.unklar === "string" ? k.bearbeitung.unklar : unklar.join("\n");
     const pruefen = !unklar.length ? ""
       : k.bearbeiten ? pruefenFeld(pruefenWert, unklar.length)
-        : `<section class="abschnitt pruefen"><h3 class="augenbraue">${symbol("warn", "klein")}Bitte prüfen</h3>${punkteHtml(unklar)}</section>`;
+        : prueflisteHtml(s);
     const fuss = k.bearbeiten
       ? `<button class="knopf primaer klein" type="button" data-aktion="entwurf-uebernehmen">${symbol("haken")}Übernehmen</button>
          <button class="knopf leise klein" type="button" data-aktion="entwurf-abbrechen">Abbrechen</button>`
@@ -2279,8 +2340,35 @@
       try { pdfSpeichern((await api(`/api/notizen/${k.gespeichert}`)).notiz); } catch (f) { if (!(f instanceof Abbruch)) toast(f.message, { art: "fehler" }); }
       return;
     }
+    if (aktion === "aenderung-uebernehmen") return abwarten(aenderungUebernehmen(n, k, b, g));
+    if (aktion === "aenderung-verwerfen") {
+      const akt = (n.karten || []).find((x) => x.id === k.id) || k;
+      if (akt.uebernommen) { nachrichtNeuZeichnen(n); toast("Diese Änderung wurde inzwischen in einem anderen Fenster übernommen.", { art: "erfolg" }); return; }
+      akt.verworfen = true;
+      nachrichtNeuZeichnen(n);
+      gespraechMerken(g);
+      return;
+    }
     if (aktion === "bericht-pdf") return berichtPdfSpeichern(k.bericht);
     if (aktion === "bericht-kopieren") return kopieren(berichtAlsText(k.bericht), "Bericht kopiert.");
+  });
+
+  // v2.5: Häkchen in der Prüfliste eines Entwurfs – gehört zur Karte (Gerät), wird mit der Notiz gespeichert
+  el.nachrichten.addEventListener("change", (e) => {
+    const box = e.target.closest("input[data-pruefpunkt]");
+    if (!box) return;
+    const knoten = box.closest(".nachricht");
+    const kk = box.closest("[data-karte]");
+    const n = knoten && chat.nachrichten.find((x) => x.id === knoten.dataset.id);
+    const k = n && kk && (n.karten || []).find((x) => x.id === kk.dataset.karte);
+    if (!k || k.typ !== "entwurf" || k.gespeichert || k.verworfen) return;
+    const punkt = box.dataset.pruefpunkt;
+    k.strukturiert = NL.setzen(k.strukturiert || {}, punkt, box.checked);
+    nachrichtNeuZeichnen(n);
+    const neu = nachrichtKnoten.get(n.id);
+    const ziel = neu && [...neu.querySelectorAll("input[data-pruefpunkt]")].find((x) => x.dataset.pruefpunkt === punkt);
+    if (ziel) fokusSetzen(ziel);
+    gespraechMerken(chat.gespraech);
   });
 
   el.nachrichten.addEventListener("input", (e) => {
@@ -2379,6 +2467,92 @@
     } finally {
       k.speichert = false;
     }
+  }
+
+  /**
+   * v2.5 „Übernehmen“ eines Änderungsvorschlags – derselbe Weg wie das Bearbeiten im Notizordner (PATCH /api/notizen/:id)
+   * und dieselben Schutzmechanismen wie beim Speichern eines Entwurfs: Sperre über Tabs (zweimal tippen oder zwei Tabs =
+   * eine Änderung), Stand in der Ablage (anderswo schon übernommen/verworfen), gelöschtes Gespräch, Abmelden wartet.
+   * Angewendet wird auf den frisch geladenen Stand: Steht eine Vorher-Zeile dort nicht mehr (die Notiz wurde inzwischen
+   * geändert), wird nichts gespeichert. Gelöschte Notiz: Hinweis auf der Karte. Das Original-Diktat bleibt unberührt.
+   */
+  async function aenderungUebernehmen(n, k, knopf, g = chat.gespraech) {
+    if (k.speichert) return;
+    if (k.uebernommen || k.verworfen || k.fehlt || k.veraltet) { nachrichtNeuZeichnen(n); return; }
+    k.speichert = true;
+    knopf.disabled = true;
+    knopf.innerHTML = '<span class="drehen"></span>Übernehme …';
+    const zurueck = () => { if (knopf.isConnected) { knopf.disabled = false; knopf.innerHTML = `${symbol("haken")}Übernehmen`; } };
+    const nacheinander = g.gespeichert && verlauf.ablage && navigator.locks ? (f) => mitSperre(`gabi-aenderung-${k.id}`, f) : (f) => f();
+    const gespraechWeg = () => {
+      if (!verwaist(g)) anderswoGeloescht(g, { still: true });
+      zurueck();
+      if (!abmeldenLaeuft && !verlauf.abgemeldet) toast("Nicht übernommen – das Gespräch wurde inzwischen gelöscht. Ob die Notiz schon geändert ist, siehst du im Notizordner.", { art: "warn", dauer: 8000 });
+    };
+    try {
+      await nacheinander(async () => {
+        if (verwaist(g)) return gespraechWeg();
+        const stand = g.gespeichert && verlauf.ablage ? await karteInAblage(g.id, k.id) : null;
+        if (verwaist(g) || (stand && stand.fehlt && g.abgelegt)) return gespraechWeg();
+        const dort = stand && stand.karte;
+        if (k.uebernommen || (dort && dort.uebernommen)) {
+          k.uebernommen = k.uebernommen || dort.uebernommen;
+          delete k.verworfen;
+          nachrichtNeuZeichnen(n);
+          await gespraechMerken(g);
+          toast("Diese Änderung wurde schon in einem anderen Fenster übernommen.", { art: "erfolg", aktion: { text: "Ansehen", tun: () => { location.hash = `#/notizen/n/${k.uebernommen}`; } } });
+          return;
+        }
+        if (k.verworfen || (dort && dort.verworfen)) {
+          k.verworfen = true;
+          nachrichtNeuZeichnen(n);
+          toast("Dieser Vorschlag wurde inzwischen in einem anderen Fenster verworfen.", { art: "warn" });
+          return;
+        }
+        speichernBis = Math.max(speichernBis, Date.now() + 20500); // Abmelden wartet (api: höchstens 20 s je Anfrage)
+        const { notiz: alt } = await api(`/api/notizen/${encodeURIComponent(k.notiz_id)}`);
+        const ergebnis = NL.aenderungAnwenden(alt.strukturiert || {}, k.aenderungen);
+        if (ergebnis.konflikt) {
+          k.veraltet = true;
+          nachrichtNeuZeichnen(n);
+          await gespraechMerken(g);
+          toast("Nicht übernommen – die Notiz wurde inzwischen geändert. Frag Gabi bitte noch einmal.", { art: "warn", dauer: 7000 });
+          return;
+        }
+        speichernBis = Math.max(speichernBis, Date.now() + 20500);
+        const { notiz } = await api(`/api/notizen/${encodeURIComponent(k.notiz_id)}`, { methode: "PATCH", body: { strukturiert: ergebnis.strukturiert, pruefung_basis: (alt.strukturiert && alt.strukturiert.pruefung) || [] } });
+        k.uebernommen = notiz.id;
+        ordner.notizen.set(notiz.id, notiz);
+        ordner.notizenVon.delete(notiz.patient_id);
+        if (offeneNotiz && offeneNotiz.id === notiz.id && ordner.bearbeiten !== notiz.id) offeneNotiz = notiz;
+        nachrichtNeuZeichnen(n);
+        hakenZeichnen(n, k);
+        toast(`Änderung übernommen (${k.kuerzel}${modus.demo ? ", Demo" : ""}).`, { art: "erfolg", aktion: { text: "Ansehen", tun: () => { location.hash = `#/notizen/n/${notiz.id}`; } } });
+        await gespraechMerken(g); // erst auf dem Gerät, dann die Sperre freigeben
+      });
+    } catch (f) {
+      if (f && f.status === 404) {
+        k.fehlt = true;
+        nachrichtNeuZeichnen(n);
+        gespraechMerken(g);
+        toast("Nicht übernommen – diese Notiz gibt es nicht mehr.", { art: "warn", dauer: 7000 });
+      } else if (f instanceof Abbruch && f.gesperrt) toast("Diese Änderung wird gerade in einem anderen Fenster übernommen – bitte dort nachsehen.", { art: "warn", dauer: 7000 });
+      else if (f instanceof Abbruch && f.zugang) toast(`Nicht übernommen (${k.kuerzel}): Der Zugangscode galt nicht mehr.`, { art: "fehler", dauer: 8000 });
+      else if (!(f instanceof Abbruch)) toast(`Nicht übernommen: ${f.message}`, { art: "fehler", dauer: 6000 });
+      zurueck();
+    } finally {
+      k.speichert = false;
+    }
+  }
+
+  /** Eine Karte in der gespeicherten Fassung des Gesprächs (Ablage) – oder fehlt das Gespräch dort? */
+  async function karteInAblage(gespraechId, kartenId) {
+    try {
+      const nachrichten = await verlauf.ablage.laden(gespraechId);
+      if (!Array.isArray(nachrichten)) return { karte: null, fehlt: nachrichten === null };
+      for (const m of nachrichten) for (const x of (m && m.karten) || []) if (x && x.id === kartenId) return { karte: x, fehlt: false };
+    } catch { /* egal – dann normal weiter */ }
+    return { karte: null, fehlt: false };
   }
 
   /**
@@ -2975,6 +3149,8 @@
     if (e.target.id === "suche" && e.key === "Escape") { ordner.suche = ""; e.target.value = ""; sucheAusfuehren(); }
   });
   el.notizen.addEventListener("change", (e) => {
+    const box = e.target.closest("input[data-pruefpunkt]");
+    if (box) { pruefpunktSetzen(box); return; }
     if (e.target.id === "sortierung") {
       speicher.schreiben("lokal", SORTIERUNG, e.target.value);
       notizenZeigen(jetzigerHash());
@@ -3066,6 +3242,48 @@
     }
   }
 
+  /**
+   * v2.5: Häkchen einer gespeicherten Notiz setzen – sofort sichtbar, dann auf dem Server (nur dieser eine Punkt, auf dem
+   * gespeicherten Stand: zwei Tabs überschreiben sich keine Häkchen). Nacheinander je Notiz; Abmelden wartet darauf.
+   */
+  let pruefKette = Promise.resolve();
+  function pruefpunktSetzen(box) {
+    const n = offeneNotiz;
+    if (!n || ordner.bearbeiten === n.id) return;
+    const punkt = box.dataset.pruefpunkt;
+    const erledigt = box.checked;
+    offeneNotiz = { ...n, strukturiert: NL.setzen(n.strukturiert || {}, punkt, erledigt) };
+    ordner.notizen.set(n.id, offeneNotiz);
+    const neuZeichnen = () => {
+      if (!offeneNotiz || offeneNotiz.id !== n.id || jetzigerHash() !== `#/notizen/n/${n.id}` || ordner.bearbeiten === n.id) return;
+      const hatte = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.pruefpunkt;
+      leserZeichnen();
+      if (hatte) { const z = [...el.notizen.querySelectorAll("input[data-pruefpunkt]")].find((x) => x.dataset.pruefpunkt === hatte); if (z) fokusSetzen(z); }
+    };
+    neuZeichnen();
+    if (!document.activeElement || !document.activeElement.dataset || !document.activeElement.dataset.pruefpunkt) {
+      const z = [...el.notizen.querySelectorAll("input[data-pruefpunkt]")].find((x) => x.dataset.pruefpunkt === punkt);
+      if (z) fokusSetzen(z);
+    }
+    const lauf = pruefKette.then(async () => {
+      try {
+        const { notiz } = await api(`/api/notizen/${encodeURIComponent(n.id)}`, { methode: "PATCH", body: { pruefpunkt: { punkt, erledigt } } });
+        ordner.notizen.set(notiz.id, notiz);
+        ordner.notizenVon.delete(notiz.patient_id);
+        if (offeneNotiz && offeneNotiz.id === notiz.id && ordner.bearbeiten !== notiz.id) { offeneNotiz = notiz; neuZeichnen(); }
+      } catch (f) {
+        if (f instanceof Abbruch) { if (f.zugang) toast("Häkchen nicht gespeichert: Der Zugangscode galt nicht mehr.", { art: "fehler", dauer: 8000 }); return; }
+        // zurück auf den gespeicherten Stand
+        if (offeneNotiz && offeneNotiz.id === n.id) { offeneNotiz = { ...offeneNotiz, strukturiert: NL.setzen(offeneNotiz.strukturiert || {}, punkt, !erledigt) }; ordner.notizen.set(n.id, offeneNotiz); neuZeichnen(); }
+        if (f.status === 404) toast("Diese Notiz gibt es nicht mehr.", { art: "warn" });
+        else if (f.status === 409) { toast(f.message, { art: "warn", dauer: 6000 }); notizZeigen(n.id); }
+        else toast(`Häkchen nicht gespeichert: ${f.message}`, { art: "fehler", dauer: 6000 });
+      }
+    });
+    pruefKette = lauf;
+    abwarten(lauf);
+  }
+
   function leserZeichnen() {
     const n = offeneNotiz;
     const s = n.strukturiert || {};
@@ -3078,7 +3296,7 @@
     const unklar = K.stichpunkte(s.unklar);
     const pruefen = !unklar.length ? ""
       : bearbeiten ? pruefenFeld(unklar.join("\n"), unklar.length)
-        : `<section class="abschnitt pruefen"><h3 class="augenbraue">${symbol("warn", "klein")}Bitte prüfen</h3>${punkteHtml(unklar)}</section>`;
+        : prueflisteHtml(s);
     const aktionen = bearbeiten
       ? `<button class="knopf primaer klein" type="button" data-leser="sichern">${symbol("haken")}Speichern</button><button class="knopf leise klein" type="button" data-leser="abbrechen">Abbrechen</button>`
       : `<button class="knopf sekundaer klein" type="button" data-leser="bearbeiten">${symbol("stift")}Bearbeiten</button>
@@ -3137,7 +3355,8 @@
       ordner.beschaeftigt = true;
       l.disabled = true;
       try {
-        const { notiz } = await abwarten(api(`/api/notizen/${n.id}`, { methode: "PATCH", body: { strukturiert: s } })); // Abmelden wartet darauf
+        // v2.5: pruefung_basis = Häkchen beim Laden – der Server führt sie mit Häkchen aus anderen Tabs zusammen
+        const { notiz } = await abwarten(api(`/api/notizen/${n.id}`, { methode: "PATCH", body: { strukturiert: s, pruefung_basis: (n.strukturiert && n.strukturiert.pruefung) || [] } })); // Abmelden wartet darauf
         ordner.notizen.set(notiz.id, notiz);
         ordner.notizenVon.delete(notiz.patient_id);
         offeneNotiz = notiz;

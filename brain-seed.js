@@ -9,7 +9,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   return {
-    "version": "66396bbe9dde",
+    "version": "cc7ea1d0ec5b",
     "knoten": [
       {
         "id": "s-praxis",
@@ -856,6 +856,28 @@
         "phase": 2
       },
       {
+        "id": "notiz-per-gespraech-aendern",
+        "name": "Notiz per Gespräch ändern",
+        "beschreibung": "„Ändere bei TP-01 die Flexion auf 110 Grad“ – Gabi bereitet die Änderung vor und zeigt sie mit Vorher und Nachher.",
+        "darf": "Gabi schlägt nur vor und ändert nur, was du gesagt hast. Gespeichert wird erst, wenn du auf „Übernehmen“ tippst. Das Original-Diktat bleibt, wie es ist.",
+        "stufe": "vorschlagen",
+        "status": "aktiv",
+        "daten": [
+          "Behandlungsnotizen (nur Testdaten, Patienten nur als Kürzel)"
+        ],
+        "voraussetzungen": [
+          "Zugangscode",
+          "KI-Schlüssel auf dem Server"
+        ],
+        "werkzeuge": [
+          "notiz_aenderung_vorschlagen"
+        ],
+        "aktionen": [],
+        "befehle": [],
+        "bestaetigung": "Knopf „Übernehmen“ auf der Änderungskarte",
+        "phase": 2
+      },
+      {
         "id": "patienten-liste",
         "name": "Test-Patienten auflisten",
         "beschreibung": "Gabi kennt die Liste der Test-Patienten: Kürzel, kurze Beschreibung, Anzahl der Notizen.",
@@ -1074,27 +1096,6 @@
         "voraussetzungen": [
           "Benutzerkonten und Rollen statt gemeinsamem Zugangscode (Admin = Praxisinhaber)",
           "Änderungsprotokoll: wer hat wann was bestätigt"
-        ],
-        "werkzeuge": [],
-        "aktionen": [],
-        "befehle": [],
-        "bestaetigung": "Knopf „Übernehmen“ auf der Karte mit vorher und nachher",
-        "phase": 4
-      },
-      {
-        "id": "notiz-per-gespraech-aendern",
-        "name": "Notiz per Gespräch ändern",
-        "beschreibung": "„Trag bei TP-01 noch die Hausaufgabe nach“ – Gabi bereitet die Änderung vor und zeigt sie zur Freigabe.",
-        "darf": "Gabi würde eine gespeicherte Notiz erst ändern, nachdem du die Änderung bestätigt hast. Löschen bleibt bei dir.",
-        "stufe": "mit_bestaetigung_ausfuehren",
-        "status": "geplant",
-        "daten": [
-          "Behandlungsnotizen (nur Testdaten, Patienten nur als Kürzel)"
-        ],
-        "voraussetzungen": [
-          "Benutzerkonten und Rollen statt gemeinsamem Zugangscode (Admin = Praxisinhaber)",
-          "Änderungsprotokoll: wer hat wann was bestätigt",
-          "Rückgängig für jede Änderung"
         ],
         "werkzeuge": [],
         "aktionen": [],

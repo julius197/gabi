@@ -1,5 +1,8 @@
 // Physio-Notiz: Abschnitte, Prompt, Schema und Prüfung der Daten.
 // Übernommen aus dem Notara-Kern (kern.py: SYSTEM_PROMPT, _als_abschnitte) und für Physiotherapie angepasst.
+import NOTIZLOGIK from "../../notizlogik.js"; // v2.5: dieselbe Datei wie in der Oberfläche (Prüfliste, Änderungsvorschlag)
+
+export const NL = NOTIZLOGIK;
 
 export const ABSCHNITTE = [
   ["befund", "Befund"],
@@ -125,7 +128,10 @@ function punkte(werte) {
 /** Liste von Stichpunkten bereinigen (auch für Berichte): Aufzählungszeichen weg, „(unklar)“ einheitlich, ohne Doppelte. */
 export const stichpunkte = punkte;
 
-/** Formt beliebige (auch unvollständige) Daten in die fünf Listen um – ohne Fehler zu werfen. */
+/**
+ * Formt beliebige (auch unvollständige) Daten in die fünf Listen um – ohne Fehler zu werfen. v2.5: dazu der Status der
+ * Prüfliste (pruefung, nur wenn es etwas zu merken gibt – sonst bleibt die Notiz genau wie bisher).
+ */
 export function normalisieren(daten) {
   const quelle = daten && typeof daten === "object" && !Array.isArray(daten) ? daten : {};
   const klein = {};
@@ -133,6 +139,8 @@ export function normalisieren(daten) {
   const ergebnis = {};
   for (const [key] of ABSCHNITTE) ergebnis[key] = punkte(klein[key] ?? (key === "massnahmen" ? klein["maßnahmen"] : undefined));
   ergebnis[UNKLAR] = punkte(klein[UNKLAR]);
+  const pruefung = NL.pruefungNormalisieren(klein.pruefung, ergebnis[UNKLAR]);
+  if (pruefung.length) ergebnis.pruefung = pruefung;
   return ergebnis;
 }
 

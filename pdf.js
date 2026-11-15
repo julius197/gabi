@@ -9,6 +9,8 @@
   "use strict";
 
   const ABSCHNITTE = [["befund", "Befund"], ["massnahmen", "Maßnahmen"], ["verlauf", "Verlauf"], ["hausaufgaben", "Hausaufgaben"]];
+  // v2.5: erledigte Prüfpunkte im PDF kennzeichnen (dieselbe Logik wie in der App)
+  const NL = typeof module === "object" && module.exports ? require("./notizlogik.js") : globalThis.GabiNotizLogik;
   const FUSS = "Testversion – Testdaten";
   const SEITE = { b: 210, h: 297, rand: 20, oben: 20, unten: 297 - 26 };
   // v2.3: PhysioWorks-Farben wie in style.css (Abschnitt 1) – Streifen Cyan → #3391F0 → #1A6FD0, Pill und Datum in
@@ -226,8 +228,9 @@
     }
     const unklar = Array.isArray(s.unklar) ? s.unklar : [];
     if (unklar.length) {
-      d.ueberschrift("Bitte prüfen (unklare Stellen)", { f: FARBE.warn });
-      d.punkte(unklar, { punktFarbe: FARBE.warn, hintergrund: FARBE.warnHell });
+      const st = NL ? NL.status(s) : { punkte: unklar.map((punkt) => ({ punkt, erledigt: false })), erledigt: 0, gesamt: unklar.length };
+      d.ueberschrift(`Bitte prüfen (unklare Stellen)${st.erledigt ? ` – ${st.erledigt} von ${st.gesamt} erledigt` : ""}`, { f: FARBE.warn });
+      d.punkte(st.punkte.map((p) => (p.erledigt ? `${p.punkt} – erledigt` : p.punkt)), { punktFarbe: FARBE.warn, hintergrund: FARBE.warnHell });
     }
     d.fuss(`Behandlungsnotiz ${n.kuerzel} ${tag(erstellt)}`);
     return d.doc;

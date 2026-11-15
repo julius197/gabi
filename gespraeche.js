@@ -141,7 +141,7 @@
    * Schreiben in die Ablage. Überträgt sie aus quelle nach ziel (gleiche Karten-ID, ziel wird geändert) und beendet dort
    * das Bearbeiten. Gespeichert schlägt verworfen (die Notiz gibt es dann). Ergebnis: die geänderten Nachrichten aus ziel.
    */
-  const ENDE = { entwurf: ["gespeichert", "verworfen"], aufnahme: ["erledigt", "verworfen"], auswahl: ["gewaehlt"], "brain-vorschlag": ["uebernommen", "verworfen"], "brain-interview": ["erledigt"] };
+  const ENDE = { entwurf: ["gespeichert", "verworfen"], aufnahme: ["erledigt", "verworfen"], auswahl: ["gewaehlt"], aenderung: ["uebernommen", "verworfen", "fehlt", "veraltet"], "brain-vorschlag": ["uebernommen", "verworfen"], "brain-interview": ["erledigt"] };
   function endzustaendeUebernehmen(ziel, quelle) {
     const fertig = new Map();
     for (const k of kartenVon(quelle)) if (k && k.id && ENDE[k.typ] && ENDE[k.typ].some((f) => k[f])) fertig.set(k.id, k);

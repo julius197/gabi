@@ -90,7 +90,8 @@ describe("Praxiswissen und Regeln", () => {
   it("Werkzeuge: eindeutige Namen, saubere Schemas, kein Werkzeug zum Speichern oder Löschen", () => {
     const namen = WERKZEUGE.map((w) => w.name);
     expect(new Set(namen).size).toBe(namen.length);
-    expect(namen).toEqual(["patienten_auflisten", "notizen_suchen", "notiz_lesen", "heute_ueberblick", "notiz_entwurf_erstellen", "bericht_erstellen"]);
+    expect(namen).toEqual(["patienten_auflisten", "notizen_suchen", "notiz_lesen", "heute_ueberblick", "notiz_entwurf_erstellen", "notiz_aenderung_vorschlagen", "bericht_erstellen"]);
+    expect(WERKZEUGE.find((w) => w.name === "notiz_aenderung_vorschlagen").description).toContain("Speichert NICHT");
     for (const w of WERKZEUGE) {
       expect(w.description.length).toBeGreaterThan(20);
       expect(w.input_schema).toMatchObject({ type: "object", additionalProperties: false });

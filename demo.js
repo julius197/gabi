@@ -12,6 +12,8 @@
   "use strict";
 
   const TAG_MS = 86400000;
+  // v2.5: Prüfliste und Änderungsvorschlag – dieselbe Logik wie Oberfläche und Worker (notizlogik.js)
+  const NL = typeof module === "object" && module.exports ? require("./notizlogik.js") : globalThis.GabiNotizLogik;
   const ABSCHNITTE = ["befund", "massnahmen", "verlauf", "hausaufgaben"];
   const MAX_ROHTEXT = 50000;
   const DEMO_HINWEIS = "Demo-Modus: Beispiel-Zuordnung ohne KI – bitte prüfen";
@@ -211,6 +213,8 @@
     const n = {};
     for (const k of ABSCHNITTE) n[k] = punkte(q[k]);
     n.unklar = punkte(q.unklar);
+    const pruefung = NL.pruefungNormalisieren(q.pruefung, n.unklar);
+    if (pruefung.length) n.pruefung = pruefung;
     return n;
   }
 
@@ -290,7 +294,7 @@
   const ALLE = [...ABSCHNITTE, "unklar"];
   const TITEL = { befund: "Befund", massnahmen: "Maßnahmen", verlauf: "Verlauf", hausaufgaben: "Hausaufgaben", unklar: "Unklar" };
 
-  const WERKZEUG_NAMEN = ["patienten_auflisten", "notizen_suchen", "notiz_lesen", "heute_ueberblick", "notiz_entwurf_erstellen", "bericht_erstellen"];
+  const WERKZEUG_NAMEN = ["patienten_auflisten", "notizen_suchen", "notiz_lesen", "heute_ueberblick", "notiz_entwurf_erstellen", "notiz_aenderung_vorschlagen", "bericht_erstellen"];
   const STATUS = {
     patienten_auflisten: "Schaue in die Patientenliste …",
     notizen_suchen: "Durchsuche die Notizen …",
@@ -298,6 +302,7 @@
     heute_ueberblick: "Schaue, was heute anliegt …",
     notiz_entwurf_erstellen: "Strukturiere das Diktat …",
     bericht_erstellen: "Schreibe den Bericht …",
+    notiz_aenderung_vorschlagen: "Bereite die Änderung vor …",
   };
 
   /** Texte der festen Abläufe – gleich wie im Worker (worker/src/app.js, Route /api/chat). */
@@ -376,7 +381,11 @@
       const s = normalisieren(n.strukturiert);
       const o = { id: n.id, kuerzel: n.kuerzel, datum: anzeigeZeit(n.erstellt_am) };
       if (n.geaendert_am) o.bearbeitet = anzeigeZeit(n.geaendert_am);
-      for (const k of ALLE) if (s[k].length) o[k] = s[k];
+      for (const k of ABSCHNITTE) if (s[k].length) o[k] = s[k];
+      const offen = NL.offenePunkte(s);
+      const erledigt = NL.erledigtePunkte(s);
+      if (offen.length) o.unklar = offen;
+      if (erledigt.length) o.unklar_erledigt = erledigt;
       return o;
     }
     const quelle = (n) => ({ id: n.id, kuerzel: n.kuerzel, erstellt_am: n.erstellt_am });
@@ -409,7 +418,7 @@
         const vonHeute = alle.filter((n) => tagBerlin(n.erstellt_am) === heute);
         const offen = alle
           .filter((n) => new Date(n.erstellt_am).getTime() >= seit)
-          .flatMap((n) => normalisieren(n.strukturiert).unklar.map((punkt) => ({ kuerzel: n.kuerzel, datum: anzeigeZeit(n.erstellt_am), punkt })))
+          .flatMap((n) => NL.offenePunkte(normalisieren(n.strukturiert)).map((punkt) => ({ kuerzel: n.kuerzel, datum: anzeigeZeit(n.erstellt_am), punkt })))
           .slice(0, 12);
         if (vonHeute.length && k.senden) k.senden({ t: "quellen", notizen: vonHeute.slice(0, 6).map(quelle) });
         return {
@@ -433,6 +442,21 @@
           stichpunkte: Object.fromEntries(ABSCHNITTE.map((x) => [x, strukturiert[x].length])),
           unklar: strukturiert.unklar,
           hinweis: "Der Entwurf wird als Karte angezeigt. Gespeichert wird erst, wenn die Therapeutin auf „Speichern“ tippt.",
+        };
+      },
+      async notiz_aenderung_vorschlagen(e, k) {
+        if (typeof e.id !== "string" || !e.id) throw new WerkzeugFehler("Ungültige Notiz-id – bitte die id aus notizen_suchen nehmen.");
+        let n;
+        try { n = (await api.anfrage(`/api/notizen/${encodeURIComponent(e.id)}`)).notiz; } catch { throw new WerkzeugFehler("Diese Notiz gibt es nicht (mehr)."); }
+        const s = normalisieren(n.strukturiert);
+        const geprueft = NL.aenderungPruefen(s, e.aenderungen);
+        if (geprueft.fehler) throw new WerkzeugFehler(geprueft.fehler);
+        const abschnitte = Object.fromEntries(ABSCHNITTE.filter((x) => geprueft.aenderungen.some((a) => a.abschnitt === x)).map((x) => [x, s[x]]));
+        if (k.senden) k.senden({ t: "quellen", notizen: [quelle(n)] });
+        if (k.senden) k.senden({ t: "aenderung", aenderung: { notiz_id: n.id, patient_id: n.patient_id, kuerzel: n.kuerzel, erstellt_am: n.erstellt_am, stand: n.geaendert_am || n.erstellt_am, abschnitte, aenderungen: geprueft.aenderungen } });
+        return {
+          angezeigt: true, gespeichert: false, kuerzel: n.kuerzel, datum: anzeigeZeit(n.erstellt_am), aenderungen: geprueft.aenderungen.length,
+          hinweis: "Der Vorschlag wird als Karte mit Vorher/Nachher angezeigt. Gespeichert wird erst, wenn die Therapeutin auf „Übernehmen“ tippt.",
         };
       },
       async bericht_erstellen(e, k) {
@@ -479,6 +503,46 @@
   const FUELLWOERTER = /\b(such(e|en|st)?|finde?n?|zeig(e|en)?|mir|notiz(en)?|meinen?|meiner|in|mit|nach|wo|steht|stand|den|der|die|das|dem|bitte|gabi|alle|über|zu|zum|zur|von|was|gibt|es|ich|du|hast|habe|eine?n?)\b/g;
 
   /** Einfache Absichtserkennung für den Demo-Modus (ohne KI). */
+  // ---------- v2.5: Notiz per Gespräch ändern (Demo: vorbereitete Antworten ohne KI) ----------
+  const VORBEREITET = "Vorbereitete Antwort ohne KI (Demo-Modus).";
+  // \b reicht vor Umlauten nicht (JavaScript kennt dort nur ASCII-Wortgrenzen) – darum (?<!\p{L})
+  const WILL_AENDERN = /(?<!\p{L})(?:änder|aender|korrigier|ersetz|setz)\p{L}*/iu;
+  const VAGE = /(?<!\p{L})(?:verbesser|überarbeit|ueberarbeit|optimier|umformulier|aufhübsch)\p{L}*|(?<!\p{L})mach\p{L}*(?!\p{L})[^.?!]*(?<!\p{L})(?:besser|schöner|schoener|professioneller|ordentlicher)(?!\p{L})/iu;
+  const KONKRET = /\b(?:die|den|das|der)\s+([\p{L}][\p{L}\p{N}-]*(?:\s+[\p{L}][\p{L}\p{N}-]*)?)\s+(?:auf|in)\s+(-?\d+(?:[.,]\d+)?)\s*(grad|°|kg|kilo(?:gramm)?|cm|zentimeter|min(?:uten)?|sek(?:unden)?|s)?(?![\p{L}])/iu;
+  const EINHEIT = { grad: "°", "°": "°", kg: " kg", kilo: " kg", kilogramm: " kg", cm: " cm", zentimeter: " cm", min: " min", minuten: " min", s: " s", sek: " s", sekunden: " s" };
+
+  /** „Ändere bei TP-01 die Flexion auf 110 Grad“ → { art: "aenderung", begriff, wert, einheit, tag, neueste }; unklar → „aenderung_vage“. */
+  function aenderungErkennen(text, kuerzel) {
+    const t = glatt(text);
+    const will = WILL_AENDERN.test(t);
+    const vage = VAGE.test(t);
+    if (!will && !vage) return null;
+    const m = KONKRET.exec(t);
+    if (m && will) {
+      const d = /\bvom\s+(\d{1,2})\.(\d{1,2})\./.exec(t);
+      return {
+        art: "aenderung", kuerzel, begriff: m[1].trim(), wert: m[2], einheit: (m[3] || "").toLowerCase(),
+        tag: d ? `${d[1].padStart(2, "0")}.${d[2].padStart(2, "0")}.` : "",
+        neueste: /\b(?:letzte[nr]?|neueste[nr]?|jüngste[nr]?|aktuelle[nr]?)\s+notiz/i.test(t),
+        aelteste: /\b(?:erste[nr]?|älteste[nr]?|aelteste[nr]?)\s+notiz/i.test(t),
+      };
+    }
+    if (vage || (will && (kuerzel || /\bnotiz/i.test(t)))) return { art: "aenderung_vage", kuerzel };
+    return null;
+  }
+
+  /** Den ersten Wert hinter dem Begriff ersetzen; Einheit der Zeile bleibt (fehlt sie, die genannte). null = kein Wert. */
+  function wertErsetzen(zeile, begriff, wert, einheit) {
+    const i = zeile.toLowerCase().indexOf(begriff.toLowerCase());
+    if (i < 0) return null;
+    const ab = i + begriff.length;
+    const m = /(-?\d+(?:[.,]\d+)?)(\s*(?:°|kg\b|cm\b|min\b|s\b|Wdh\.))?/u.exec(zeile.slice(ab));
+    if (!m) return null;
+    const anfang = ab + m.index;
+    const neu = `${wert}${m[2] ? m[2] : EINHEIT[einheit] || ""}`;
+    return zeile.slice(0, anfang) + neu + zeile.slice(anfang + m[0].length);
+  }
+
   function absichtErkennen(text, kuerzelListe = []) {
     const t = String(text || "").toLowerCase().trim();
     if (!t) return { art: "unbekannt" };
@@ -494,6 +558,8 @@
     const kuerzel = kuerzelFinden(text, kuerzelListe);
     const hat = (re) => re.test(t);
     if (hat(/diagnose|empfiehl|empfehl|welche übung(en)? soll|was soll (ich|er|sie)|therapievorschlag|prognose|ist das (schlimm|normal)|was fehlt (ihm|ihr)/)) return { art: "rat" };
+    const aenderung = aenderungErkennen(text, kuerzel);
+    if (aenderung) return aenderung;
     if (kuerzel && t.length > 40 && hat(/notiz für|diktat|dokumentier|schreib.*notiz|neue notiz|behandlung (heute|eben)/)) return { art: "entwurf", kuerzel };
     if (hat(/bericht|zusammenfass|verlauf (von|für)|fasse? .*zusammen/)) return { art: "bericht", kuerzel, berichtArt: hat(/zusammenfass|fasse? .*zusammen/) ? "zusammenfassung" : "verlauf" };
     if (hat(/\bheute\b|steht an|tagesüberblick|überblick|termin/)) return { art: "heute" };
@@ -522,6 +588,42 @@
 
   const datumAus = (n) => ((/(\d{2}\.\d{2}\.)\d{4}/.exec((n && n.datum) || "") || [])[1] || "");
   const liste = (punkteListe) => punkteListe.map((x) => `- ${x}`).join("\n");
+
+  /** v2.5: Änderungswunsch im Demo-Modus – nachfragen, ablehnen oder einen Vorschlag als Karte zeigen. */
+  async function aenderungImGespraech(a, { sag, nutze, warte }) {
+    const beispiel = (k) => `„Ändere bei ${k || "TP-01"} die Flexion auf 110 Grad.“`;
+    const mit = (text) => sag(`${text}\n\n${VORBEREITET}`);
+    if (a.art === "aenderung_vage") {
+      await warte(450);
+      return mit(`Das ändere ich so nicht – ich schlage nur konkrete Änderungen vor, damit nichts in die Notiz kommt, was du nicht gesagt hast. Was genau soll wie geändert werden? Zum Beispiel: ${beispiel(a.kuerzel)}`);
+    }
+    const wunsch = `${a.wert}${EINHEIT[a.einheit] || ""}`;
+    if (!a.kuerzel) { await warte(450); return mit(`Bei welchem Test-Patienten? Nenn mir bitte das Kürzel, zum Beispiel: „Ändere bei TP-01 die ${a.begriff} auf ${wunsch}.“`); }
+    const r = await nutze("notizen_suchen", { kuerzel: a.kuerzel, anzahl: 10 });
+    if (r.fehler) return mit(r.meldung || "Die Notizen konnten nicht gelesen werden.");
+    let notizen = (r.ergebnis && r.ergebnis.notizen) || [];
+    if (a.tag) notizen = notizen.filter((n) => datumAus(n) === a.tag);
+    else if (a.neueste) notizen = notizen.slice(0, 1);
+    else if (a.aelteste) notizen = notizen.slice(-1);
+    const begriff = a.begriff.toLowerCase();
+    const treffer = [];
+    for (const n of notizen) for (const ab of ABSCHNITTE) for (const z of n[ab] || []) if (z.toLowerCase().includes(begriff)) treffer.push({ n, ab, z });
+    if (!treffer.length) return mit(`In ${a.tag ? `der Notiz vom ${a.tag}` : "den Notizen"} von **${a.kuerzel}** finde ich „${a.begriff}“ nicht. Nenn mir den Begriff so, wie er in der Notiz steht.`);
+    const ids = [...new Set(treffer.map((t) => t.n.id))];
+    if (ids.length > 1) {
+      return mit(`Bei **${a.kuerzel}** steht „${a.begriff}“ in ${ids.length} Notizen:\n${liste(treffer.map((t) => `am ${datumAus(t.n)}: ${t.z}`))}\nWelche meinst du? Schreib zum Beispiel: „Ändere bei ${a.kuerzel} in der Notiz vom ${datumAus(treffer[0].n)} die ${a.begriff} auf ${wunsch}.“`);
+    }
+    if (treffer.length > 1) {
+      return mit(`In der Notiz vom ${datumAus(treffer[0].n)} steht „${a.begriff}“ mehrmals:\n${liste(treffer.map((t) => t.z))}\nWelche Zeile meinst du? Nenn mir ein Wort, das nur in dieser Zeile steht.`);
+    }
+    const t = treffer[0];
+    const nachher = wertErsetzen(t.z, a.begriff, a.wert, a.einheit);
+    if (!nachher) return mit(`In dieser Zeile finde ich keinen Wert, den ich sicher ändern kann: „${t.z}“. Bitte bearbeite die Notiz im Notizordner.`);
+    if (nachher === t.z) return mit(`In der Notiz vom ${datumAus(t.n)} steht schon „${t.z}“ – da ändere ich nichts.`);
+    const v = await nutze("notiz_aenderung_vorschlagen", { id: t.n.id, aenderungen: [{ abschnitt: t.ab, vorher: t.z, nachher }] });
+    if (v.fehler) return mit(`Das hat nicht geklappt: ${v.meldung}`);
+    return mit(`Hier ist mein Vorschlag für **${a.kuerzel}** (Notiz vom ${datumAus(t.n)}) – nur diese Zeile ändert sich. Gespeichert wird erst, wenn du auf „Übernehmen“ tippst.`);
+  }
 
   /** Text wie beim Streaming in kleinen Stücken ausgeben. */
   async function textStroemen(text, senden, warte) {
@@ -654,6 +756,8 @@
     const patienten = await werkzeuge.ausfuehren("patienten_auflisten", {}, {});
     const kuerzelListe = ((patienten.ergebnis && patienten.ergebnis.patienten) || []).map((p) => p.kuerzel);
     let a = absichtErkennen(letzte, kuerzelListe);
+    // v2.5: Notiz ändern – mit Brain nur, wenn ein Kürzel genannt ist (sonst ist „Ändere die Telefonzeiten: …“ ein Brain-Befehl)
+    if ((a.art === "aenderung" || a.art === "aenderung_vage") && (!brain || a.kuerzel)) return aenderungImGespraech(a, { sag, nutze, warte });
 
     const suche = brain ? brainModul("GabiBrainSuche", "./brain-suche.js") : null;
     const antworten = brain ? brainAntwort || (suche && suche.antwortAusKontext) : null;
@@ -913,7 +1017,7 @@
         if (!patient) throw new DemoFehler(400, "Bitte einen Test-Patienten wählen.");
         const rohtext = String((body && body.rohtext) || "").replace(/\r\n?/g, "\n").trim();
         if (rohtext.length > MAX_ROHTEXT) throw new DemoFehler(413, "Transkript zu lang.");
-        const strukturiert = normalisieren(body && body.strukturiert);
+        const strukturiert = normalisieren(NL.mitStellen(normalisieren(body && body.strukturiert)));
         if (istLeer(strukturiert) && !rohtext) throw new DemoFehler(400, "Die Notiz ist leer.");
         const n = { id: uuid(), patient_id: patient.id, rohtext, strukturiert, suchtext: suchtext(patient, rohtext, strukturiert), erstellt_am: new Date(jetzt()).toISOString(), geaendert_am: null };
         d.notizen.push(n);
@@ -929,8 +1033,25 @@
         if (!n) throw new DemoFehler(404, "Notiz nicht gefunden.");
         if (methode === "GET") return { notiz: mitPatient(d, n) };
         if (methode === "PATCH") {
+          // v2.5 wie im Worker: ein Häkchen auf dem gespeicherten Stand (Inhalt und „bearbeitet“ bleiben)
+          if (body && "pruefpunkt" in body) {
+            const pp = body.pruefpunkt || {};
+            if (typeof pp.punkt !== "string" || !pp.punkt || typeof pp.erledigt !== "boolean") throw new DemoFehler(400, "Ungültige Angabe: pruefpunkt.");
+            const jetzt2 = NL.mitStellen(normalisieren(n.strukturiert));
+            if (!jetzt2.unklar.includes(pp.punkt)) throw new DemoFehler(409, "Diesen Prüfpunkt gibt es in der Notiz nicht mehr – bitte neu laden.");
+            n.strukturiert = normalisieren(NL.setzen(jetzt2, pp.punkt, pp.erledigt));
+            merken(d);
+            return { notiz: mitPatient(d, n) };
+          }
           const rohtext = body && "rohtext" in body ? String(body.rohtext || "").replace(/\r\n?/g, "\n").trim() : n.rohtext;
-          const strukturiert = body && "strukturiert" in body ? normalisieren(body.strukturiert) : n.strukturiert;
+          let strukturiert = body && "strukturiert" in body ? normalisieren(body.strukturiert) : n.strukturiert;
+          if (body && "strukturiert" in body) {
+            const server = NL.mitStellen(normalisieren(n.strukturiert));
+            const roh = body.strukturiert && typeof body.strukturiert === "object" ? body.strukturiert : {};
+            const basis = Array.isArray(body.pruefung_basis) ? { pruefung: body.pruefung_basis } : "pruefung" in roh ? { pruefung: [] } : server;
+            const lokal = "pruefung" in roh || Array.isArray(body.pruefung_basis) ? strukturiert : { ...strukturiert, pruefung: server.pruefung };
+            strukturiert = normalisieren({ ...strukturiert, pruefung: NL.zusammenfuehren({ basis, lokal, server }) });
+          }
           if (istLeer(strukturiert) && !rohtext) throw new DemoFehler(400, "Die Notiz ist leer.");
           const patient = d.patienten.find((x) => x.id === n.patient_id) || {};
           Object.assign(n, { rohtext, strukturiert, suchtext: suchtext(patient, rohtext, strukturiert), geaendert_am: new Date(jetzt()).toISOString() });
@@ -1006,7 +1127,7 @@
   return {
     PATIENTEN, NOTIZEN, DIKTATE, FRAGEN, PRAXIS, DEMO_HINWEIS, WERKZEUG_NAMEN, ANTWORT, DemoFehler,
     erstelleApi, browserAblage, speicherAblage, startDaten, demoStrukturieren, normalisieren, suchtext, kuerzelPruefen,
-    absichtErkennen, kuerzelFinden, demoWerkzeuge, demoGespraech, demoBerichtInhalt, berichtBauen, entwurfText, berichtText,
+    absichtErkennen, aenderungErkennen, wertErsetzen, VORBEREITET, kuerzelFinden, demoWerkzeuge, demoGespraech, demoBerichtInhalt, berichtBauen, entwurfText, berichtText,
     istRatFrage, RAT_IN_ANTWORT,
   };
 });

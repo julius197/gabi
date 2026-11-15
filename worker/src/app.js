@@ -2,7 +2,7 @@
 // Abhängigkeiten werden hereingereicht (testbar, lokal ohne Konten).
 // Logs: nie Inhalte, Schlüssel, Codes oder IP-Adressen – höchstens die Art eines Fehlers.
 import { GRENZEN, erstelleBegrenzer } from "./begrenzer.js";
-import { MAX_ROHTEXT, istLeer, kuerzelPruefen, normalisieren, pseudonymPruefen, suchtext, suchwoerter } from "./notiz.js";
+import { MAX_ROHTEXT, NL, istLeer, kuerzelPruefen, normalisieren, pseudonymPruefen, suchtext, suchwoerter } from "./notiz.js";
 import { SpeicherFehler, istUuid } from "./speicher.js";
 import { StrukturFehler } from "./strukturierung.js";
 import { ChatFehler, MAX_NACHRICHTEN, MAX_ZEICHEN_NACHRICHT, MAX_ZEICHEN_VERLAUF, erstelleWerkzeuge, kiFehler } from "./chat.js";
@@ -402,7 +402,9 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
       const patient = await speicher.patient(daten.patient_id);
       if (!patient) throw new HttpFehler(404, "Test-Patient nicht gefunden.");
       const rohtext = rohtextPruefen(daten.rohtext);
-      const strukturiert = normalisieren(objektFeld(daten.strukturiert, "strukturiert"));
+      // v2.5: jede noch markierte „(unklar)“-Stelle gleich ihrem Prüfpunkt zuordnen (sonst wäre „im Text korrigiert“
+      // später nicht erkennbar) – die Oberfläche schickt die Zuordnung aus dem Entwurf meist schon mit
+      const strukturiert = normalisieren(NL.mitStellen(normalisieren(objektFeld(daten.strukturiert, "strukturiert"))));
       if (istLeer(strukturiert) && !rohtext) throw new HttpFehler(400, "Die Notiz ist leer.");
       const notiz = await speicher.neueNotiz({
         patient_id: patient.id,
@@ -424,8 +426,30 @@ export function erstelleApp({ speicher, transkribieren, strukturieren, chatten =
       const daten = await jsonLesen(request);
       const alt = await speicher.notiz(id);
       if (!alt) throw new HttpFehler(404, "Notiz nicht gefunden.");
+      // v2.5 „Bitte prüfen“: nur ein Häkchen setzen oder entfernen – auf dem gespeicherten Stand, damit zwei Tabs sich
+      // nicht gegenseitig Häkchen überschreiben. Der Inhalt bleibt, „bearbeitet“ ändert sich nicht.
+      if ("pruefpunkt" in daten) {
+        const pp = objektFeld(daten.pruefpunkt, "pruefpunkt");
+        if (typeof pp.punkt !== "string" || !pp.punkt || pp.punkt.length > 600 || typeof pp.erledigt !== "boolean") throw new HttpFehler(400, "Ungültige Angabe: pruefpunkt.");
+        const jetzt = NL.mitStellen(normalisieren(alt.strukturiert));
+        if (!jetzt.unklar.includes(pp.punkt)) throw new HttpFehler(409, "Diesen Prüfpunkt gibt es in der Notiz nicht mehr – bitte neu laden.");
+        const notiz = await speicher.notizAendern(id, { strukturiert: normalisieren(NL.setzen(jetzt, pp.punkt, pp.erledigt)) });
+        if (!notiz) throw new HttpFehler(404, "Notiz nicht gefunden.");
+        return json({ notiz });
+      }
       const rohtext = "rohtext" in daten ? rohtextPruefen(daten.rohtext) : alt.rohtext;
-      const strukturiert = "strukturiert" in daten ? normalisieren(objektFeld(daten.strukturiert, "strukturiert")) : normalisieren(alt.strukturiert);
+      let strukturiert = "strukturiert" in daten ? normalisieren(objektFeld(daten.strukturiert, "strukturiert")) : normalisieren(alt.strukturiert);
+      if ("strukturiert" in daten) {
+        // Häkchen dreiseitig zusammenführen (zwei Tabs): was dieser Tab geändert hat (gegenüber pruefung_basis), gilt –
+        // sonst das Gespeicherte. Ohne pruefung_basis (ältere Oberfläche) bleiben die gespeicherten Häkchen. Die Stellen
+        // im Text kommen aus dem alten Stand: so erkennt die Prüfliste, was mit dieser Änderung korrigiert wurde.
+        const server = NL.mitStellen(normalisieren(alt.strukturiert));
+        const roh = objektFeld(daten.strukturiert, "strukturiert");
+        const basis = Array.isArray(daten.pruefung_basis) ? { pruefung: daten.pruefung_basis } : "pruefung" in roh ? { pruefung: [] } : server;
+        const lokal = "pruefung" in roh || Array.isArray(daten.pruefung_basis) ? strukturiert : { ...strukturiert, pruefung: server.pruefung };
+        const pruefung = NL.zusammenfuehren({ basis, lokal, server });
+        strukturiert = normalisieren({ ...strukturiert, pruefung });
+      }
       if (istLeer(strukturiert) && !rohtext) throw new HttpFehler(400, "Die Notiz ist leer.");
       const notiz = await speicher.notizAendern(id, {
         rohtext,

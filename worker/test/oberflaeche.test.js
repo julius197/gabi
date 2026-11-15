@@ -187,17 +187,17 @@ describe("Versionsstempel", () => {
   const geladen = [...html.matchAll(/<(?:script|link)\b[^>]*?\b(?:src|href)="([^"#?:]+)(?:\?v=([^"]*))?"/g)].map((m) => [m[1], m[2] || ""]);
 
   it("VERSION in app.js passt zu jedem ?v= in index.html (sonst lädt jeder Start einmal neu oder zeigt „aktualisiert“)", () => {
-    const eigene = [...html.matchAll(/(?:src|href)="(style\.css|darstellung\.js|config\.js|kern\.js|pdf\.js|demo\.js|aufnahme\.js|gespraeche\.js|app\.js)\?v=([^"]+)"/g)];
-    expect(eigene.map((m) => m[1]).sort()).toEqual(["app.js", "aufnahme.js", "config.js", "darstellung.js", "demo.js", "gespraeche.js", "kern.js", "pdf.js", "style.css"]);
+    const eigene = [...html.matchAll(/(?:src|href)="(style\.css|darstellung\.js|config\.js|kern\.js|notizlogik\.js|pdf\.js|demo\.js|aufnahme\.js|gespraeche\.js|app\.js)\?v=([^"]+)"/g)];
+    expect(eigene.map((m) => m[1]).sort()).toEqual(["app.js", "aufnahme.js", "config.js", "darstellung.js", "demo.js", "gespraeche.js", "kern.js", "notizlogik.js", "pdf.js", "style.css"]);
     for (const m of eigene) expect(`${m[1]}?v=${m[2]}`).toBe(`${m[1]}?v=${version}`);
   });
 
-  it("die Fassung mit Brain und Design heißt 2.4.0 – und passt unverändert in eine Adresse", () => {
-    expect(version).toBe("2.4.0");
+  it("die Fassung mit Prüfliste und Änderungsvorschlag heißt 2.5.0 – und passt unverändert in eine Adresse", () => {
+    expect(version).toBe("2.5.0");
     expect(encodeURIComponent(version)).toBe(version);
     // jede eigene Datei in index.html trägt den Stempel – keine ohne, keine mit einem alten (nur die fremde Bibliothek hat ihre eigene Nummer)
     const eigene = geladen.filter(([datei]) => !datei.startsWith("vendor/") && /\.(js|css)$/.test(datei));
-    expect(eigene).toHaveLength(9); // v2.4: dazu darstellung.js im <head>
+    expect(eigene).toHaveLength(10); // v2.4: dazu darstellung.js im <head>, v2.5: notizlogik.js
     for (const [datei, stempel] of eigene) expect(`${datei}?v=${stempel}`).toBe(`${datei}?v=${version}`);
     expect(geladen.filter(([datei]) => datei.startsWith("vendor/"))).toEqual([["vendor/jspdf.umd.min.js", "4.2.1"]]);
   });

@@ -122,6 +122,11 @@
       const b = karte.bericht || {};
       return `[App-Hinweis: ${b.titel || "Bericht"} für ${b.kuerzel} angezeigt – ${stichpunkte(b.zusammenfassung).join("; ")}]`;
     }
+    if (karte.typ === "aenderung") {
+      const zustand = karte.uebernommen ? "übernommen" : karte.verworfen ? "verworfen" : karte.fehlt ? "Notiz gelöscht" : karte.veraltet ? "passt nicht mehr" : "noch nicht übernommen";
+      const teile = (Array.isArray(karte.aenderungen) ? karte.aenderungen : []).map((a) => `${a.abschnitt}: „${String(a.vorher || "").slice(0, 200)}“ → „${String(a.nachher || "").slice(0, 200)}“`);
+      return `[App-Hinweis: Änderungsvorschlag für ${karte.kuerzel} angezeigt (${zustand}) – ${teile.join(" · ")}]`;
+    }
     if (karte.typ === "brain-vorschlag") {
       const zustand = karte.uebernommen ? "übernommen" : karte.verworfen ? "nicht übernommen" : "noch nicht übernommen";
       return `[App-Hinweis: Vorschlag fürs Brain „${String(karte.titel || "").slice(0, 120)}“ angezeigt (${zustand})]`;
@@ -139,7 +144,7 @@
       if (!n || n.lokal) continue;
       // Kam vor dem Fehler/Abbruch schon ein Entwurf oder Bericht an, gilt der Wortwechsel: die Karte steht im Gespräch
       // (gespeichert oder nicht) und Gabi soll sie bei Folgefragen kennen
-      const mitKarte = (n.karten || []).some((k) => k && (k.typ === "entwurf" || k.typ === "bericht"));
+      const mitKarte = (n.karten || []).some((k) => k && (k.typ === "entwurf" || k.typ === "bericht" || k.typ === "aenderung"));
       if ((n.fehler || n.abgebrochen) && !mitKarte) {
         // gescheiterter Wortwechsel: auch die Frage dazu weglassen (sonst wandert z. B. ein altes Diktat in die nächste Notiz)
         if (n.rolle === "gabi" && liste.length && liste[liste.length - 1].rolle === "nutzer") liste.pop();
