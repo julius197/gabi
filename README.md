@@ -33,7 +33,8 @@ Adresse: **https://gabi.automatilabs.de** (Branch `main`, v2 seit 08.11.2026, v2
 ## Aufbau
 
 ```
-index.html, style.css           Oberfläche (mobile first, Hell/Dunkel nach System, Deutsch) – GitHub Pages
+index.html, style.css           Oberfläche (mobile first, Hell/Dunkel nach System, Deutsch) – GitHub Pages; Look im
+                                PhysioWorks-Stil mit Glas, alle Farben als Tokens oben in style.css (Abschnitt 1)
 app.js                          Gespräch, Gesprächsverlauf, Karten (Entwurf, Bericht), Push-to-Talk, Notizordner, Start/Zugang/Demo
 gespraeche.js                   Gesprächsverlauf: Ablage nur im Browser (IndexedDB → localStorage), Titel, Gruppen, Limit 50
 kern.js                         reine Hilfen: sicherer Text (Markdown-Ersatz), NDJSON-Leser, Verlauf für den Server, Datum
@@ -43,7 +44,7 @@ pdf.js                          PDF: Behandlungsnotiz und Bericht (Browser und N
 config.js                       öffentliche API-Adresse (kein Geheimnis)
 knowledge/physioworks.md        Wissen über die Praxis (von physio-works.de, Unklares als „TODO prüfen“)
 vendor/jspdf.umd.min.js         PDF-Erzeugung im Browser (jsPDF 4.2.1, MIT)
-assets/                         Symbole, Schrift Inter (OFL, lokal)
+assets/                         Favicon, Apple-Touch-Icon, Schriften DM Sans + Red Hat Display 700 (OFL, lokal)
 worker/                         Cloudflare Worker = einzige Stelle mit Schlüsseln
   src/app.js                    Routen, Zugangscode, CORS, Eingabeprüfung, NDJSON-Strom, Sicherheits-Header
   src/chat.js                   Assistent: Systemprompt, Werkzeuge, Gesprächsschleife mit Claude, Bericht
@@ -62,7 +63,10 @@ supabase/seed_test.sql          NUR TESTDATEN: 3 erfundene Test-Patienten mit je
 supabase/reset_test.sql         ⚠️ löscht ALLE Notizen und Test-Patienten, dann Stand von seed_test.sql (nur von Hand, nach OK)
 tests/v2.mjs                    Ende-zu-Ende-Tests (Playwright): Handy/Laptop × Hell/Dunkel, Robustheit, echte lokale API, Safari
 tests/eingabefelder.mjs         Eingabefelder ohne Anschnitt (Cursor, Text, Platzhalter per Bildvergleich) – Block 5 von v2.mjs
-screenshots/                    Screenshots aus tests/v2.mjs
+tests/design.mjs                Design v2.3: Kontrast aller Textstellen (Pixel, auch auf Glas), Schriften, CSP/Fremd-Requests,
+                                Breite 320–1440, Glas-Unschärfe, deckend bei Bewegung/Transparenz reduzieren, Screenshots
+tests/design-leistung.mjs       Scrollen mit Glas: 50 Nachrichten, Frame-Zeiten in Chromium (Ziel: kein Frame > 33 ms)
+screenshots/                    Screenshots aus tests/v2.mjs, screenshots/design/ aus tests/design.mjs
 ```
 
 **Datenfluss Gespräch:** Browser → `POST /api/chat` (Verlauf als Text, Zugangscode) → Worker → Claude mit Werkzeugen
@@ -127,6 +131,9 @@ node dev/wissen_erzeugen.mjs               # src/wissen.js neu schreiben, wenn k
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/v2.mjs [diktat.wav] [screenshots/]
 # nur die Eingabefelder (Chromium + WebKit, 320/390/1440, Hell/Dunkel; einzeln: GABI_MOTOREN=chromium GABI_BREITEN=320):
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/eingabefelder.mjs [screenshots/eingabefelder] [http://localhost:8788]
+# Design (Chromium + WebKit, Hell/Dunkel; ~20 min; eingrenzen mit GABI_MOTOREN, GABI_SCHEMEN, GABI_BREITEN, GABI_TEILE=A,D,E,F):
+PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/design.mjs [screenshots/design] [http://localhost:8788]
+PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/design-leistung.mjs [http://localhost:8788] [ergebnis.json]
 ```
 
 ## Einrichtung (einmalig)

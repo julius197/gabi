@@ -11,9 +11,11 @@
   const ABSCHNITTE = [["befund", "Befund"], ["massnahmen", "Maßnahmen"], ["verlauf", "Verlauf"], ["hausaufgaben", "Hausaufgaben"]];
   const FUSS = "Testversion – Testdaten";
   const SEITE = { b: 210, h: 297, rand: 20, oben: 20, unten: 297 - 26 };
+  // v2.3: PhysioWorks-Farben wie in style.css (Abschnitt 1) – Streifen Cyan → #3391F0 → #1A6FD0, Pill und Datum in
+  // Akzent-Text #15569F auf #E4EFFC, Grautöne blaugrau; Schrift bleibt Helvetica (in jedem PDF-Leser vorhanden)
   const FARBE = {
-    tinte: [31, 42, 44], text2: [75, 88, 91], text3: [98, 110, 113], linie: [230, 235, 235], flaeche: [243, 243, 240],
-    akzent: [40, 119, 61], ton: [54, 149, 77], hell: [76, 175, 80], blass: [108, 196, 113], akzentHell: [233, 248, 234], akzentTief: [30, 94, 49],
+    tinte: [27, 30, 33], text2: [59, 72, 88], text3: [74, 88, 106], linie: [223, 231, 242], flaeche: [237, 244, 250],
+    akzent: [26, 111, 208], ton: [51, 145, 240], hell: [72, 168, 242], blass: [98, 207, 244], akzentHell: [228, 239, 252], akzentTief: [21, 86, 159],
     warn: [138, 74, 0], warnHell: [255, 243, 224], markierung: [255, 226, 179],
   };
   const ZEILE = 5.2; // mm je Textzeile bei 10.5 pt

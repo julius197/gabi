@@ -1,74 +1,155 @@
 /* ==========================================================================
-   Gabi v2 – Oberfläche · mobile first, Hell- und Dunkelmodus nach System
-   Sprache: warmes Grau, weiße schwebende Karten mit feiner Kante, lange weiche Schatten,
-   ein Akzent (tiefes Grün), runde Bedienelemente, Inter, ruhige Bewegung (≤ 260 ms).
+   Gabi v2.3 – Oberfläche im PhysioWorks-Stil mit Glas · mobile first, Hell- und Dunkelmodus nach System
+   Bild: hell-bläulicher Grund (Verlauf #EDF4FA → #DFE7F2) mit drei großen weichen Lichtflächen (Akzentblau, helles
+   Cyan), darüber Glas: halbtransparent, Unschärfe + Sättigung (backdrop-filter), feine helle Innenkante, flacher
+   Schatten. Weiße Karten mit 10 px Ecken, runde Knöpfe/Pills, Red Hat Display 700 für Überschriften, DM Sans für
+   Text. Dunkel: Marine #072D53 als Grund mit Glas darauf, Akzent bleibt #3391F0. Ruhige Bewegung (≤ 260 ms); nichts
+   zeichnet dauernd – der Grund ist ein fester Verlauf ohne Animation.
+   Alle Farben stehen als Tokens in Abschnitt 1: zuerst die PhysioWorks-Grundfarben, daraus die Rollen – dort lässt
+   sich der Look nachstellen. Glas wird deckend ohne backdrop-filter, bei „Bewegung reduzieren“ und bei „Transparenz
+   reduzieren“ (Abschnitte 12 und 13). Am Handy rechnen nur Kopfzeile und Eingabe-Band (dazu offene Dialoge,
+   Schublade, Toasts) Unschärfe – Karten im Verlauf sind Glas ohne backdrop-filter (Abschnitt 11).
    1 Tokens · 2 Grundlagen · 3 Bausteine · 4 Kopf/Seitenleiste · 5 Zugang · 6 Gespräch · 7 Eingabe
-   8 Karten im Gespräch · 9 Notizen · 10 Dialoge/Toasts · 11 Laptop · 12 Bewegung
+   8 Karten im Gespräch · 9 Notizen · 10 Dialoge/Toasts · 11 Handy/Laptop · 12 Bewegung · 13 Glas deckend
    ========================================================================== */
 
+/* Schriften lokal (CSP font-src 'self'), nur die nötigen Schnitte, lateinischer Zeichensatz mit Umlauten, „“, –, €:
+   DM Sans als variable Schrift (ein File für 400–700), Red Hat Display nur fett (700) für Überschriften. Lizenzen:
+   assets/fonts/OFL-*.txt */
 @font-face {
-  font-family: "Inter";
-  src: url("assets/fonts/inter-latin.woff2") format("woff2");
-  font-weight: 100 900;
+  font-family: "DM Sans";
+  src: url("assets/fonts/dm-sans-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 1000;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Red Hat Display";
+  src: url("assets/fonts/red-hat-display-latin-700-normal.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 /* 1 Tokens ---------------------------------------------------------------- */
 :root {
   color-scheme: light dark;
-  --bg: #f3f3f0;
-  --bg-glas: rgba(243, 243, 240, 0.82);
-  --flaeche: #ffffff;
-  --flaeche-2: #f8faf9;
-  --fuell: #eff3f3;
-  --fuell-2: #e3e9ea;
-  --ring: rgba(16, 24, 25, 0.06);
-  --linie: #e6ebeb;
-  --linie-2: #d3dbdc;
-  --text: #1f2a2c;
-  --text-2: #4b585b;
-  --text-3: #626e71;
-  --text-4: #97a2a4;
 
-  --akzent: #28773d;
-  --akzent-hover: #1e5e31;
-  --akzent-auf: #ffffff;
-  --akzent-ton: #36954d;
-  --akzent-hell: #eefbee;
-  --eintrag-aktiv: #eefbee; /* deckend: Stift und Papierkorb liegen darüber */
-  --akzent-hell-2: #ddf6dd;
-  --akzent-rand: #bdeabf;
-  --akzent-tief: #1e5e31;
-  --blase: #28773d;
+  /* PhysioWorks-Grundfarben (von physio-works.de ausgelesen) – alle Rollen darunter leiten sich davon ab */
+  --pw-blau: #3391f0;    /* Akzent */
+  --pw-marine: #072d53;  /* Überschriften, Kopfleiste – im Dunkelmodus der Grund */
+  --pw-grund: #edf4fa;   /* Hintergrund */
+  --pw-karte: #f8fafd;   /* Karten */
+  --pw-flaeche: #dfe7f2; /* Flächen */
+  --pw-text: #1b1e21;    /* Text */
+  --pw-cyan: #62cff4;    /* helles Cyan: zweite Lichtfläche hinter dem Glas (zum Blau ergänzt, nicht von der Website) */
+
+  /* Grund: Verlauf von oben nach unten, darüber drei Lichtflächen (RGB, Deckkraft in der Mitte) – siehe body::before */
+  --bg: var(--pw-grund);
+  --bg-unten: var(--pw-flaeche);
+  --licht-1: 51, 145, 240;  /* Akzentblau, oben rechts */
+  --licht-1-a: 0.22;
+  --licht-2: 98, 207, 244;  /* helles Cyan, links */
+  --licht-2-a: 0.3;
+  --licht-3: 51, 145, 240;  /* Akzentblau, unten */
+  --licht-3-a: 0.1;
+
+  /* Flächen */
+  --flaeche: var(--pw-karte); /* Karten (deckend) */
+  --flaeche-2: #f1f6fb;
+  --feld: #ffffff;            /* Eingabefelder, Suche, Auswahl */
+  --fuell: #e3ecf6;           /* deckend: Füllung sekundärer Knöpfe, Zeigen über Einträgen */
+  --fuell-2: #d6e2ef;
+  --ring: rgba(7, 45, 83, 0.08);
+  --linie: rgba(7, 45, 83, 0.1);
+  --linie-2: rgba(7, 45, 83, 0.2);
+
+  /* Text – jede Stufe ≥ 4,5:1 auf Grund, Lichtflächen, Glas und Karten (gemessen in tests/design.mjs) */
+  --text: var(--pw-text);
+  --titel: var(--pw-marine);  /* Überschriften, Wortmarke */
+  --text-2: #3b4858;
+  --text-3: #4a586a;
+  --text-4: #556477;          /* Platzhalter in Feldern (dort ≥ 4,5:1), leise Symbole */
+
+  /* Akzent */
+  --akzent: var(--pw-blau);   /* Flächen, Symbole, Punkte, Häkchen, Senden, Markenpunkt */
+  --akzent-knopf: #1a6fd0;    /* Knöpfe mit Text, eigene Blase, Avatar: Weiß darauf 4,97:1 (auf #3391F0 nur 3,26:1) */
+  --akzent-hover: #155cb0;
+  --akzent-auf: #ffffff;      /* Schrift und Symbole auf Akzent-Flächen */
+  --akzent-ton: var(--pw-blau);
+  --akzent-text: #15569f;     /* Text in Akzentfarbe (Links, Status, Chips): ≥ 4,8:1 auch über den Lichtflächen */
+  --akzent-tief: var(--akzent-text);
+  --akzent-symbol: #1a6fd0;   /* Symbole auf hellblauen Kacheln */
+  --akzent-hell: #e4effc;
+  --eintrag-aktiv: #dbe9fa;   /* deckend: Stift und Papierkorb liegen darüber */
+  --akzent-hell-2: #d6e7fb;
+  --akzent-rand: rgba(51, 145, 240, 0.4);
+  --senden-hover: #1a6fd0;
+  --fokus: #1a6fd0;           /* Fokusring: ≥ 3:1 auf Grund und Flächen */
+  --fokus-schein: rgba(51, 145, 240, 0.2);
+  --blase: var(--akzent-knopf);
   --blase-text: #ffffff;
   /* Schein hinter leeren Zuständen: Farbe und Deckkraft in der Mitte (Verlauf siehe .leer::before) */
-  --glanz-rgb: 221, 246, 221;
-  --glanz-a: 1;
-  --streifen: linear-gradient(90deg, #6cc471, #4caf50 50%, #36954d);
+  --glanz-rgb: 51, 145, 240;
+  --glanz-a: 0.14;
+  --streifen: linear-gradient(90deg, var(--pw-cyan), var(--pw-blau) 50%, var(--akzent-knopf));
+
+  /* Glas: halbtransparente Fläche + Unschärfe/Sättigung des Dahinter + feine helle Innenkante + flacher Schatten */
+  --glas: rgba(248, 250, 253, 0.58);       /* Karten im Gespräch, Seitenleiste, Schnellaktionen, Zugang */
+  --glas-stark: rgba(248, 250, 253, 0.84); /* Dialoge, Schublade, Toasts */
+  --glas-kopf: rgba(237, 244, 250, 0.78);  /* Kopfzeile und Eingabe-Band: Inhalt läuft darunter durch */
+  --glas-feld: rgba(255, 255, 255, 0.74);  /* Eingabefeld und Chips auf dem Band */
+  --glas-kante: rgba(255, 255, 255, 0.75); /* feiner heller Rand innen (1 px) */
+  --glas-glanz: rgba(255, 255, 255, 0.95); /* Lichtkante oben */
+  --glas-schatten: 0 1px 2px rgba(7, 45, 83, 0.06), 0 10px 28px -18px rgba(7, 45, 83, 0.32);
+  --glas-schatten-hoch: 0 2px 4px rgba(7, 45, 83, 0.06), 0 16px 32px -18px rgba(7, 45, 83, 0.38);
+  --glas-filter: blur(18px) saturate(160%);
+  /* deckende Gegenstücke – ohne backdrop-filter, bei „Transparenz reduzieren“ und „Bewegung reduzieren“ */
+  --glas-deckend: var(--pw-karte);
+  --glas-kopf-deckend: var(--pw-grund);
+  --glas-feld-deckend: #ffffff;
 
   --warn-bg: rgba(255, 149, 0, 0.14);
-  --warn-text: #8a4a00;
-  --warn-rand: rgba(255, 149, 0, 0.32);
-  --fehler: #c4170e;
+  --warn-text: #7c4200;
+  --warn-rand: rgba(255, 149, 0, 0.34);
+  --fehler: #9b0f08;
   --auf-fehler: #fff;
   --fehler-bg: rgba(255, 59, 48, 0.08);
-  --fehler-rand: rgba(255, 59, 48, 0.22);
-  --ok: #1a6e2e;
+  --fehler-rand: rgba(255, 59, 48, 0.24);
+  --ok: var(--akzent-text);
   --aufnahme: #e5372c;
+  /* Schrift direkt auf Kopfzeile/Eingabe-Band: hält ≥ 4,5:1 auch, wenn dahinter scharfer Text liegt (ohne Unschärfe) */
+  --marke-unter: var(--titel);
+  --band-text: var(--text-2);
+  --band-hinweis: var(--titel);
 
-  --schatten: 0 0 0 1px var(--ring), 0 18px 40px -30px rgba(35, 46, 48, 0.35);
-  --schatten-hoch: 0 0 0 1px var(--ring), 0 24px 50px -26px rgba(35, 46, 48, 0.4);
-  --schatten-schwebe: 0 0 0 1px var(--ring), 0 10px 30px -12px rgba(0, 0, 0, 0.18);
-  --schatten-dialog: 0 0 0 1px var(--ring), 0 30px 80px -20px rgba(0, 0, 0, 0.35);
+  /* sehr flache Schatten: feine Kante + kurzer weicher Fall */
+  --schatten: 0 0 0 1px var(--ring), 0 1px 2px rgba(7, 45, 83, 0.05), 0 6px 16px -10px rgba(7, 45, 83, 0.2);
+  --schatten-hoch: 0 0 0 1px var(--ring), 0 2px 4px rgba(7, 45, 83, 0.05), 0 12px 26px -14px rgba(7, 45, 83, 0.28);
+  --schatten-schwebe: 0 0 0 1px var(--ring), 0 8px 24px -14px rgba(7, 45, 83, 0.32);
+  --schatten-dialog: 0 0 0 1px var(--ring), 0 24px 64px -24px rgba(7, 45, 83, 0.42);
+  --schatten-chip: 0 1px 2px rgba(7, 45, 83, 0.05);
+  --schatten-toast: 0 0 0 1px var(--ring), 0 18px 44px -18px rgba(7, 45, 83, 0.4);
+  --schatten-leiste: 1px 0 0 var(--ring), 8px 0 32px -24px rgba(7, 45, 83, 0.35);
+  --schatten-zeichen: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 16px 40px -18px rgba(26, 111, 208, 0.75);
+  --schatten-aufnahme: 0 0 0 2px var(--aufnahme), 0 14px 34px -14px rgba(229, 55, 44, 0.45);
+  --schatten-verwirft: 0 0 0 2px var(--text-3), 0 14px 34px -14px rgba(0, 0, 0, 0.3);
+  --glanz-fuellung: inset 0 1px 0 rgba(255, 255, 255, 0.2); /* Lichtkante auf gefüllten Flächen: Knöpfe, Blase, Avatar, Senden */
+  --auf-aufnahme: #ffffff;
+  /* Abdunkeln hinter Dialogen und Schublade steht als fester Wert in ::backdrop (Abschnitt 10), weil ältere Safari dort
+     keine Variablen erben: Hell rgba(7, 45, 83, 0.3), Dunkel rgba(1, 12, 26, 0.55) */
 
-  --r-s: 8px;
-  --r-m: 12px;
-  --r-l: 16px;
-  --r-xl: 24px;
+  --r-s: 6px;
+  --r-m: 8px;
+  --r-l: 10px;
+  --r-xl: 14px;   /* Dialoge, Schublade */
+  --r-karte: 10px; /* Karten: ca. 10 px wie auf physio-works.de */
   --rund: 999px;
 
-  --schrift: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --schrift: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --schrift-titel: "Red Hat Display", "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --raus: cubic-bezier(0.16, 1, 0.3, 1);
   --rein: cubic-bezier(0.4, 0, 1, 1);
   --beide: cubic-bezier(0.65, 0, 0.35, 1);
@@ -83,49 +164,74 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0c1213;
-    --bg-glas: rgba(12, 18, 19, 0.8);
-    --flaeche: #141c1e;
-    --flaeche-2: #182123;
-    --fuell: #1c2628;
-    --fuell-2: #253133;
-    --ring: rgba(255, 255, 255, 0.07);
-    --linie: #233033;
-    --linie-2: #33403f;
-    --text: #e7eeef;
-    --text-2: #b3bec0;
-    --text-3: #8d999b;
-    --text-4: #677476;
+    --bg: var(--pw-marine);
+    --bg-unten: #05213f;
+    --licht-1-a: 0.26;
+    --licht-2-a: 0.14;
+    --licht-3-a: 0.16;
 
-    --akzent: #6cc471;
-    --akzent-hover: #94da98;
-    --akzent-auf: #072312;
-    --akzent-ton: #6cc471;
-    --akzent-hell: rgba(108, 196, 113, 0.11);
-    --eintrag-aktiv: #17261d; /* = --akzent-hell über --bg, aber deckend */
-    --akzent-hell-2: rgba(108, 196, 113, 0.18);
-    --akzent-rand: rgba(108, 196, 113, 0.3);
-    --akzent-tief: #9ddfa1;
-    --blase: #1e5e31;
-    --blase-text: #eafbe9;
-    --glanz-rgb: 76, 175, 80;
-    --glanz-a: 0.16;
-    --streifen: linear-gradient(90deg, #4caf50, #36954d 50%, #28773d);
+    --flaeche: #0b3461;
+    --flaeche-2: #0e3a69;
+    --feld: #0e3a69;
+    --fuell: #15406b;
+    --fuell-2: #1c4b7a;
+    --ring: rgba(255, 255, 255, 0.08);
+    --linie: rgba(255, 255, 255, 0.1);
+    --linie-2: rgba(255, 255, 255, 0.2);
+
+    --text: #eaf2fb;
+    --titel: #f4f8fd;
+    --text-2: #c3d3e6;
+    --text-3: #b0c3d9;
+    --text-4: #a9bdd4;
+
+    --akzent-knopf: var(--pw-blau); /* dunkle Schrift darauf: 5,49:1 */
+    --akzent-hover: #5aa6f4;
+    --akzent-auf: #04182e;
+    --akzent-text: #93c8fb;
+    --akzent-symbol: #93c8fb;
+    --akzent-hell: #0d3b69;   /* deckend (= Akzent 14 % auf Marine) */
+    --eintrag-aktiv: #1a4a7a; /* deckend */
+    --akzent-hell-2: #11436f; /* deckend (= Akzent 22 % auf Marine) */
+    --akzent-rand: rgba(51, 145, 240, 0.45);
+    --senden-hover: #5aa6f4;
+    --fokus: #7dbbf7;
+    --fokus-schein: rgba(51, 145, 240, 0.3);
+    --blase: #1b5fae;
+    --blase-text: #ffffff;
+    --glanz-a: 0.2;
+    --streifen: linear-gradient(90deg, var(--pw-cyan), var(--pw-blau) 50%, #1a6fd0);
+
+    --glas: rgba(11, 52, 97, 0.55);
+    --glas-stark: rgba(9, 44, 82, 0.84);
+    --glas-kopf: rgba(7, 45, 83, 0.82);
+    --glas-feld: rgba(14, 58, 105, 0.9);
+    --glas-kante: rgba(255, 255, 255, 0.1);
+    --glas-glanz: rgba(255, 255, 255, 0.16);
+    --glas-schatten: 0 1px 2px rgba(0, 0, 0, 0.2), 0 12px 32px -18px rgba(0, 0, 0, 0.65);
+    --glas-schatten-hoch: 0 2px 4px rgba(0, 0, 0, 0.2), 0 18px 36px -18px rgba(0, 0, 0, 0.7);
+    --glas-deckend: #0b3461;
+    --glas-kopf-deckend: var(--pw-marine);
+    --glas-feld-deckend: #15406b;
 
     --warn-bg: rgba(255, 170, 60, 0.14);
     --warn-text: #ffc078;
     --warn-rand: rgba(255, 170, 60, 0.3);
-    --fehler: #ff8a80;
+    --fehler: #ffb4ae;
     --auf-fehler: #3a0603;
-    --fehler-bg: rgba(255, 90, 80, 0.1);
-    --fehler-rand: rgba(255, 90, 80, 0.26);
-    --ok: #8fdc98;
+    --fehler-bg: rgba(255, 90, 80, 0.12);
+    --fehler-rand: rgba(255, 90, 80, 0.3);
     --aufnahme: #ff5b4f;
+    --marke-unter: var(--akzent-text);
+    --band-hinweis: var(--akzent-text);
 
-    --schatten: 0 0 0 1px var(--ring), 0 18px 40px -26px rgba(0, 0, 0, 0.7);
-    --schatten-hoch: 0 0 0 1px var(--ring), 0 24px 50px -24px rgba(0, 0, 0, 0.75);
-    --schatten-schwebe: 0 0 0 1px var(--ring), 0 10px 30px -10px rgba(0, 0, 0, 0.6);
-    --schatten-dialog: 0 0 0 1px var(--ring), 0 30px 80px -20px rgba(0, 0, 0, 0.8);
+    --schatten: 0 0 0 1px var(--ring), 0 1px 2px rgba(0, 0, 0, 0.2), 0 6px 16px -10px rgba(0, 0, 0, 0.5);
+    --schatten-hoch: 0 0 0 1px var(--ring), 0 2px 4px rgba(0, 0, 0, 0.2), 0 12px 26px -14px rgba(0, 0, 0, 0.6);
+    --schatten-schwebe: 0 0 0 1px var(--ring), 0 8px 24px -14px rgba(0, 0, 0, 0.6);
+    --schatten-dialog: 0 0 0 1px var(--ring), 0 24px 64px -24px rgba(0, 0, 0, 0.75);
+    --schatten-chip: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --schatten-toast: 0 0 0 1px var(--ring), 0 18px 44px -18px rgba(0, 0, 0, 0.6);
+    --schatten-leiste: 1px 0 0 var(--ring), 8px 0 32px -24px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -140,16 +246,59 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 400 15px/1.6 var(--schrift);
-  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+/* Grund: Verlauf und drei Lichtflächen, fest hinter allem – scrollt nicht mit, wird beim Scrollen nicht neu gemalt,
+   keine Animation. Die Lichtflächen sind Verläufe mit Kosinus-Abfall in 11 Stufen statt filter: blur(): genauso
+   weich, ohne Kante und ohne Unschärfe-Rechnung über die ganze Fläche. Das Glas darüber hat so etwas zum Brechen. */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(56vmax 46vmax at 100% 0%,
+      rgba(var(--licht-1), var(--licht-1-a)) 0%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.976)) 10%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.905)) 20%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.794)) 30%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.655)) 40%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.500)) 50%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.345)) 60%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.206)) 70%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.095)) 80%,
+      rgba(var(--licht-1), calc(var(--licht-1-a) * 0.024)) 90%,
+      rgba(var(--licht-1), 0) 100%),
+    radial-gradient(50vmax 42vmax at 0% 58%,
+      rgba(var(--licht-2), var(--licht-2-a)) 0%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.976)) 10%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.905)) 20%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.794)) 30%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.655)) 40%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.500)) 50%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.345)) 60%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.206)) 70%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.095)) 80%,
+      rgba(var(--licht-2), calc(var(--licht-2-a) * 0.024)) 90%,
+      rgba(var(--licht-2), 0) 100%),
+    radial-gradient(48vmax 36vmax at 64% 104%,
+      rgba(var(--licht-3), var(--licht-3-a)) 0%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.976)) 10%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.905)) 20%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.794)) 30%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.655)) 40%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.500)) 50%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.345)) 60%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.206)) 70%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.095)) 80%,
+      rgba(var(--licht-3), calc(var(--licht-3-a) * 0.024)) 90%,
+      rgba(var(--licht-3), 0) 100%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-unten) 100%);
+}
 h1, h2, h3, h4, p, ul, ol, figure { margin: 0; }
 ul, ol { padding: 0; }
-h1, h2, h3 { font-weight: 600; letter-spacing: -0.022em; line-height: 1.2; }
+h1, h2, h3 { font-family: var(--schrift-titel); font-weight: 700; letter-spacing: -0.015em; line-height: 1.2; color: var(--titel); }
 h1 { font-size: 26px; }
 h2 { font-size: 19px; }
-h3 { font-size: 15px; letter-spacing: -0.01em; }
+h3 { font-size: 15px; letter-spacing: -0.005em; }
 a { color: inherit; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -158,7 +307,7 @@ svg { display: block; flex: none; }
 img { display: block; max-width: 100%; }
 ::selection { background: var(--akzent-rand); }
 :focus { outline: none; }
-:focus-visible { outline: 2px solid var(--akzent-ton); outline-offset: 2px; border-radius: inherit; }
+:focus-visible { outline: 2px solid var(--fokus); outline-offset: 2px; border-radius: inherit; }
 .unsichtbar { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .zahl { font-variant-numeric: tabular-nums; }
 .stumm { color: var(--text-3); }
@@ -178,11 +327,11 @@ img { display: block; max-width: 100%; }
 }
 .knopf:active:not(:disabled) { transform: scale(0.97); }
 .knopf:disabled { cursor: default; opacity: 0.5; }
-.knopf.primaer { background: var(--akzent); color: var(--akzent-auf); }
+.knopf.primaer { background: var(--akzent-knopf); color: var(--akzent-auf); box-shadow: var(--glanz-fuellung); }
 .knopf.primaer:hover:not(:disabled) { background: var(--akzent-hover); }
 .knopf.sekundaer { background: var(--fuell); color: var(--text); }
 .knopf.sekundaer:hover:not(:disabled) { background: var(--fuell-2); }
-.knopf.geist { background: transparent; color: var(--akzent-tief); padding: 0 12px; }
+.knopf.geist { background: transparent; color: var(--akzent-text); padding: 0 12px; }
 .knopf.geist:hover:not(:disabled) { background: var(--akzent-hell); }
 .knopf.leise { background: transparent; color: var(--text-2); padding: 0 12px; }
 .knopf.leise:hover:not(:disabled) { background: var(--fuell); color: var(--text); }
@@ -209,51 +358,53 @@ img { display: block; max-width: 100%; }
   background: var(--fuell); color: var(--text-2);
   font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; white-space: nowrap;
 }
-.badge.akzent { background: var(--akzent-hell-2); color: var(--akzent-tief); }
+.badge.akzent { background: var(--akzent-hell-2); color: var(--akzent-text); }
 .badge.warn { background: var(--warn-bg); color: var(--warn-text); }
 .badge .punkt { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
+/* Chips: helles Glas ohne eigene Unschärfe (auf dem Eingabe-Band rechnet das Band, im Verlauf liegt nur der Grund) */
 .chip {
   display: inline-flex; align-items: center; gap: 7px;
   min-height: 38px; padding: 0 14px;
   border: 0; border-radius: var(--rund);
-  background: var(--flaeche); color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--linie-2);
+  background: var(--glas-feld); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--linie-2), var(--schatten-chip);
   font-size: 14px; font-weight: 500; line-height: 1.2; white-space: nowrap; text-decoration: none;
   transition: background-color var(--t-kurz) var(--raus), box-shadow var(--t-kurz), color var(--t-kurz), transform var(--t-kurz) var(--raus);
 }
-.chip:hover:not(:disabled) { background: var(--akzent-hell); box-shadow: inset 0 0 0 1px var(--akzent-rand); color: var(--akzent-tief); }
+.chip:hover:not(:disabled) { background: var(--akzent-hell); box-shadow: inset 0 0 0 1px var(--akzent-rand); color: var(--akzent-text); }
 .chip:active:not(:disabled) { transform: scale(0.97); }
 .chip:disabled { opacity: 0.45; cursor: default; }
 .chip .symbol { width: 16px; height: 16px; color: var(--akzent-ton); }
-.chip.akzent { background: var(--akzent-hell); color: var(--akzent-tief); box-shadow: inset 0 0 0 1px var(--akzent-rand); }
-.chip.gewaehlt { background: var(--akzent); color: var(--akzent-auf); box-shadow: none; }
+.chip.akzent { background: var(--akzent-hell); color: var(--akzent-text); box-shadow: inset 0 0 0 1px var(--akzent-rand); }
+.chip.gewaehlt { background: var(--akzent-knopf); color: var(--akzent-auf); box-shadow: var(--glanz-fuellung); }
 .chip.gewaehlt .symbol { color: currentColor; }
 .chip.gewaehlt:disabled { opacity: 1; }
-.chip.gewaehlt .stumm { color: inherit; opacity: 0.8; }
+.chip.gewaehlt .stumm { color: inherit; opacity: 0.9; }
 .chip-gruppe { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* Karten: weiß (--pw-karte), schweben flach auf dem Grund; Glas-Karten siehe 5, 6 und 8 */
 .karte {
-  position: relative; background: var(--flaeche); border-radius: var(--r-xl);
+  position: relative; background: var(--flaeche); border-radius: var(--r-karte);
   box-shadow: var(--schatten); padding: 20px;
 }
 .karte.mit-streifen { overflow: hidden; }
 .karte.mit-streifen::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--streifen); }
 
-.augenbraue { font-size: 11.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.augenbraue { font-family: var(--schrift); font-size: 11.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
 
 .feld { display: grid; gap: 7px; }
 .feld > span { font-size: 13px; font-weight: 500; color: var(--text-2); }
 .feld small { font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
 .eingabefeld {
   width: 100%; min-height: 48px; padding: 12px 14px;
-  border: 0; border-radius: var(--r-m); background: var(--flaeche); color: var(--text);
+  border: 0; border-radius: var(--r-m); background: var(--feld); color: var(--text);
   box-shadow: inset 0 0 0 1px var(--linie-2);
   font-size: 16px; line-height: 1.4;
   transition: box-shadow var(--t-kurz) var(--raus), background-color var(--t-kurz);
 }
 .eingabefeld::placeholder { color: var(--text-4); }
-.eingabefeld:focus { box-shadow: inset 0 0 0 2px var(--akzent-ton); }
+.eingabefeld:focus { box-shadow: inset 0 0 0 2px var(--fokus); }
 .eingabefeld:focus-visible, .eingabe-text:focus-visible, .suche input:focus-visible { outline: none; }
 .eingabefeld[aria-invalid="true"], .eingabefeld[aria-invalid="true"]:focus { box-shadow: inset 0 0 0 2px var(--fehler); }
 textarea.eingabefeld { resize: none; min-height: 84px; line-height: 1.5; }
@@ -263,7 +414,7 @@ textarea.eingabefeld { resize: none; min-height: 84px; line-height: 1.5; }
 
 .punkte { list-style: none; display: grid; gap: 6px; }
 .punkte li { position: relative; padding-left: 16px; line-height: 1.5; overflow-wrap: anywhere; }
-.punkte li::before { content: ""; position: absolute; left: 2px; top: 0.62em; width: 5px; height: 5px; border-radius: 50%; background: var(--akzent-ton); opacity: 0.85; }
+.punkte li::before { content: ""; position: absolute; left: 2px; top: 0.62em; width: 5px; height: 5px; border-radius: 50%; background: var(--akzent-ton); opacity: 0.9; }
 mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius: 5px; padding: 0 3px; font-weight: 500; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 
 .drehen { width: 18px; height: 18px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; opacity: 0.8; animation: drehen 0.7s linear infinite; }
@@ -272,21 +423,22 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 
 /* 4 Kopf / Seitenleiste ---------------------------------------------------- */
 .app { min-height: 100vh; min-height: 100dvh; }
+/* Handy/Tablet: Kopfzeile aus Glas – der Verlauf scrollt darunter durch und wird unscharf */
 .kopf {
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; gap: 8px;
   min-height: var(--kopf-h); padding: 8px var(--rand); padding-top: calc(8px + env(safe-area-inset-top));
-  background: var(--bg-glas); -webkit-backdrop-filter: saturate(1.6) blur(16px); backdrop-filter: saturate(1.6) blur(16px);
+  background: var(--glas-kopf); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
   border-bottom: 1px solid transparent; transition: border-color var(--t) var(--raus);
 }
 .kopf.mit-linie { border-bottom-color: var(--linie); }
 .marke { display: inline-flex; flex-direction: column; text-decoration: none; line-height: 1; padding: 4px 2px; border-radius: var(--r-s); }
-.marke-wort { font-size: 23px; font-weight: 650; letter-spacing: -0.045em; color: var(--text); }
+.marke-wort { font-family: var(--schrift-titel); font-size: 23px; font-weight: 700; letter-spacing: -0.02em; color: var(--titel); }
 .marke-wort b { font-weight: 700; font-size: 1.12em; letter-spacing: -0.04em; }
-.marke-punkt { color: var(--akzent-ton); }
-.marke-unter { margin-top: 3px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); }
+.marke-punkt { color: var(--akzent); }
+.marke-unter { margin-top: 3px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--marke-unter); }
 .kopf .badge-test { margin-left: 4px; cursor: pointer; }
-.kopf-menue { margin-left: -8px; color: var(--text); }
+.kopf-menue { margin-left: -8px; color: var(--titel); }
 .kopf > .rund-knopf, .kopf > .knopf, .kopf .badge-test { flex: none; } /* nichts in der Kopfzeile wird zusammengedrückt */
 .seiten-gespraeche { display: none; }
 .kopf-platz { flex: 1; }
@@ -296,9 +448,9 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 
 .titel-block { display: grid; gap: 4px; min-width: 0; }
 .knopf-reihe.links { justify-content: flex-start; }
-.skelett[data-skelett-karte] { height: 102px; border-radius: 20px; } /* = echte Patientenkarte: kein Springen beim Laden */
-.skelett[data-skelett-leser] { height: 360px; border-radius: var(--r-xl); }
-.skelett[data-skelett-notiz] { height: 83px; border-radius: 20px; } /* = Notizkarte mit einzeiliger Vorschau */
+.skelett[data-skelett-karte] { height: 102px; border-radius: var(--r-karte); } /* = echte Patientenkarte: kein Springen beim Laden */
+.skelett[data-skelett-leser] { height: 360px; border-radius: var(--r-karte); }
+.skelett[data-skelett-notiz] { height: 83px; border-radius: var(--r-karte); } /* = Notizkarte mit einzeiliger Vorschau */
 @media (max-width: 639.98px) { .skelett[data-skelett-notiz] { height: 95px; } } /* schmal: Vorschau oft zweizeilig (83/106 px) */
 .skelett.skelett-zeile { height: 21.6px; width: 11rem; border-radius: var(--r-s); } /* = Zeile „.suche-hinweis“ (13,5 px × 1,6) */
 .leser .skelett.skelett-zeile { height: 24px; width: 9rem; } /* = Zeile „Testfall … · bearbeitet“ (15 px × 1,6) */
@@ -347,25 +499,35 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .zugang::before { left: 50%; top: 0; width: min(960px, 100%); height: 66%; }
 .zugang-inhalt { position: relative; width: 100%; max-width: 400px; display: grid; gap: 28px; text-align: center; }
 .zugang-marke { display: grid; justify-items: center; gap: 10px; }
-.zugang-zeichen { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; background: var(--akzent); color: var(--akzent-auf); font-size: 34px; font-weight: 700; letter-spacing: -0.05em; box-shadow: 0 16px 40px -18px rgba(40, 119, 61, 0.7); }
-.zugang h1 { font-size: 30px; letter-spacing: -0.035em; }
+.zugang-zeichen {
+  width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center;
+  background: var(--akzent-knopf); color: var(--akzent-auf);
+  font-family: var(--schrift-titel); font-size: 34px; font-weight: 700; letter-spacing: -0.03em;
+  box-shadow: var(--schatten-zeichen);
+}
+.zugang h1 { font-size: 30px; letter-spacing: -0.025em; }
 .zugang-unter { color: var(--text-2); font-size: 15.5px; line-height: 1.5; max-width: 30ch; margin: 0 auto; }
+/* Glas-Karten ohne Verlauf dahinter (Zugang, Hinweis-Seiten): Unschärfe nur ab 640 px (Abschnitt 11) */
+.zugang .karte, .hinweis-seite .karte {
+  background: var(--glas); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  box-shadow: inset 0 0 0 1px var(--glas-kante), inset 0 1px 0 var(--glas-glanz), 0 0 0 1px var(--ring), var(--glas-schatten);
+}
 .zugang .karte { text-align: left; display: grid; gap: 16px; padding: 24px; }
 .code-zeile { position: relative; }
 .code-zeile .eingabefeld { padding-right: 48px; letter-spacing: 0.04em; }
 .code-zeile .rund-knopf { position: absolute; right: 4px; top: 4px; }
 .zugang-fuss { font-size: 13.5px; color: var(--text-3); }
-.zugang-fuss a { color: var(--akzent-tief); font-weight: 500; text-decoration-color: var(--akzent-rand); text-underline-offset: 3px; }
+.zugang-fuss a { color: var(--akzent-text); font-weight: 500; text-decoration-color: var(--akzent-rand); text-underline-offset: 3px; }
 
 /* Hinweis-Seiten (offline, Fehler) */
 .hinweis-seite { min-height: calc(100dvh - var(--kopf-h)); display: grid; place-items: center; padding: 24px var(--rand) 48px; }
 .hinweis-seite .karte { width: 100%; max-width: 440px; display: grid; gap: 14px; text-align: center; justify-items: center; padding: 28px 24px; }
-.kachel { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: var(--akzent-hell-2); color: var(--akzent-tief); }
+.kachel { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; background: var(--akzent-hell-2); color: var(--akzent-symbol); }
 .kachel.warn { background: var(--warn-bg); color: var(--warn-text); }
 .kachel .symbol { width: 24px; height: 24px; }
 .hinweis-seite p { color: var(--text-2); }
-.laden-inhalt { display: grid; justify-items: center; gap: 14px; max-width: 320px; text-align: center; } /* Ladekreis, beim Abmelden mit Text */
-.laden-text { font-size: 15px; }
+.laden-inhalt { display: grid; justify-items: center; gap: 14px; max-width: 320px; text-align: center; color: var(--titel); } /* Ladekreis, beim Abmelden mit Text */
+.laden-text { font-size: 15px; color: var(--text); }
 .laden-text:focus { outline: none; } /* bekommt beim Abmelden den Fokus – damit Screenreader ihn sagen, nicht als Bedienelement */
 .knopf-reihe { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 
@@ -375,38 +537,44 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 
 .willkommen { padding: 28px 0 4px; display: grid; gap: 26px; }
 .willkommen-kopf { display: grid; gap: 10px; }
-.gruss { font-size: 34px; line-height: 1.08; font-weight: 600; letter-spacing: -0.04em; }
-.gruss .akzent { color: var(--akzent-ton); }
+.gruss { font-size: 34px; line-height: 1.08; font-weight: 700; letter-spacing: -0.03em; }
+.gruss .akzent { color: var(--akzent); }
 .gruss-unter { font-size: 16px; color: var(--text-2); max-width: 36ch; line-height: 1.5; }
 .vorschlaege { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Schnellaktionen: Glas-Kacheln (Unschärfe ab 640 px, Abschnitt 11) */
 .vorschlag {
   display: grid; gap: 12px; align-content: start; text-align: left;
-  min-height: 112px; padding: 14px; border: 0; border-radius: var(--r-l);
-  background: var(--flaeche); box-shadow: var(--schatten); color: var(--text);
+  min-height: 112px; padding: 14px; border: 0; border-radius: var(--r-karte);
+  background: var(--glas); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  box-shadow: inset 0 0 0 1px var(--glas-kante), inset 0 1px 0 var(--glas-glanz), 0 0 0 1px var(--ring), var(--glas-schatten);
+  color: var(--text);
   transition: transform var(--t) var(--raus), box-shadow var(--t) var(--raus);
 }
-.vorschlag:hover { transform: translateY(-2px); box-shadow: var(--schatten-hoch); }
+.vorschlag:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px var(--glas-kante), inset 0 1px 0 var(--glas-glanz), 0 0 0 1px var(--ring), var(--glas-schatten-hoch); }
 .vorschlag:active { transform: scale(0.98); }
-.vorschlag-symbol { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: var(--akzent-hell-2); color: var(--akzent-tief); }
+.vorschlag-symbol { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--akzent-hell-2); color: var(--akzent-symbol); }
 .vorschlag-symbol .symbol { width: 19px; height: 19px; }
 .vorschlag-text { display: block; }
-.vorschlag-text strong { display: block; font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; color: var(--text); }
+.vorschlag-text strong { display: block; font-family: var(--schrift-titel); font-size: 14.5px; font-weight: 700; letter-spacing: -0.005em; line-height: 1.25; color: var(--titel); }
 .vorschlag-text > span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--text-3); line-height: 1.35; }
 
 .nachrichten { display: flex; flex-direction: column; gap: 22px; }
 .nachrichten:empty { display: none; }
 .nachricht { display: flex; gap: 10px; align-items: flex-start; animation: auftauchen var(--t-lang) var(--raus) both; }
 .nachricht.von-nutzer { justify-content: flex-end; }
+/* eigene Nachricht: deckende Blase (kein Glas im Verlauf – Scrollen bleibt leicht) */
 .blase {
-  max-width: min(85%, 560px); padding: 10px 15px; border-radius: 20px 20px 6px 20px;
+  max-width: min(85%, 560px); padding: 10px 15px; border-radius: 18px 18px 6px 18px;
   background: var(--blase); color: var(--blase-text); font-size: 15px; line-height: 1.5;
+  box-shadow: var(--glanz-fuellung);
   overflow-wrap: anywhere; white-space: pre-wrap;
 }
-.blase-kopf { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; font-weight: 600; opacity: 0.85; white-space: normal; }
+.blase-kopf { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; font-weight: 600; white-space: normal; }
 .blase-kopf .symbol { width: 14px; height: 14px; }
 .avatar {
-  flex: none; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center;
-  background: var(--akzent); color: var(--akzent-auf); font-size: 15px; font-weight: 700; letter-spacing: -0.04em; margin-top: 1px;
+  flex: none; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+  background: var(--akzent-knopf); color: var(--akzent-auf); box-shadow: var(--glanz-fuellung);
+  font-family: var(--schrift-titel); font-size: 15px; font-weight: 700; letter-spacing: -0.02em; margin-top: 1px;
 }
 .nachricht-inhalt { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .nachricht-inhalt > * { min-width: 0; }
@@ -417,12 +585,12 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .nachricht-text ul li { position: relative; padding-left: 16px; }
 .nachricht-text ul li::before { content: ""; position: absolute; left: 2px; top: 0.66em; width: 5px; height: 5px; border-radius: 50%; background: var(--akzent-ton); }
 .nachricht-text ol { padding-left: 20px; }
-.nachricht-text strong { font-weight: 600; }
+.nachricht-text strong { font-weight: 650; color: var(--titel); }
 .nachricht-text.laeuft > :last-child::after { content: ""; display: inline-block; width: 7px; height: 1em; margin-left: 2px; vertical-align: -0.15em; border-radius: 2px; background: var(--akzent-ton); animation: blinken 1s steps(2) infinite; }
 .nachricht-aktionen { display: flex; gap: 2px; margin-left: -8px; opacity: 0.75; transition: opacity var(--t); }
 .nachricht:hover .nachricht-aktionen, .nachricht-aktionen:focus-within { opacity: 1; }
 .nachricht-aktionen .rund-knopf { width: 34px; height: 34px; color: var(--text-3); }
-.nachricht-aktionen .rund-knopf[aria-pressed="true"] { color: var(--akzent-tief); background: var(--akzent-hell); }
+.nachricht-aktionen .rund-knopf[aria-pressed="true"] { color: var(--akzent-text); background: var(--akzent-hell); }
 
 .tippen { display: flex; align-items: center; gap: 12px; min-height: 30px; }
 .punkte-tippen { display: inline-flex; gap: 5px; }
@@ -440,10 +608,10 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
   font-size: 12.5px; font-weight: 500; text-decoration: none; white-space: nowrap;
   transition: background-color var(--t-kurz), color var(--t-kurz);
 }
-.quelle:hover { background: var(--akzent-hell-2); color: var(--akzent-tief); }
+.quelle:hover { background: var(--akzent-hell-2); color: var(--akzent-text); }
 .quelle .symbol { width: 13px; height: 13px; }
 
-.hinweis-box { display: grid; gap: 10px; padding: 14px 16px; border-radius: var(--r-l); background: var(--fehler-bg); box-shadow: inset 0 0 0 1px var(--fehler-rand); color: var(--text); font-size: 14.5px; }
+.hinweis-box { display: grid; gap: 10px; padding: 14px 16px; border-radius: var(--r-karte); background: var(--fehler-bg); box-shadow: inset 0 0 0 1px var(--fehler-rand); color: var(--text); font-size: 14.5px; }
 .hinweis-box.warn { background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--warn-rand); }
 .hinweis-box.neutral { background: var(--flaeche); box-shadow: var(--schatten); }
 .hinweis-box-kopf { display: flex; gap: 8px; align-items: center; font-weight: 600; }
@@ -456,9 +624,15 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .eingabe-bereich {
   position: sticky; bottom: 0; z-index: 30;
   padding: 8px var(--rand) calc(10px + env(safe-area-inset-bottom));
-  background: var(--bg);
 }
-.eingabe-bereich::before { content: ""; position: absolute; left: 0; right: 0; top: -28px; height: 28px; background: linear-gradient(to top, var(--bg), transparent); pointer-events: none; }
+/* Glas-Band: eine einzige Unschärfe-Ebene hinter Chips, Eingabefeld und Hinweis. Der Verlauf läuft darunter durch und
+   wird unscharf; oben blendet das Band über 30 px weich ein (Maske) – keine Kante über der letzten Nachricht. */
+.eingabe-bereich::before {
+  content: ""; position: absolute; z-index: -1; left: 0; right: 0; top: -22px; bottom: 0; pointer-events: none;
+  background: var(--glas-kopf); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30px);
+  mask-image: linear-gradient(to bottom, transparent, #000 30px);
+}
 .eingabe-innen { width: 100%; max-width: var(--spalte); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .eingabe-innen > * { min-width: 0; }
 .chips-leiste { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--rand)); padding: 2px var(--rand); -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--rand), #000 calc(100% - var(--rand)), transparent); mask-image: linear-gradient(90deg, transparent, #000 var(--rand), #000 calc(100% - var(--rand)), transparent); }
@@ -467,7 +641,8 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .modus-pill {
   justify-self: start; display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
   height: 34px; padding: 0 6px 0 12px; border-radius: var(--rund);
-  background: var(--akzent-hell-2); color: var(--akzent-tief); font-size: 13.5px; font-weight: 500;
+  background: var(--akzent-hell-2); color: var(--akzent-text); font-size: 13.5px; font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--akzent-rand);
   animation: auftauchen var(--t) var(--raus);
 }
 .modus-pill .symbol { width: 16px; height: 16px; }
@@ -475,13 +650,14 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .modus-pill .rund-knopf { width: 26px; height: 26px; color: inherit; }
 .modus-pill .rund-knopf:hover { background: var(--akzent-hell); }
 
+/* Eingabefeld: helle Glas-Pille auf dem Band (das Band rechnet die Unschärfe), feine Innenkante, flacher Schatten */
 .eingabe {
   position: relative; display: flex; align-items: flex-end; gap: 6px;
   padding: 6px 6px 6px 0; border-radius: 26px; /* links kein Innenabstand: der sitzt im Textfeld (siehe .eingabe-text) */
-  background: var(--flaeche); box-shadow: var(--schatten-schwebe);
+  background: var(--glas-feld); box-shadow: inset 0 0 0 1px var(--glas-kante), var(--schatten-schwebe);
   transition: box-shadow var(--t) var(--raus);
 }
-.eingabe:focus-within { box-shadow: 0 0 0 2px var(--akzent-ton), 0 10px 30px -12px rgba(0, 0, 0, 0.18); }
+.eingabe:focus-within { box-shadow: inset 0 0 0 1px var(--glas-kante), 0 0 0 2px var(--fokus), 0 0 0 6px var(--fokus-schein), var(--schatten-schwebe); }
 /* v2.1.2: Innenabstand im Textfeld selbst – begann der Text direkt an dessen Kante, schnitt die Rundung des Rahmens
    den Cursor am Zeilenanfang an (Chromium und Safari, gemessen in tests/eingabefelder.mjs) */
 .eingabe-text {
@@ -497,17 +673,17 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
   display: grid; place-items: center; position: relative;
   transition: background-color var(--t-kurz) var(--raus), color var(--t-kurz), transform var(--t-kurz) var(--raus), opacity var(--t-kurz);
 }
-.mikro { background: var(--akzent-hell-2); color: var(--akzent-tief); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.mikro { background: var(--akzent-hell-2); color: var(--akzent-symbol); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .mikro:hover:not(:disabled) { background: var(--akzent-rand); }
 .mikro.lockt::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; box-shadow: 0 0 0 2px var(--akzent-ton); opacity: 0; animation: locken 2s var(--raus) infinite; }
-.senden { background: var(--akzent); color: var(--akzent-auf); }
-.senden:hover:not(:disabled) { background: var(--akzent-hover); }
+.senden { background: var(--akzent); color: var(--akzent-auf); box-shadow: var(--glanz-fuellung); }
+.senden:hover:not(:disabled) { background: var(--senden-hover); }
 .senden:active:not(:disabled), .mikro:active:not(:disabled) { transform: scale(0.94); }
-.senden:disabled { background: var(--fuell); color: var(--text-4); cursor: default; }
+.senden:disabled { background: var(--fuell); color: var(--text-4); box-shadow: none; cursor: default; }
 .mikro:disabled { opacity: 0.45; cursor: default; }
 .mikro .symbol, .senden .symbol { width: 20px; height: 20px; }
-.eingabe-fuss { text-align: center; font-size: 11.5px; color: var(--text-3); }
-.eingabe-fuss.hinweis { font-size: 13px; font-weight: 600; color: var(--akzent-tief); animation: auftauchen var(--t) var(--raus); }
+.eingabe-fuss { text-align: center; font-size: 11.5px; color: var(--band-text); }
+.eingabe-fuss.hinweis { font-size: 13px; font-weight: 600; color: var(--band-hinweis); animation: auftauchen var(--t) var(--raus); }
 .eingabe-fuss.hinweis.warn { color: var(--warn-text); }
 .eingabe-fuss.hinweis.fehler { color: var(--fehler); }
 .veraltet { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 16px; padding: 24px; text-align: center; }
@@ -516,7 +692,7 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .aufnahme-anzeige { display: none; flex: 1; min-width: 0; align-items: center; gap: 10px; min-height: 40px; padding: 0 4px 0 18px; overflow: hidden; } /* links wie bisher 18 px vom Rahmen */
 .eingabe.nimmt-auf .aufnahme-anzeige, .eingabe.erkennt .aufnahme-anzeige { display: flex; }
 .eingabe.nimmt-auf .eingabe-text, .eingabe.erkennt .eingabe-text, .eingabe.nimmt-auf .senden, .eingabe.erkennt .senden { display: none; }
-.eingabe.nimmt-auf { box-shadow: 0 0 0 2px var(--aufnahme), 0 14px 34px -14px rgba(229, 55, 44, 0.45); }
+.eingabe.nimmt-auf { box-shadow: var(--schatten-aufnahme); }
 .aufnahme-punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--aufnahme); flex: none; animation: pulsieren 1.2s var(--beide) infinite; }
 .eingabe.erkennt .aufnahme-punkt { display: none; }
 .aufnahme-zeit { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 38px; }
@@ -525,7 +701,7 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .wellen i { flex: 1; max-width: 4px; min-width: 2px; height: calc(10% + var(--h, 0) * 90%); border-radius: 2px; background: var(--text-3); opacity: 0.7; transition: height 90ms linear; }
 .eingabe.erkennt .wellen { display: none; }
 .aufnahme-text { flex: 0 1 auto; min-width: 0; font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.eingabe.nimmt-auf .mikro { background: var(--aufnahme); color: #fff; transform: scale(1.06); }
+.eingabe.nimmt-auf .mikro { background: var(--aufnahme); color: var(--auf-aufnahme); transform: scale(1.06); }
 .eingabe.nimmt-auf .mikro::before, .eingabe.nimmt-auf .mikro::after {
   content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--aufnahme);
   opacity: 0.35; transform: scale(calc(1 + var(--pegel, 0) * 0.9)); transition: transform 90ms linear; z-index: -1;
@@ -533,19 +709,24 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .eingabe.nimmt-auf .mikro::after { animation: welle 1.6s var(--raus) infinite; transform: none; }
 .eingabe.erkennt .mikro { background: var(--fuell); color: var(--text-3); }
 .eingabe.erkennt .aufnahme-zeit { min-width: 0; display: grid; place-items: center; }
-.eingabe.verwirft { box-shadow: 0 0 0 2px var(--text-3), 0 14px 34px -14px rgba(0, 0, 0, 0.3); }
+.eingabe.verwirft { box-shadow: var(--schatten-verwirft); }
 .eingabe.verwirft .mikro { background: var(--text-3); }
 .eingabe.verwirft .aufnahme-text { color: var(--fehler); font-weight: 500; }
 
 /* 8 Karten im Gespräch ----------------------------------------------------- */
-.gespraechs-karte { padding: 18px; border-radius: 22px; display: grid; gap: 16px; }
+/* Entwurfs- und Berichtskarten: Glas (Unschärfe ab 640 px – am Handy keine Unschärfe-Ebene je Karte, Abschnitt 11) */
+.gespraechs-karte {
+  padding: 18px; border-radius: var(--r-karte); display: grid; gap: 16px;
+  background: var(--glas); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  box-shadow: inset 0 0 0 1px var(--glas-kante), inset 0 1px 0 var(--glas-glanz), 0 0 0 1px var(--ring), var(--glas-schatten);
+}
 .gespraechs-karte .karte-kopf { display: flex; align-items: flex-start; gap: 12px; }
 .karte-kopf-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.karte-titel { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; }
+.karte-titel { font-family: var(--schrift-titel); font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: var(--titel); }
 .karte-meta { font-size: 13px; color: var(--text-3); }
 .karte-kopf > .rund-knopf { flex: none; margin: -6px -8px 0 0; color: var(--text-3); }
 .karte-kopf > .rund-knopf:hover { color: var(--fehler); background: var(--fehler-bg); }
-.karte-kachel { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--akzent-hell-2); color: var(--akzent-tief); }
+.karte-kachel { flex: none; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--akzent-hell-2); color: var(--akzent-symbol); }
 .karte-kachel .symbol { width: 19px; height: 19px; }
 .abschnitte { display: grid; gap: 14px; }
 .abschnitt { display: grid; gap: 7px; }
@@ -577,7 +758,10 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .haken.zeichnet path { stroke-dashoffset: 20; animation: zeichnen var(--t-lang) var(--raus) 80ms forwards; } /* einmal, direkt nach dem Speichern (app.js: hakenZeichnen) */
 .karte-entwurf.erledigt .abschnitte, .karte-entwurf.erledigt .karte-fuss { display: none; }
 .gespraechs-karte .original summary { padding: 0; }
-.karte-entwurf.verworfen { opacity: 0.7; }
+/* verworfen: zurückgenommen über Fläche und Farben statt über opacity – die Schrift bleibt ≥ 4,5:1 */
+.karte-entwurf.verworfen { background: transparent; box-shadow: inset 0 0 0 1px var(--linie-2); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.karte-entwurf.verworfen .karte-titel, .karte-entwurf.verworfen .karte-zustand { color: var(--text-3); }
+.karte-entwurf.verworfen .karte-kachel { background: var(--fuell); color: var(--text-3); }
 
 .zeitleiste { list-style: none; display: grid; gap: 0; }
 .zeitpunkt { position: relative; padding: 0 0 16px 22px; }
@@ -594,23 +778,23 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .notizen { width: 100%; max-width: 1040px; margin: 0 auto; padding: 16px var(--rand) calc(48px + env(safe-area-inset-bottom)); display: grid; gap: 20px; align-content: start; }
 .notizen-kopf { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .notizen-kopf .titel-block { flex: 1; min-width: 0; display: grid; gap: 4px; }
-.notizen-kopf h1 { font-size: 28px; letter-spacing: -0.035em; }
+.notizen-kopf h1 { font-size: 28px; letter-spacing: -0.025em; }
 .werkzeugleiste { display: flex; gap: 8px; align-items: center; }
 .suche { position: relative; flex: 1; min-width: 0; }
 .suche > .symbol { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .suche input {
   width: 100%; height: 46px; padding: 0 44px 0 44px; border: 0; border-radius: var(--rund);
-  background: var(--flaeche); box-shadow: var(--schatten); font-size: 16px; color: var(--text);
+  background: var(--feld); box-shadow: var(--schatten); font-size: 16px; color: var(--text);
   transition: box-shadow var(--t-kurz);
 }
 .suche input::placeholder { color: var(--text-4); }
-.suche input:focus { box-shadow: 0 0 0 2px var(--akzent-ton); }
+.suche input:focus { box-shadow: 0 0 0 2px var(--fokus), 0 0 0 6px var(--fokus-schein); }
 .suche input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 .suche .rund-knopf { position: absolute; right: 5px; top: 5px; width: 36px; height: 36px; }
 .sortierung { position: relative; flex: none; }
 .sortierung select {
   appearance: none; -webkit-appearance: none; height: 46px; padding: 0 38px 0 16px; border: 0; border-radius: var(--rund);
-  background: var(--flaeche); box-shadow: var(--schatten); font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer;
+  background: var(--feld); box-shadow: var(--schatten); font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer;
 }
 .sortierung .symbol { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-3); width: 16px; height: 16px; }
 .suche-hinweis { font-size: 13.5px; color: var(--text-3); }
@@ -618,30 +802,30 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .raster { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
 .patient-karte {
   display: flex; align-items: center; gap: 14px; padding: 16px; text-decoration: none; color: inherit;
-  border-radius: 20px; background: var(--flaeche); box-shadow: var(--schatten);
+  border-radius: var(--r-karte); background: var(--flaeche); box-shadow: var(--schatten);
   transition: transform var(--t) var(--raus), box-shadow var(--t) var(--raus);
 }
 .patient-karte:hover { transform: translateY(-2px); box-shadow: var(--schatten-hoch); }
 .patient-karte:active { transform: scale(0.99); }
-.patient-kachel { flex: none; width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; background: var(--akzent-hell-2); color: var(--akzent-tief); font-size: 15px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.patient-kachel { flex: none; width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; background: var(--akzent-hell-2); color: var(--akzent-text); font-size: 15px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .patient-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.patient-text strong { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.patient-text strong { font-family: var(--schrift-titel); font-size: 16px; font-weight: 700; letter-spacing: -0.005em; color: var(--titel); }
 .patient-text span { font-size: 13.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .patient-text small { font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .patient-karte > .symbol { color: var(--text-4); }
-.neu-karte { justify-content: center; color: var(--akzent-tief); font-weight: 500; background: transparent; box-shadow: inset 0 0 0 1.5px var(--linie-2); border: 0; font-size: 15px; min-height: 78px; }
+.neu-karte { justify-content: center; color: var(--akzent-text); font-weight: 500; background: transparent; box-shadow: inset 0 0 0 1.5px var(--linie-2); border: 0; font-size: 15px; min-height: 78px; }
 .neu-karte:hover { background: var(--akzent-hell); box-shadow: inset 0 0 0 1.5px var(--akzent-rand); }
 
 .notiz-liste { display: grid; gap: 10px; }
 #ordner-inhalt { display: grid; gap: 16px; align-content: start; min-width: 0; }
 .notiz-karte {
   display: grid; gap: 6px; padding: 16px 18px; text-decoration: none; color: inherit;
-  border-radius: 20px; background: var(--flaeche); box-shadow: var(--schatten);
+  border-radius: var(--r-karte); background: var(--flaeche); box-shadow: var(--schatten);
   transition: transform var(--t) var(--raus), box-shadow var(--t) var(--raus);
 }
 .notiz-karte:hover { transform: translateY(-2px); box-shadow: var(--schatten-hoch); }
 .notiz-karte-kopf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.notiz-karte-kopf strong { font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.notiz-karte-kopf strong { font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--titel); }
 .notiz-karte-kopf .badge.warn { margin-left: auto; }
 .notiz-karte p { font-size: 14.5px; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 /* Karten tauchen nur beim ersten Betreten einer Ansicht auf (app.js: erstesMal) – Aktualisierungen erscheinen ruhig */
@@ -670,12 +854,16 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .leer p { color: var(--text-2); max-width: 36ch; }
 
 /* 10 Dialoge und Toasts ---------------------------------------------------- */
+/* Dialoge, Schublade, Toasts: kräftigeres Glas – der Hintergrund wird nur abgedunkelt, nicht zusätzlich unscharf
+   (eine Unschärfe-Ebene weniger übereinander) */
 dialog.dialog {
   width: min(420px, calc(100% - 32px)); max-height: min(44rem, calc(100dvh - 32px)); padding: 0;
-  border: 0; border-radius: var(--r-xl); background: var(--flaeche); color: var(--text); box-shadow: var(--schatten-dialog);
+  border: 0; border-radius: var(--r-xl); color: var(--text);
+  background: var(--glas-stark); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  box-shadow: inset 0 0 0 1px var(--glas-kante), inset 0 1px 0 var(--glas-glanz), var(--schatten-dialog);
 }
 dialog.dialog[open] { animation: aufploppen var(--t-lang) var(--raus); }
-dialog.dialog::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+dialog.dialog::backdrop { background: rgba(7, 45, 83, 0.3); }
 dialog:focus-visible { outline: none; } /* Safari fokussiert nach einer Rückfrage oder beim Tab-Umlauf den Dialog selbst – kein Rahmen ums Ganze */
 .dialog-form { display: grid; gap: 16px; padding: 24px; }
 .dialog-form h2 { font-size: 19px; }
@@ -688,7 +876,9 @@ dialog:focus-visible { outline: none; } /* Safari fokussiert nach einer Rückfra
 .toasts { position: fixed; z-index: 60; left: 50%; top: calc(var(--kopf-h) + env(safe-area-inset-top) + 8px); transform: translateX(-50%); display: grid; gap: 8px; width: min(400px, calc(100% - 24px)); pointer-events: none; }
 .toast {
   pointer-events: none; display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 12px;
-  border-radius: var(--r-l); background: var(--flaeche); box-shadow: 0 0 0 1px var(--ring), 0 18px 44px -18px rgba(0, 0, 0, 0.35);
+  border-radius: var(--r-l); color: var(--text);
+  background: var(--glas-stark); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  box-shadow: inset 0 0 0 1px var(--glas-kante), var(--schatten-toast);
   font-size: 14px; line-height: 1.4; animation: toast-rein var(--t-lang) var(--raus);
 }
 .toast.weg { animation: toast-raus var(--t-kurz) var(--rein) forwards; }
@@ -704,7 +894,7 @@ dialog.schublade .toasts { position: absolute; top: auto; bottom: calc(12px + en
 .toast .knopf { min-height: 32px; padding: 0 12px; font-size: 13.5px; }
 
 .haken-zeile { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--r-m); background: var(--flaeche-2); box-shadow: inset 0 0 0 1px var(--linie); font-size: 14.5px; line-height: 1.45; color: var(--text); cursor: pointer; }
-.haken-zeile input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--akzent); cursor: pointer; }
+.haken-zeile input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--akzent-knopf); cursor: pointer; }
 
 /* Gesprächsliste (Seitenleiste am Laptop, Schublade am Handy) – gleiche Bausteine */
 .gespraeche-liste ul { list-style: none; display: grid; gap: 1px; }
@@ -712,6 +902,7 @@ dialog.schublade .toasts { position: absolute; top: auto; bottom: calc(12px + en
 .gespraeche-gruppe-titel { padding: 4px 12px 4px; font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--text-3); }
 .gespraech-eintrag { --eintrag-bg: var(--bg); position: relative; display: flex; align-items: center; min-width: 0; border-radius: var(--r-m); transition: background-color var(--t-kurz); }
 .gespraech-eintrag:hover { --eintrag-bg: var(--fuell); background: var(--fuell); }
+.gespraech-eintrag:focus-within { --eintrag-bg: var(--fuell); background: var(--fuell); } /* Tastatur: Stift/Papierkorb auf deckender Fläche (auf Glas passt --bg nicht) */
 .gespraech-eintrag.aktiv { --eintrag-bg: var(--eintrag-aktiv); background: var(--eintrag-aktiv); }
 .gespraech-link {
   flex: 1; min-width: 0; display: block; padding: 9px 12px; border-radius: inherit;
@@ -731,7 +922,7 @@ dialog.schublade .toasts { position: absolute; top: auto; bottom: calc(12px + en
 .gespraech-aktionen .rund-knopf .symbol { width: 15px; height: 15px; }
 .gespraech-aktionen .rund-knopf:hover { color: var(--text); background: var(--fuell-2); }
 .gespraech-aktionen [data-gespraech-aktion="loeschen"]:hover { color: var(--fehler); background: var(--fehler-bg); }
-.gespraech-eintrag.benennt { --eintrag-bg: var(--flaeche); background: var(--flaeche); box-shadow: inset 0 0 0 2px var(--akzent-ton); }
+.gespraech-eintrag.benennt { --eintrag-bg: var(--feld); background: var(--feld); box-shadow: inset 0 0 0 2px var(--fokus); }
 .gespraech-eintrag.benennt .gespraech-aktionen { display: none; }
 .gespraech-feld { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 0; border-radius: inherit; background: transparent; color: var(--text); font-size: 14px; }
 .gespraech-feld:focus-visible { outline: none; }
@@ -752,27 +943,38 @@ dialog.schublade .toasts { position: absolute; top: auto; bottom: calc(12px + en
   .gespraeche-fuss .knopf { min-height: 44px; }
 }
 
-/* Schublade: Liste der Gespräche von links (Handy/Tablet) */
+/* Schublade: Liste der Gespräche von links (Handy/Tablet), Glas */
 dialog.schublade {
   position: fixed; inset: 0 auto 0 0; margin: 0; padding: 0; border: 0;
   width: min(340px, calc(100vw - 40px)); max-width: none; height: auto; max-height: none;
-  background: var(--bg); color: var(--text); border-radius: 0 var(--r-xl) var(--r-xl) 0; box-shadow: var(--schatten-dialog);
+  background: var(--glas-stark); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  color: var(--text); border-radius: 0 var(--r-xl) var(--r-xl) 0;
+  box-shadow: inset -1px 0 0 var(--glas-kante), var(--schatten-dialog);
 }
 dialog.schublade[open] { animation: schublade-rein var(--t-lang) var(--raus); }
 dialog.schublade.schliesst { animation: schublade-raus 180ms var(--rein) forwards; }
-dialog.schublade::backdrop { background: rgba(16, 24, 25, 0.32); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); animation: einblenden var(--t-lang) var(--raus); }
+dialog.schublade::backdrop { background: rgba(7, 45, 83, 0.3); animation: einblenden var(--t-lang) var(--raus); }
 dialog.schublade.schliesst::backdrop { animation: ausblenden 180ms var(--rein) forwards; }
+@media (prefers-color-scheme: dark) {
+  dialog.dialog::backdrop, dialog.schublade::backdrop { background: rgba(1, 12, 26, 0.55); } /* ::backdrop erbt die Tokens nicht überall */
+}
 html:has(dialog.schublade[open]) { overflow: hidden; }
 .schublade-innen {
   height: 100%; display: flex; flex-direction: column; gap: 12px;
   padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
 }
 .schublade-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-left: 8px; min-height: 44px; }
-.schublade-kopf h2 { font-size: 18px; letter-spacing: -0.02em; }
+.schublade-kopf h2 { font-size: 18px; letter-spacing: -0.015em; }
 .schublade-neu { justify-content: flex-start; padding: 0 16px; }
 .schublade .gespraeche-liste { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 2px 4px 8px; }
 
-/* 11 Laptop ---------------------------------------------------------------- */
+/* 11 Handy / Laptop -------------------------------------------------------- */
+/* Handy: Unschärfe nur in Kopfzeile, Eingabe-Band und offenen Dialogen/Schublade/Toasts (höchstens 2–3 Ebenen
+   übereinander). Karten und Schnellaktionen im Verlauf bleiben Glas, aber ohne backdrop-filter: dahinter liegt nur der
+   ruhige Grund, sichtbar ist derselbe Eindruck – und jede Karte wäre beim Scrollen eine eigene Unschärfe-Ebene. */
+@media (max-width: 639.98px) {
+  .vorschlag, .gespraechs-karte, .zugang .karte, .hinweis-seite .karte { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 @media (min-width: 440px) {
   .kopf-knopf .beschriftung { display: inline; }
 }
@@ -789,10 +991,11 @@ html:has(dialog.schublade[open]) { overflow: hidden; }
   :root { --rand: 32px; --kopf-h: 0px; }
   .app { display: grid; grid-template-columns: 272px minmax(0, 1fr); }
   .app.ohne-seite { display: block; }
+  /* Seitenleiste aus Glas: über den Lichtflächen links, feine helle Kante rechts */
   .kopf {
     position: sticky; top: 0; height: 100vh; height: 100dvh; flex-direction: column; align-items: stretch; gap: 6px;
-    padding: 24px 16px 20px; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none;
-    border-bottom: 0; border-right: 1px solid var(--linie);
+    padding: 24px 16px 20px; background: var(--glas); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+    border-bottom: 0; border-right: 1px solid var(--glas-kante); box-shadow: var(--schatten-leiste);
     overflow-y: auto; overscroll-behavior: contain; /* zur Not (sehr niedriges Fenster) scrollt die ganze Leiste */
   }
   .app.ohne-seite .kopf { display: none; }
@@ -808,7 +1011,7 @@ html:has(dialog.schublade[open]) { overflow: hidden; }
     transition: background-color var(--t-kurz), color var(--t-kurz);
   }
   .navi a:hover { background: var(--fuell); color: var(--text); }
-  .navi a[aria-current="page"] { background: var(--flaeche); color: var(--text); box-shadow: var(--schatten); }
+  .navi a[aria-current="page"] { background: var(--flaeche); color: var(--titel); box-shadow: var(--schatten); }
   .navi a[aria-current="page"] .symbol { color: var(--akzent-ton); }
   .kopf-menue { display: none; }
   /* Gespräche (scrollt für sich), darunter die Test-Patienten (höchstens ein Viertel der Höhe), unten der Hinweis */
@@ -821,7 +1024,7 @@ html:has(dialog.schublade[open]) { overflow: hidden; }
   .seiten-patienten .augenbraue { padding: 0 12px 6px; }
   .seiten-patienten a { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: var(--r-m); text-decoration: none; color: var(--text-2); font-size: 14px; }
   .seiten-patienten a:hover { background: var(--fuell); color: var(--text); }
-  .seiten-patienten a b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+  .seiten-patienten a b { font-weight: 600; color: var(--titel); font-variant-numeric: tabular-nums; }
   .seiten-patienten a span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-3); }
   .seiten-patienten a .badge { flex: none; height: 20px; padding: 0 7px; font-size: 11px; color: var(--text-3); }
   .seiten-fuss { display: grid; gap: 10px; flex: none; margin-top: auto; padding: 14px 12px 0; border-top: 1px solid var(--linie); font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
@@ -886,7 +1089,8 @@ html:has(dialog.schublade[open]) { overflow: hidden; }
 @keyframes zeichnen { to { stroke-dashoffset: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 120ms !important; animation-iteration-count: 1 !important; transition-duration: 120ms !important; scroll-behavior: auto !important; }
+  /* ohne Übergänge (transition), Animationen nur noch kurz ein- und ausblenden; Glas deckend (Abschnitt 13) */
+  *, *::before, *::after { animation-duration: 120ms !important; animation-iteration-count: 1 !important; transition: none !important; scroll-behavior: auto !important; }
   /* nur ein- und ausblenden statt bewegen – bewusst ohne !important: „schon gezeigt“ (animation: none am Element) muss
      gewinnen, sonst blendet z. B. eine laufende Antwort bei jedem Bild neu ein (das blinkte) */
   .nachricht, .raster.einblenden > .patient-karte, .notiz-liste.einblenden > .notiz-karte, .ansicht.einblenden, .toast, .modus-pill, .status-zeile, .eingabe-fuss.hinweis,
@@ -896,4 +1100,18 @@ html:has(dialog.schublade[open]) { overflow: hidden; }
   .punkte-tippen i, .aufnahme-punkt, .drehen, .skelett::after, .mikro.lockt::after, .nachricht-text.laeuft > :last-child::after { animation: none !important; }
   .eingabe.nimmt-auf .mikro::after { animation: none !important; opacity: 0; }
   .haken.zeichnet path { animation: none; stroke-dashoffset: 0; } /* Häkchen steht gleich fertig da – kein Zeichnen, keine Lücke */
+}
+
+/* 13 Glas deckend ---------------------------------------------------------- */
+/* Ohne backdrop-filter (ältere Browser), bei „Transparenz reduzieren“ und bei „Bewegung reduzieren“: jede Glasfläche
+   deckend in denselben Farben, ohne Unschärfe. „Transparenz reduzieren“ nimmt dazu die Übergänge weg (wie „Bewegung
+   reduzieren“ in Abschnitt 12). */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glas: var(--glas-deckend); --glas-stark: var(--glas-deckend); --glas-kopf: var(--glas-kopf-deckend); --glas-feld: var(--glas-feld-deckend); --glas-filter: none; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-reduced-motion: reduce) {
+  :root { --glas: var(--glas-deckend); --glas-stark: var(--glas-deckend); --glas-kopf: var(--glas-kopf-deckend); --glas-feld: var(--glas-feld-deckend); --glas-filter: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  *, *::before, *::after { transition: none !important; }
 }
