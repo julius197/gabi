@@ -1,8 +1,8 @@
-// Design v2.3 – PhysioWorks-Stil mit Glas: Messungen und Screenshots (nur Demo- und Testdaten, keine Secrets).
+// Design v2.3/v2.4 – PhysioWorks-Stil mit Glas: Messungen und Screenshots (nur Demo- und Testdaten, keine Secrets).
 //  A  Hauptansichten in Chromium und WebKit, Hell und Dunkel, 390 und 1440 px: Zugang, Gespräch (Start, Entwurf,
 //     Gespeichert + Toast, Antwort + Quellen, Bericht, Glas über dem Verlauf), Schublade bzw. Seitenleiste,
 //     Info-Dialog, Notizordner (Patienten, Neuer Test-Patient, Suche, Nichts gefunden, Patient, Notiz, Rückfrage),
-//     Offline, Mikrofon-Hilfe. Je Ansicht:
+//     Offline, Mikrofon-Hilfe, v2.4: Einstellungen. Je Ansicht:
 //     · Screenshot nach <ordner>/<motor>-<hell|dunkel>-<breite>-<nr>-<ansicht>.jpg
 //     · Kontrast jeder sichtbaren Textstelle gegen ihren echten Hintergrund ≥ 4,5:1: Bild mit unsichtbarem Text,
 //       Pixel im Textrahmen gegen die Textfarbe (2-%-Perzentil, Deckkraft der Vorfahren eingerechnet). Zwei Durchgänge:
@@ -19,12 +19,17 @@
 //  F  deckend: „Bewegung reduzieren“ (Chromium + WebKit), „Transparenz reduzieren“ (Chromium per CDP) und ohne
 //     backdrop-filter (der @supports-not-Block aus style.css eingespielt): Glas ohne Unschärfe, Fläche deckend,
 //     ohne Übergänge
+//     v2.4: dazu der Schalter „Glas-Effekt“ aus den Einstellungen (data-glas="aus")
+//  H  v2.4 Brain (zweiter Server mit Schalter AN, GABI_BRAIN_BASIS): Graph, Detail, Mehr-Menü, Liste, Lücken, Fähigkeiten
+//     in Hell/Dunkel, 390 und 1440 px – Screenshot, Kontrast (Panels und Leisten über dem Graphen als Glas-Ebene),
+//     kein seitliches Scrollen
 //  G  Grund ohne Kante: Verlauf und Lichtflächen allein (App ausgeblendet), Zeilen und Spalten über den ganzen Bildschirm.
 //     Chromium dithert Verläufe mit einem feinen Muster (Nachbarpixel ±2–4 Stufen) – gemessen wird darum der Sprung
 //     zwischen Mitteln aus 8×8 Pixeln (≤ 3 Stufen); eine eingebaute Kontrollkante von etwa 5 Stufen muss erkannt werden
 // Voraussetzung: lokaler Server wie bei v2.mjs (`cd worker && npm run lokal` → http://localhost:8788, Code „test“).
 // Aufruf: PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/design.mjs [screenshot-ordner] [basis-url]
-//   Eingrenzen: GABI_MOTOREN=chromium,webkit  GABI_SCHEMEN=light,dark  GABI_BREITEN=390,1440  GABI_TEILE=A,D,E,F,G
+//   Eingrenzen: GABI_MOTOREN=chromium,webkit  GABI_SCHEMEN=light,dark  GABI_BREITEN=390,1440  GABI_TEILE=A,D,E,F,G,H
+//   Teil H: GABI_BRAIN_BASIS=http://localhost:8790 (`cd worker && npm run brain`); ohne die Angabe fällt H weg
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,7 +42,8 @@ const liste = (name, standard) => (process.env[name] || standard).split(",").map
 const MOTOREN = liste("GABI_MOTOREN", "chromium,webkit");
 const SCHEMEN = liste("GABI_SCHEMEN", "light,dark");
 const BREITEN = liste("GABI_BREITEN", "390,1440").map(Number);
-const TEILE = liste("GABI_TEILE", "A,D,E,F,G");
+const TEILE = liste("GABI_TEILE", "A,D,E,F,G,H");
+const BRAIN_BASIS = process.env.GABI_BRAIN_BASIS || "";
 const MIN_KONTRAST = 4.5;
 
 const fehler = [];
@@ -109,7 +115,7 @@ async function messregeln(page) {
       `html.km-ruhe *, html.km-ruhe *::before, html.km-ruhe *::after { transition: none !important; }`,
       `html.km-alles *, html.km-alles *::before, html.km-alles *::after { ${unsichtbar} }`,
       `html.km-alles ::placeholder { color: transparent !important; -webkit-text-fill-color: transparent !important; }`,
-      `html.km-ueber .kopf *, html.km-ueber .eingabe-bereich *, html.km-ueber dialog[open] *, html.km-ueber .toasts * { ${unsichtbar} }`,
+      `html.km-ueber .kopf *, html.km-ueber .eingabe-bereich *, html.km-ueber dialog[open] *, html.km-ueber .toasts *, html.km-ueber .brain-graph-knoepfe *, html.km-ueber .brain-legende *, html.km-ueber .brain-fokus *, html.km-ueber .brain-graph-stand *, html.km-ueber .brain-detail *, html.km-ueber .brain-menue * { ${unsichtbar} }`,
       `html.km-ueber .kopf ::placeholder, html.km-ueber .eingabe-bereich ::placeholder, html.km-ueber dialog[open] ::placeholder { color: transparent !important; -webkit-text-fill-color: transparent !important; }`,
       // Glasprobe (E): eigene Inhalte der Glasflächen ausblenden, Unschärfe abschalten
       `html.gp-leer .kopf > *, html.gp-leer .eingabe-innen, html.gp-leer .toasts { visibility: hidden !important; }`,
@@ -122,8 +128,13 @@ async function messregeln(page) {
 
 /** Sichtbare Textstellen einer Ebene („inhalt“ oder „ueber“) mit Rahmen, Farbe, Deckkraft. */
 function textPostenSammeln(ebene) {
-  const UEBER = ".kopf, .eingabe-bereich, dialog[open], .toasts";
-  const modal = [...document.querySelectorAll("dialog[open]")].some((d) => d.matches(":modal"));
+  // v2.4: Leisten und Panels über dem Brain-Graphen (Glas über dem Canvas) zählen wie die anderen Glas-Ebenen
+  const UEBER = ".kopf, .eingabe-bereich, dialog[open], .toasts, .brain-graph-knoepfe, .brain-legende, .brain-fokus, .brain-graph-stand, .brain-detail, .brain-menue";
+  const modale = [...document.querySelectorAll("dialog[open]")].filter((d) => d.matches(":modal"));
+  const modal = modale.length > 0;
+  // v2.4: liegen zwei Dialoge übereinander (Handy: Einstellungen über der Schublade), ist nur der oberste lesbar – der
+  // untere liegt hinter dessen ::backdrop abgedunkelt und inaktiv wie der Inhalt
+  const oben = modale.length > 1 ? modale.find((d) => { const r = d.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 60)); return e && d.contains(e); }) || null : null;
   if (ebene === "inhalt" && modal) return { posten: [], ausnahmen: [] }; // unter einem Dialog ist alles abgedunkelt und inaktiv
   const vw = innerWidth, vh = innerHeight;
   const schnitt = (a, b) => ({ x: Math.max(a.x, b.x), y: Math.max(a.y, b.y), r: Math.min(a.r, b.r), u: Math.min(a.u, b.u) });
@@ -153,9 +164,12 @@ function textPostenSammeln(ebene) {
   const gehoert = (el) => (ebene === "ueber") === Boolean(el.closest(UEBER));
   const aufnehmen = (el, rechtecke, text, c) => {
     if (!gehoert(el)) return;
-    if (modal && ebene === "ueber" && !el.closest("dialog[open]")) return; // hinter dem Dialog: abgedunkelt
+    if (modal && ebene === "ueber" && (oben ? !oben.contains(el) : !el.closest("dialog[open]"))) return; // hinter dem (obersten) Dialog: abgedunkelt
     if (el.closest("button:disabled, [aria-disabled='true'], input:disabled, textarea:disabled, select:disabled, fieldset:disabled")) { ausnahmen.push(`deaktiviert: ${text.slice(0, 30)}`); return; }
     if (el.matches(".marke-punkt, .gruss .akzent") && text.trim() === ".") { ausnahmen.push("Markenpunkt „.“ (Logo)"); return; }
+    // v2.4 Brain-Legende: „?“ im Ring ist das Bild des Graph-Zeichens (Grafik, WCAG 1.4.11 ≥ 3:1) – der Ring in derselben
+    // Farbe reicht kantengeglättet in die Ecken des Schriftrahmens; die Bedeutung trägt der Text daneben („Zu klären“)
+    if (el.closest(".brain-zeichen")) { ausnahmen.push("Legenden-Zeichen (Grafik)"); return; }
     const o = deckkraft(el);
     if (!c || c.a * o < 0.05) return;
     for (const r0 of rechtecke) {
@@ -475,6 +489,11 @@ async function ansichten(motor, schema, breite, { bilder = true, kontrast = true
   await page.click('#dialog-info button[value="ok"]');
   await page.waitForFunction(() => !document.querySelector("#dialog-info").open);
 
+  // v2.4 Einstellungen (Laptop: Seitenleiste, Handy: unten in der Schublade)
+  await einstellungenOeffnen(page, breite);
+  await ansicht(page, "09b", "einstellungen");
+  await einstellungenSchliessen(page, breite);
+
   // Notizordner
   if (breite < 1024) await page.click("#kopf-wechsel");
   else await page.click('.navi a[data-navi="notizen"]');
@@ -546,17 +565,89 @@ async function ansichten(motor, schema, breite, { bilder = true, kontrast = true
   return ergebnisse;
 }
 
+async function einstellungenOeffnen(page, breite) {
+  if (breite < 1024) {
+    await page.click("#kopf-menue");
+    await page.waitForSelector("#schublade[open]");
+    await warte(320);
+    await page.click("#schublade-einstellungen");
+  } else await page.click("#seite-einstellungen");
+  await page.waitForSelector("#dialog-einstellungen[open]");
+  await page.evaluate(() => { document.querySelector("#dialog-einstellungen").scrollTop = 0; document.activeElement.blur(); });
+}
+async function einstellungenSchliessen(page, breite) {
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !document.querySelector("#dialog-einstellungen").open);
+  if (breite < 1024) { await page.click("#schublade-zu"); await page.waitForFunction(() => !document.querySelector("#schublade").open); }
+}
+
+// ---------------------------------------------------------------------------
+// H: Brain-Ansichten (Server mit Schalter AN)
+// ---------------------------------------------------------------------------
+async function brainAnsichten(motor, schema, breite) {
+  const mobil = breite < 768;
+  const name = `${motor} ${schema === "dark" ? "dunkel" : "hell"} ${breite} Brain`;
+  const datei = (nr, was) => join(aus, `${motor}-${schema === "dark" ? "dunkel" : "hell"}-${breite}-${nr}-${was}.jpg`);
+  const dsf = mobil ? 2 : 1;
+  const ctx = await kontext(motor, { breite, schema });
+  const page = await ctx.newPage();
+  const konsole = [];
+  page.on("pageerror", (e) => konsole.push(e.message));
+  page.on("request", (r) => { const u = r.url(); if (!u.startsWith(BRAIN_BASIS) && !u.startsWith("data:") && !u.startsWith("blob:")) bericht.anfragen.push(`${name}: ${u}`); });
+  const ruht = () => page.waitForFunction(() => { const m = window.GabiBrainAnsicht && window.GabiBrainAnsicht.aktuell && window.GabiBrainAnsicht.aktuell.messen(); return Boolean(m && m.ruht); }, null, { timeout: 30000 });
+  const ansicht = async (nr, was) => {
+    await warte(500);
+    await page.screenshot({ path: datei(nr, was), type: "jpeg", quality: 82, caret: "initial" });
+    await kontrastPruefen(page, `${name} ${nr}-${was}`, dsf);
+    const ueber = await page.evaluate(() => document.documentElement.scrollWidth) - breite;
+    pruefe(ueber <= 0, `${name} ${nr}-${was}: kein seitliches Scrollen${ueber > 0 ? ` (${ueber} px zu breit)` : ""}`);
+  };
+  const reiter = async (r) => { await page.click(`[data-brain="reiter"][data-wert="${r}"]`); await page.waitForSelector(`#brain-${r}:not([hidden])`); };
+  await page.goto(`${BRAIN_BASIS}/?demo=1#/brain/graph`);
+  await page.waitForSelector("#brain-graph:not([hidden]) canvas.brain-graph-flaeche", { timeout: 20000 });
+  await ruht();
+  await page.mouse.move(breite - 4, 4);
+  await ansicht("20", "brain-graph");
+  await page.evaluate(() => { location.hash = "#/brain/s-telefonzeiten"; });
+  await page.waitForSelector("#brain-detail:not([hidden]) #brain-detail-titel");
+  await ruht();
+  await ansicht("21", "brain-detail");
+  await page.evaluate(() => { location.hash = "#/brain/graph"; });
+  await page.waitForFunction(() => document.querySelector("#brain-detail").hidden);
+  await page.click("#brain-mehr");
+  await page.waitForSelector("#brain-menue:not([hidden])");
+  await page.evaluate(() => document.activeElement.blur());
+  await ansicht("22", "brain-mehr");
+  if (await page.isVisible("#brain-menue")) await page.click("#brain-mehr");
+  await page.waitForSelector("#brain-menue", { state: "hidden" });
+  await reiter("liste");
+  await ansicht("23", "brain-liste");
+  await reiter("luecken");
+  await ansicht("24", "brain-luecken");
+  await reiter("faehigkeiten");
+  await ansicht("25", "brain-faehigkeiten");
+  if (breite < 1024) {
+    await page.click("#kopf-menue");
+    await page.waitForSelector("#schublade[open]");
+    await warte(320);
+    await ansicht("26", "schublade-brain");
+    await page.click("#schublade-zu");
+  }
+  pruefe(!konsole.length, `${name}: keine Skriptfehler${konsole.length ? ` (${konsole.join(" | ")})` : ""}`);
+  await ctx.close();
+}
+
 // ---------------------------------------------------------------------------
 // F: deckend bei „Bewegung reduzieren“, „Transparenz reduzieren“ und ohne backdrop-filter
 // ---------------------------------------------------------------------------
-async function deckendPruefen(page, name) {
+async function deckendPruefen(page, name, { ohneBewegung = true } = {}) {
   await page.click("#test-badge");
   await page.waitForSelector("#dialog-info[open]");
   await warte(300);
   const r = await page.evaluate(() => {
     const alpha = (s) => { const m = s.match(/rgba?\(([^)]+)\)/); if (!m) return s === "transparent" ? 0 : 1; const t = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return t.length > 3 ? t[3] : 1; };
     const filter = (cs) => cs.backdropFilter || cs.webkitBackdropFilter || "none";
-    const flaechen = [[".kopf", null], [".eingabe-bereich", "::before"], [".eingabe", null], [".vorschlag", null], ["#dialog-info", null]];
+    const flaechen = [[".kopf", null], [".eingabe-bereich", "::before"], [".eingabe", null], [".vorschlag", null], ["#dialog-info", null], ["#dialog-einstellungen", null]];
     return {
       flaechen: flaechen.map(([sel, pseudo]) => { const el = document.querySelector(sel); const cs = getComputedStyle(el, pseudo); return { sel: sel + (pseudo || ""), filter: filter(cs), alpha: alpha(cs.backgroundColor) }; }),
       uebergang: getComputedStyle(document.querySelector(".knopf, .chip, .vorschlag")).transitionDuration,
@@ -565,8 +656,8 @@ async function deckendPruefen(page, name) {
   await page.click('#dialog-info button[value="ok"]');
   const schlecht = r.flaechen.filter((f) => f.filter !== "none" || f.alpha < 1);
   bericht.deckend.push({ name, ...r });
-  pruefe(!schlecht.length && r.uebergang.split(",").every((d) => parseFloat(d) === 0),
-    `${name}: Glas deckend und ohne Unschärfe (${r.flaechen.map((f) => `${f.sel} ${f.filter === "none" ? "ohne" : f.filter} α${f.alpha}`).join(", ")}), Übergänge ${r.uebergang}`);
+  pruefe(!schlecht.length && (!ohneBewegung || r.uebergang.split(",").every((d) => parseFloat(d) === 0)),
+    `${name}: Glas deckend und ohne Unschärfe (${r.flaechen.map((f) => `${f.sel} ${f.filter === "none" ? "ohne" : f.filter} α${f.alpha}`).join(", ")}), Übergänge ${r.uebergang}${ohneBewegung ? "" : " (bleiben – der Schalter betrifft nur das Glas)"}`);
 }
 async function deckend() {
   for (const motor of MOTOREN) for (const schema of SCHEMEN) {
@@ -589,9 +680,21 @@ async function deckend() {
     else pruefe(false, "Chromium: „Transparenz reduzieren“ lässt sich nicht nachstellen");
     await ctx.close();
   }
+  // v2.4: Schalter „Glas-Effekt“ aus (gespeichert wie aus den Einstellungen)
+  for (const motor of MOTOREN) for (const schema of SCHEMEN) {
+    const ctx = await kontext(motor, { breite: 390, schema });
+    await ctx.addInitScript(() => { try { localStorage.setItem("gabi.darstellung", JSON.stringify({ thema: "system", glas: false })); } catch { /* egal */ } });
+    const page = await ctx.newPage();
+    await page.goto(`${basis}/?demo=1#/`);
+    await page.waitForSelector(".vorschlag");
+    const glas = await page.evaluate(() => document.documentElement.getAttribute("data-glas"));
+    pruefe(glas === "aus", `${motor} ${schema === "dark" ? "dunkel" : "hell"}: data-glas="aus" gesetzt (${glas})`);
+    await deckendPruefen(page, `${motor} ${schema === "dark" ? "dunkel" : "hell"}: Glas-Effekt aus (Einstellungen)`, { ohneBewegung: false });
+    await ctx.close();
+  }
   // ohne backdrop-filter: den @supports-not-Block aus style.css unbedingt einspielen (wie ein Browser ohne Glas)
   const css = await readFile(join(WURZEL, "style.css"), "utf8");
-  const m = /@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\s*(:root \{[^}]*\})\s*\}/.exec(css);
+  const m = /@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\s*(:root[^{]*\{[^}]*\})\s*\}/.exec(css);
   pruefe(Boolean(m), "style.css: Rückfall-Block für Browser ohne backdrop-filter vorhanden");
   if (m) for (const motor of MOTOREN) for (const schema of SCHEMEN) {
     const ctx = await kontext(motor, { breite: 390, schema });
@@ -660,6 +763,8 @@ if (TEILE.includes("A")) for (const motor of MOTOREN) for (const schema of SCHEM
 if (TEILE.includes("D")) for (const motor of MOTOREN) for (const breite of [320, 768]) await ansichten(motor, "light", breite, { bilder: false, kontrast: false });
 if (TEILE.includes("F")) await deckend();
 if (TEILE.includes("G")) await grund();
+if (TEILE.includes("H") && BRAIN_BASIS) for (const motor of MOTOREN) for (const schema of SCHEMEN) for (const breite of BREITEN) await brainAnsichten(motor, schema, breite);
+else if (TEILE.includes("H")) console.log("– Teil H (Brain) übersprungen: GABI_BRAIN_BASIS fehlt");
 pruefe(!bericht.anfragen.length, `kein Fremd-Request${bericht.anfragen.length ? `: ${[...new Set(bericht.anfragen)].slice(0, 8).join(" | ")}` : " (alle Anfragen an die eigene Adresse)"}`);
 await writeFile(join(aus, "messwerte.json"), `${JSON.stringify(bericht, null, 1)}\n`);
 for (const b of Object.values(browser)) await b.close();
