@@ -692,6 +692,20 @@
   el.einstellungenAlleLoeschen.addEventListener("click", () => { ausEinstellungen(); alleGespraecheLoeschenFragen(einstellungenOeffner); });
   el.einstellungenAbmelden.addEventListener("click", async () => { ausEinstellungen(); await abmeldenFragen(); });
   el.einstellungenVerbinden.addEventListener("click", mitServerVerbinden);
+  // Fokus-Falle: Tab läuft im Dialog im Kreis (vom letzten Bedienelement zurück zum ersten, Shift+Tab umgekehrt). Der Dialog
+  // führt Tab selbst – so erreicht Tab auch in Safari die Knöpfe (Safari springt sonst nur zwischen Feldern) und läuft nie
+  // in die Browserleiste. Von einer Optionsgruppe zählt nur die gewählte Option (Pfeiltasten wechseln darin).
+  el.einstellungen.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+    const ziele = [...el.einstellungen.querySelectorAll("button, input, a[href], [tabindex]:not([tabindex='-1'])")]
+      .filter((k) => !k.disabled && !k.closest("[hidden]") && k.getClientRects().length && !(k.type === "radio" && !k.checked));
+    if (!ziele.length) return;
+    const i = ziele.indexOf(document.activeElement);
+    const n = e.shiftKey ? (i <= 0 ? ziele.length - 1 : i - 1) : (i < 0 || i === ziele.length - 1 ? 0 : i + 1);
+    e.preventDefault();
+    perZeiger = false;
+    fokusSetzen(ziele[n]);
+  });
   el.einstellungen.addEventListener("close", () => {
     // Safari fokussiert Knöpfe beim Tippen nicht: dann liegt der Fokus nach dem Schließen auf body – zurück auf den Öffner
     if (fokusVerloren() && sichtbarBedienbar(einstellungenOeffner)) fokusSetzen(einstellungenOeffner);
