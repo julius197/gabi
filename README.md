@@ -64,7 +64,8 @@ supabase/reset_test.sql         ⚠️ löscht ALLE Notizen und Test-Patienten, 
 tests/v2.mjs                    Ende-zu-Ende-Tests (Playwright): Handy/Laptop × Hell/Dunkel, Robustheit, echte lokale API, Safari
 tests/eingabefelder.mjs         Eingabefelder ohne Anschnitt (Cursor, Text, Platzhalter per Bildvergleich) – Block 5 von v2.mjs
 tests/design.mjs                Design v2.3: Kontrast aller Textstellen (Pixel, auch auf Glas), Schriften, CSP/Fremd-Requests,
-                                Breite 320–1440, Glas-Unschärfe, deckend bei Bewegung/Transparenz reduzieren, Screenshots
+                                Breite 320–1440, Glas-Unschärfe, deckend bei Bewegung/Transparenz reduzieren, Grund ohne
+                                Kante, Screenshots
 tests/design-leistung.mjs       Scrollen mit Glas: 50 Nachrichten, Frame-Zeiten in Chromium (Ziel: kein Frame > 33 ms)
 screenshots/                    Screenshots aus tests/v2.mjs, screenshots/design/ aus tests/design.mjs
 ```
@@ -131,7 +132,7 @@ node dev/wissen_erzeugen.mjs               # src/wissen.js neu schreiben, wenn k
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/v2.mjs [diktat.wav] [screenshots/]
 # nur die Eingabefelder (Chromium + WebKit, 320/390/1440, Hell/Dunkel; einzeln: GABI_MOTOREN=chromium GABI_BREITEN=320):
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/eingabefelder.mjs [screenshots/eingabefelder] [http://localhost:8788]
-# Design (Chromium + WebKit, Hell/Dunkel; ~20 min; eingrenzen mit GABI_MOTOREN, GABI_SCHEMEN, GABI_BREITEN, GABI_TEILE=A,D,E,F):
+# Design (Chromium + WebKit, Hell/Dunkel; ~25 min; eingrenzen mit GABI_MOTOREN, GABI_SCHEMEN, GABI_BREITEN, GABI_TEILE=A,D,E,F,G):
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/design.mjs [screenshots/design] [http://localhost:8788]
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/design-leistung.mjs [http://localhost:8788] [ergebnis.json]
 ```

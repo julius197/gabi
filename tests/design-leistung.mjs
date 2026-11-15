@@ -33,30 +33,41 @@ async function stumm(ctx) {
 }
 const ruhig = (page) => page.waitForFunction(() => !document.querySelector("#senden.stoppt") && !document.querySelector(".von-gabi .tippen") && !document.querySelector(".eingabe.erkennt"), null, { timeout: 20000 });
 const anzahl = (page) => page.evaluate(() => document.querySelectorAll("#nachrichten .nachricht").length);
+const gabiZahl = (page) => page.evaluate(() => document.querySelectorAll("#nachrichten .von-gabi").length);
+/** erst warten, bis Gabi mit einer neuen Nachricht anfängt, dann bis sie fertig ist */
+async function antwort(page, vorher) {
+  await page.waitForFunction((n) => document.querySelectorAll("#nachrichten .von-gabi").length > n, vorher, { timeout: 20000 });
+  await ruhig(page);
+}
 
 /** Gespräch mit mindestens 50 Nachrichten aufbauen (Demo-Assistent, echte Oberfläche). */
 async function gespraechAufbauen(page) {
   const fragen = ["Was wollte TP-01?", "Wo sind die Standorte?", "Was kostet Osteopathie?", "Was hat TP-02 als Hausaufgabe?", "Wann hat die Praxis geöffnet?", "Was wollte TP-03?"];
   const patienten = ["TP-01", "TP-02", "TP-03"];
   for (let runde = 0; (await anzahl(page)) < 50 && runde < 60; runde++) {
+    const vorher = await gabiZahl(page);
     if (runde % 6 === 1) { // Diktat mit Beispiel → Entwurfskarte, gespeichert
       await page.click('#chips-leiste [data-schnell="diktat"]');
+      await antwort(page, vorher);
       await page.locator(`[data-aktion="waehle"]:has-text("${patienten[runde % 3]}")`).last().click();
       await page.waitForSelector("#modus-pill:not([hidden])");
+      const vorDiktat = await gabiZahl(page);
       await page.locator('[data-aktion="beispiel"]').last().click();
-      await page.waitForFunction((n) => document.querySelectorAll(".karte-entwurf:not(.erledigt)").length >= 1, null, { timeout: 20000 });
-      await ruhig(page);
+      await antwort(page, vorDiktat);
+      await page.waitForSelector(".karte-entwurf:not(.erledigt)", { timeout: 20000 });
       await page.locator('.karte-entwurf:not(.erledigt) [data-aktion="entwurf-speichern"]').last().click();
       await page.waitForFunction(() => !document.querySelector(".karte-entwurf:not(.erledigt):not(.verworfen)"), null, { timeout: 15000 });
     } else if (runde % 6 === 4) { // Bericht → Berichtskarte
       await page.click('#chips-leiste [data-schnell="bericht"]');
+      await antwort(page, vorher);
       await page.locator(`[data-aktion="waehle"]:has-text("${patienten[(runde + 1) % 3]}")`).last().click();
       await page.locator('[data-aktion="waehle"][data-wert="verlauf"]').last().click();
+      await page.waitForFunction((n) => document.querySelectorAll("#nachrichten .karte-bericht").length > n, await page.evaluate(() => document.querySelectorAll("#nachrichten .karte-bericht").length - 1), { timeout: 20000 });
       await ruhig(page);
     } else {
       await page.fill("#eingabe-text", fragen[runde % fragen.length]);
       await page.click("#senden");
-      await ruhig(page);
+      await antwort(page, vorher);
     }
     if (runde === 0) await page.waitForSelector("#chips-leiste:not([hidden])");
   }

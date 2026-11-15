@@ -19,9 +19,12 @@
 //  F  deckend: „Bewegung reduzieren“ (Chromium + WebKit), „Transparenz reduzieren“ (Chromium per CDP) und ohne
 //     backdrop-filter (der @supports-not-Block aus style.css eingespielt): Glas ohne Unschärfe, Fläche deckend,
 //     ohne Übergänge
+//  G  Grund ohne Kante: Verlauf und Lichtflächen allein (App ausgeblendet), Zeilen und Spalten über den ganzen Bildschirm.
+//     Chromium dithert Verläufe mit einem feinen Muster (Nachbarpixel ±2–4 Stufen) – gemessen wird darum der Sprung
+//     zwischen Mitteln aus 8×8 Pixeln (≤ 3 Stufen); eine eingebaute Kontrollkante von etwa 5 Stufen muss erkannt werden
 // Voraussetzung: lokaler Server wie bei v2.mjs (`cd worker && npm run lokal` → http://localhost:8788, Code „test“).
 // Aufruf: PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/design.mjs [screenshot-ordner] [basis-url]
-//   Eingrenzen: GABI_MOTOREN=chromium,webkit  GABI_SCHEMEN=light,dark  GABI_BREITEN=390,1440  GABI_TEILE=A,D,E,F
+//   Eingrenzen: GABI_MOTOREN=chromium,webkit  GABI_SCHEMEN=light,dark  GABI_BREITEN=390,1440  GABI_TEILE=A,D,E,F,G
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,14 +37,14 @@ const liste = (name, standard) => (process.env[name] || standard).split(",").map
 const MOTOREN = liste("GABI_MOTOREN", "chromium,webkit");
 const SCHEMEN = liste("GABI_SCHEMEN", "light,dark");
 const BREITEN = liste("GABI_BREITEN", "390,1440").map(Number);
-const TEILE = liste("GABI_TEILE", "A,D,E,F");
+const TEILE = liste("GABI_TEILE", "A,D,E,F,G");
 const MIN_KONTRAST = 4.5;
 
 const fehler = [];
 const pruefe = (ok, text) => { if (!ok) { fehler.push(text); console.log(`✗ ${text}`); } else console.log(`✓ ${text}`); };
 const warte = (ms) => new Promise((r) => setTimeout(r, ms));
 const r2 = (v) => Math.round(v * 100) / 100;
-const bericht = { kontrast: [], glas: [], deckend: [], schriften: [], anfragen: [] };
+const bericht = { kontrast: [], glas: [], deckend: [], schriften: [], anfragen: [], grund: [] };
 
 // Chromium in der neuen Headless-Variante mit GPU: die alte Headless-Shell zeichnet backdrop-filter nach manchen
 // Stil-Umschaltungen nicht mehr (Bild ohne Unschärfe, obwohl die Seite sie hat). GABI_CHROMIUM_SHELL=1: alte Shell.
@@ -602,10 +605,61 @@ async function deckend() {
 }
 
 // ---------------------------------------------------------------------------
+// G: Grund ohne Kante – Verlauf und Lichtflächen allein, Dither-Muster weggemittelt
+// ---------------------------------------------------------------------------
+async function grundMessen(page, dsf) {
+  const png = await page.screenshot({ type: "png", caret: "initial" });
+  return hilfe.evaluate(async ({ b64, dsf }) => {
+    const bild = new Image();
+    bild.src = `data:image/png;base64,${b64}`;
+    await bild.decode();
+    const c = document.createElement("canvas");
+    c.width = bild.width; c.height = bild.height;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(bild, 0, 0);
+    const W = c.width, H = c.height, D = g.getImageData(0, 0, W, H).data;
+    const n = 8 * dsf; // 8 CSS-Pixel
+    // Mittel eines n×n-Blocks ab (x, y)
+    const block = (x, y) => { const s = [0, 0, 0]; for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = ((y + j) * W + x + i) * 4; s[0] += D[k]; s[1] += D[k + 1]; s[2] += D[k + 2]; } return s.map((v) => v / (n * n)); };
+    const ab = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+    let sprung = 0, roh = 0;
+    for (const f of [0.15, 0.35, 0.5, 0.65, 0.85]) {
+      const y = Math.round(H * f), x = Math.round(W * f);
+      for (let xx = n; xx + n < W; xx += Math.max(1, dsf)) sprung = Math.max(sprung, ab(block(xx, y), block(xx - n, y)));
+      for (let yy = n; yy + n < H; yy += Math.max(1, dsf)) sprung = Math.max(sprung, ab(block(x, yy), block(x, yy - n)));
+      for (let xx = 1; xx < W; xx++) { const k = (y * W + xx) * 4; roh = Math.max(roh, Math.abs(D[k] - D[k - 4]), Math.abs(D[k + 1] - D[k - 3]), Math.abs(D[k + 2] - D[k - 2])); }
+    }
+    return { sprung, roh };
+  }, { b64: png.toString("base64"), dsf });
+}
+async function grund() {
+  for (const motor of MOTOREN) for (const schema of SCHEMEN) for (const breite of [390, 768, 1440]) {
+    const name = `${motor} ${schema === "dark" ? "dunkel" : "hell"} ${breite}`;
+    const ctx = await kontext(motor, { breite, hoehe: breite === 768 ? 1024 : undefined, schema });
+    const page = await ctx.newPage();
+    await page.goto(`${basis}/?demo=1#/`);
+    await page.waitForSelector("#ansicht-chat:not([hidden]) .vorschlag");
+    await page.evaluate(() => { const b = [...document.styleSheets].find((s) => (s.href || "").includes("style.css")); b.insertRule("#app, .toasts { visibility: hidden !important; }", b.cssRules.length); });
+    await warte(150);
+    const dsf = breite < 768 ? 2 : 1;
+    const m = await grundMessen(page, dsf);
+    // Kontrollkante: rechte Hälfte um etwa 5 Stufen verschoben – muss als Sprung erkannt werden
+    await page.evaluate((dunkel) => { const b = [...document.styleSheets].find((s) => (s.href || "").includes("style.css")); b.insertRule(`body::after { content: ""; position: fixed; top: 0; bottom: 0; left: 50%; right: 0; background: ${dunkel ? "rgba(255, 255, 255, 0.025)" : "rgba(0, 0, 0, 0.022)"}; }`, b.cssRules.length); }, schema === "dark");
+    await warte(150);
+    const k = await grundMessen(page, dsf);
+    bericht.grund.push({ name, sprung: r2(m.sprung), roh: m.roh, kontrolle: r2(k.sprung) });
+    pruefe(m.sprung <= 3 && k.sprung >= 4,
+      `${name}: Grund ohne Kante – größter Sprung zwischen 8×8-Mitteln ${r2(m.sprung)} Stufen (Dither-Muster roh bis ${m.roh}); Kontrollkante erkannt mit ${r2(k.sprung)}`);
+    await ctx.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
 const start = Date.now();
 if (TEILE.includes("A")) for (const motor of MOTOREN) for (const schema of SCHEMEN) for (const breite of BREITEN) await ansichten(motor, schema, breite, {});
 if (TEILE.includes("D")) for (const motor of MOTOREN) for (const breite of [320, 768]) await ansichten(motor, "light", breite, { bilder: false, kontrast: false });
 if (TEILE.includes("F")) await deckend();
+if (TEILE.includes("G")) await grund();
 pruefe(!bericht.anfragen.length, `kein Fremd-Request${bericht.anfragen.length ? `: ${[...new Set(bericht.anfragen)].slice(0, 8).join(" | ")}` : " (alle Anfragen an die eigene Adresse)"}`);
 await writeFile(join(aus, "messwerte.json"), `${JSON.stringify(bericht, null, 1)}\n`);
 for (const b of Object.values(browser)) await b.close();

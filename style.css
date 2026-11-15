@@ -132,7 +132,7 @@
   --schatten-dialog: 0 0 0 1px var(--ring), 0 24px 64px -24px rgba(7, 45, 83, 0.42);
   --schatten-chip: 0 1px 2px rgba(7, 45, 83, 0.05);
   --schatten-toast: 0 0 0 1px var(--ring), 0 18px 44px -18px rgba(7, 45, 83, 0.4);
-  --schatten-leiste: 1px 0 0 var(--ring), 8px 0 32px -24px rgba(7, 45, 83, 0.35);
+  --schatten-leiste: 1px 0 0 var(--ring); /* Seitenleiste: nur feine Kante – kein weicher Schatten, der in den Inhalt ausläuft */
   --schatten-zeichen: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 16px 40px -18px rgba(26, 111, 208, 0.75);
   --schatten-aufnahme: 0 0 0 2px var(--aufnahme), 0 14px 34px -14px rgba(229, 55, 44, 0.45);
   --schatten-verwirft: 0 0 0 2px var(--text-3), 0 14px 34px -14px rgba(0, 0, 0, 0.3);
@@ -231,7 +231,6 @@
     --schatten-dialog: 0 0 0 1px var(--ring), 0 24px 64px -24px rgba(0, 0, 0, 0.75);
     --schatten-chip: 0 1px 2px rgba(0, 0, 0, 0.2);
     --schatten-toast: 0 0 0 1px var(--ring), 0 18px 44px -18px rgba(0, 0, 0, 0.6);
-    --schatten-leiste: 1px 0 0 var(--ring), 8px 0 32px -24px rgba(0, 0, 0, 0.5);
   }
 }
 
