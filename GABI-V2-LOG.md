@@ -812,6 +812,134 @@ Alle Werte aus `screenshots/design/messwerte.json` und `leistung.json` (finaler 
   Seitenleiste lief in den Inhalt. Die alten Bilder unter `screenshots/*.jpg` zeigen noch v2.1.
 - **Nicht geprüft:** echtes Safari/iPhone (siehe Testgrenzen), echte Claude-Antworten (unverändert, kein Worker-Diff).
 
+## v2.4 – Brain + Glas-Design zusammen, Einstellungen, Brain im neuen Look (15.11.2026, Branch `gabi-v2-4`, nicht live)
+
+Auftrag von Julius (15.11.2026): Brain-Stand und PhysioWorks-Glas-Design zusammenführen, Einstellungen einbauen
+(Hell/Dunkel/System), Brain-Ansicht in den neuen Look ziehen; gründlich und vollständig testen. Kein Push, kein Deploy,
+keine Live-Änderung, Worker unverändert, nur Test- und Demodaten. Brain bleibt hinter seinem Schalter (Standard AUS).
+
+**Ausgangsstand:** `gabi-v2-4` neu von `gabi-brain` (754720f: Physik, Labels, Osteopathie-Fix D12), darauf
+`gabi-v2-3-design` (c9d82a5) gemergt. Gearbeitet in einem eigenen Worktree mit eigenen Ports: 8792 (Brain AN) und
+8793 (Brain AUS). 8788 (Live-Vorschau) und 8790 (Julius' alter Brain-Server) blieben unberührt.
+`worker/src` ist gegenüber `gabi-brain` unverändert (`git diff --quiet gabi-brain gabi-v2-4 -- worker/src` leer).
+
+### Konfliktlösung beim Merge (2e0457f)
+- **index.html:** Schrift-Preloads aus v2.3 (DM Sans, Red Hat Display) + Brain-Teile aus `gabi-brain`; alle `?v=` auf
+  2.4.0.
+- **app.js:** nur `VERSION` stritt (Brain 2.2.0-brain, Design 2.3.0) → 2.4.0. Brain-Logik unverändert.
+- **README.md:** beide Datei-Listen und Test-Aufrufe behalten.
+- **worker/test/oberflaeche.test.js:** erwartete Fassung 2.4.0.
+- **style.css und brain.css** liefen ohne Konflikt zusammen – das Brain hat eine eigene Datei mit eigenen `--brain-*`
+  Tokens. Die eigentliche Angleichung ist darum Handarbeit in Teil 3 (unten), kein Merge-Ergebnis.
+- Beifang: Auf `gabi-brain` liegt ein versehentlich eingecheckter Ordner `http:/localhost:8794/` (Screenshots eines
+  früheren Testlaufs mit falsch übergebenem Pfad). Er ist mitgekommen; nicht gelöscht, weil er nicht aus diesem Auftrag
+  stammt – kann bei Gelegenheit weg.
+
+### Was neu ist
+- **Einstellungen** (Zahnrad unten links in der Seitenleiste, unten in der Schublade am Handy): nativer `<dialog>` im
+  Glas-Look wie die anderen Dialoge, Escape und Schließen geben den Fokus an den Auslöser zurück.
+  - **Darstellung:** Hell / Dunkel / System (Standard System) als Segment-Wahl (Radios, Pfeiltasten).
+  - **Transparenz:** Schalter „Glas-Effekt“. Aus = deckend wie bei „Transparenz reduzieren“; die Systemeinstellungen
+    („Transparenz reduzieren“, „Bewegung reduzieren“) bleiben vorrangig: dann bleibt es deckend, egal wie der Schalter steht, und ein Hinweis darunter sagt warum.
+  - **Konto und Gerät:** Version (aus `VERSION`, dazu „Demo“/„Brain an“), Hinweis „Gespräche nur auf diesem Gerät“,
+    „Alle Gespräche löschen“ (bestehende Rückfrage), „Abmelden“ (bestehende Rückfrage mit Häkchen; in der Demo
+    stattdessen „Mit Server verbinden“ wie im Info-Dialog).
+  - **Später:** Benutzerkonto, Praxis-Einstellungen, Datenschutz als deaktivierte Zeilen „Folgt“ (ohne Funktion).
+  - Weitere Abschnitte: ein `<section class="einstellungen-abschnitt">` mit Überschrift dazu; Speichern über
+    `GabiDarstellung.setzen()` oder eigene Schlüssel.
+- **`darstellung.js`** (neu, 3,7 KB, im `<head>` vor `style.css`): setzt vor dem ersten Bild `data-thema`
+  (hell/dunkel), `data-thema-wahl` und `data-glas="aus"` am `<html>` und `meta theme-color`. Externe Datei statt
+  Inline-Skript wegen CSP `script-src 'self'`. Gespeichert nur in `localStorage` „gabi.darstellung“, jeder Zugriff in
+  try/catch (ohne Speicher: System + Glas an). „System“ folgt dem Betriebssystem auch bei offener Seite; andere Tabs
+  ziehen über das `storage`-Ereignis mit. Meldet Änderungen als Ereignis „gabi:darstellung“.
+- **Brain im neuen Look:** Kopf, Zähler, Reiter, Filter, Suche, Detail-Panel, Legende, Zoom-Knöpfe, Minikarte, Liste,
+  Lücken, Fähigkeiten und Dialoge auf die v2.3-Tokens (Schrift, Ecken, Schatten, Akzent). Glas für die Leisten über
+  dem Graphen (Knöpfe, Legende, Fokus, Stand, Minikarte) und für Detail-Panel und Mehr-Menü; Kennzahlen und
+  Filter-Leiste als Glas ohne Unschärfe. Bühne des Graphen ruhig (#F8FAFD hell, #051F3B dunkel), mit feiner Innenkante.
+- **Version 2.4.0**, `darstellung.js` ist die 9. eigene Datei mit `?v=` (Unit-Test angepasst).
+
+### Entscheidungen
+1. **Ein Dunkel-Block, gesteuert über `data-thema`.** Die Dunkel-Tokens standen in `@media (prefers-color-scheme:
+   dark)`. Sie stehen jetzt unter `:root[data-thema="dunkel"]` (style.css und brain.css) – sonst bräuchte „Dunkel“
+   bei hellem System und „Hell“ bei dunklem System jeweils eine zweite Kopie aller Tokens. `darstellung.js` setzt das
+   Attribut immer, auch bei „System“; ohne Skript bliebe Hell.
+2. **Deckend gewinnt im Dunkeln:** Die Regeln für „Transparenz/Bewegung reduzieren“ und den @supports-not-Rückfall
+   haben den Selektor `:root[data-thema], :root:not([data-thema])` (Spezifität 0,2,0), damit sie den Dunkel-Block
+   (0,2,0, aber früher) sicher überschreiben. `:root[data-glas="aus"]` nutzt dieselben deckenden Tokens.
+3. **Canvas live ohne Neuladen:** Der Graph liest seine Farben aus den `--brain-*`-Variablen. Statt des alten
+   `matchMedia`-Listeners hört `brain-ansicht.js` auf „gabi:darstellung“ und ruft `farbenNeu()` – ein Neuzeichnen,
+   kein neues Layout (gemessen: gleiche Labels an gleicher Stelle).
+4. **Knotenfarben: Bedeutung vor Marke.** Acht Arten bleiben unterscheidbar (Blau, Orange, Indigo, Violett, Pink,
+   Petrol, Grau, Ocker), abgestimmt auf Marine/Blau der Palette: Praxiswissen = PhysioWorks-Akzent #1A6FD0
+   (dunkel #5AA6F4). Alle Knotenfarben ≥ 4,3:1 zur Bühne (≥ 3:1 genügt für Grafik), Labels auf ihrer Platte ≥ 9,5:1
+   auch über Knoten.
+5. **Fokusfalle im Einstellungs-Dialog selbst gebaut:** `showModal()` hält Tab in Chromium nicht im Dialog, WebKit
+   springt ohne „Tab zu allen Bedienelementen“ gar nicht auf Knöpfe. Der Dialog führt Tab/Umschalt+Tab darum selbst
+   im Kreis (nur sichtbare, aktive Ziele; bei der Segment-Wahl nur das gewählte Radio). Die anderen Dialoge bleiben,
+   wie sie waren (ihre Tests unverändert).
+6. **Einstellungen über der Schublade (Handy):** Die Schublade bleibt offen; Escape schließt nur die Einstellungen,
+   ein zweites Escape die Schublade – wie bei den anderen Dialogen aus der Schublade.
+7. **Glas-Schalter ändert nur das Glas,** keine Übergänge (die hängen an „Bewegung reduzieren“).
+
+### Getestet (alles mit dem finalen Stand, Browser-Tests nacheinander, Last vor jeder Zeitmessung geprüft)
+- **Unit (Vitest):** 920 von 920 grün (20 Dateien; neu: `darstellung.js` als 9. Datei mit `?v=2.4.0`, Fassung 2.4.0,
+  Dunkel-Block unter `:root[data-thema="dunkel"]`, Bühnenfarben #F8FAFD/#051F3B).
+- **`tests/einstellungen.mjs` (neu, Chromium + WebKit):** 86 von 86 grün – gegen den Server ohne Brain (8793) und mit
+  Brain (8792). Öffnen über Seitenleiste und Schublade, Abschnitte und „Folgt“-Zeilen, 320/390/768/1440 px ohne
+  seitliches Scrollen, Hell/Dunkel sofort ohne Neuladen, gespeichert nach Neuladen, „System“ folgt dem Gerät live,
+  Glas an/aus, Systemeinstellung vorrangig, Version, Alle löschen (Rückfrage), Abmelden mit Häkchen (echter lokaler
+  Server, Code „test“), Tastatur (14× Tab bleibt im Dialog, Pfeiltasten, Escape → Fokus zurück), Handy-Schublade.
+  - **Kein Aufblitzen gemessen:** gespeichert „dunkel“ bei hellem System, „hell“ bei dunklem, „system“ bei dunklem –
+    in beiden Engines steht `data-thema` schon, wenn `<body>` entsteht, und das erste gemalte Bild hat die richtige
+    Grundfarbe (rgb(7,45,83) bzw. rgb(237,244,250)).
+- **`tests/brain-thema.mjs` (neu, Chromium + WebKit, 1440 und 390 px):** 20 von 20 grün. Hell → Dunkel → Hell über die
+  Einstellungen: die Label-Platten im Canvas wechseln sofort (rgb 253,254,255 → 7,40,74 → 253,254,255), Bühne
+  rgb(5,31,59), ohne Neuladen, gleiche Labels an gleicher Stelle. **Kontrast der Graph-Labels** (Pixel der Platte
+  gegen die Textfarbe, 2-%-Perzentil, 29 Labels am Laptop): Hell kleinster 14,67:1, Dunkel kleinster 11,39:1.
+- **`tests/design.mjs` (erweitert):** Gesamtlauf 552 grün + 14 rot – alle 14 Mess-Artefakte des neuen Tests, kein
+  Fehler der Oberfläche (siehe „Tests angepasst“); nach der Korrektur Teil A bei 390 px und Teil H komplett erneut:
+  276 von 276 grün. Zusammen: **204 Ansichten, 7 200 Textstellen ≥ 4,5:1, kleinster 4,68:1** (Untertitel
+  „PHYSIOWORKS“ im Dunkeln, wie in v2.3). Einstellungen 8 Ansichten, kleinster 5,94:1; Brain 52 Ansichten / 3 016
+  Textstellen, kleinster 4,68:1. Glas-Effekt aus: alle Glasflächen deckend ohne Unschärfe (Chromium + WebKit,
+  Hell + Dunkel); Rückfall ohne backdrop-filter, Bewegung/Transparenz reduzieren, Grund ohne Kante, Schriften, kein
+  Fremd-Request, kein CSP-Verstoß – grün wie in v2.3.
+- **Brain (Server mit Schalter AN):** `tests/brain.mjs` 650 von 650 (inkl. Teil 1 „ohne Schalter“: keine Brain-Datei
+  geladen, `#/brain` führt ins Gespräch); `brain-r1-antwort` 66/66, `brain-r1-daten` 174/174, `brain-r1-handy`
+  319/319, `brain-r1-sicherheit` 94/94, `brain-labels-zoom` 24/24, `brain-physik` 64/64; `brain-r1-graph` siehe unten.
+- **`brain-r1-graph`:** 1. Lauf (Last 4) 272 grün, 2 rot – Fund 4 „Auswahlring bleibt“ in beiden Engines, weil der
+  Test fest nach *grünen* Ring-Pixeln suchte; der Ring ist jetzt blau (Akzent). Test liest nun `--brain-g-akzent`
+  → 7/8 Ring-Punkte, grün. 2. Lauf: Chromium grün, WebKit 12 rot bei Last 17 (Bild-für-Bild-Animation, Doppeltipp-
+  Pausen) – einzeln nachgefahren bei Last 6: **WebKit 137 von 137 grün**. Lastbedingt, kein Fehler.
+- **Leistung (`brain-leistung.mjs`, Last 3,7):** 100/300/500 Knoten, Laptop und Handy, Chromium und WebKit: **60
+  Bilder/s** im Layout, beim Verschieben/Zoomen und beim Ziehen; 95 % der Bilder ≤ 18 ms; Zeichnen ≤ 1 ms je Bild;
+  0 Bilder in Ruhe; Layout bis zur Ruhe 1,76 s; JS-Speicher 4,7 MB bei 500 Knoten.
+- **`tests/v2.mjs` (ohne Schalter, 8793):** **564 von 564 grün in einem Lauf**, inklusive Push-to-Talk/Mikrofon und
+  Neuladen-Schritten, die in v2.3 lastbedingt ausfielen (Last zu Beginn 15, am Ende 7). Ein Nachfahren war darum
+  nicht nötig; Block 5 (Eingabefelder) eingeschlossen.
+- **Gegenprobe:** `tests/einstellungen.mjs` gegen `gabi-v2-3-design` (c9d82a5, eigener Server 8794): rot in Chromium
+  und WebKit („Einstellungen und Darstellung fehlen … Stand vor v2.4?“), gegen v2.4 grün. Zuerst stürzte der Test dort
+  ab statt sauber rot zu melden – jetzt bricht er mit einer roten Prüfung ab.
+- **Sichtprüfung:** Einstellungen und alle Brain-Ansichten (Graph, Detail, Mehr-Menü, Liste, Lücken, Fähigkeiten,
+  Schublade) in Hell/Dunkel bei 390 und 1440 px angesehen, dazu Kontaktbögen. Auffällig nur, was unter „Offen“ steht.
+
+### Tests angepasst
+- `design.mjs` Teil F: Rückfall-Regex auf den neuen Selektor (`:root[^{]*\{…\}`); Schalter „Glas-Effekt aus“ als
+  eigene Prüfung (Übergänge bleiben dort erlaubt).
+- `design.mjs` Kontrast: Leisten und Panels über dem Graphen (Knöpfe, Legende, Fokus, Stand, Detail, Mehr-Menü)
+  zählen als Glas-Ebene. **Zwei offene Dialoge** (Handy: Einstellungen über der Schublade): nur der oberste wird
+  gemessen – die Schublade liegt hinter dessen `::backdrop` abgedunkelt und inaktiv (vorher 2 Artefakte: 3,94/4,04 auf
+  dem Schubladen-Knopf). **Legenden-Zeichen „?“ im Ring** ausgenommen: das ist das Bild des Graph-Zeichens (Grafik,
+  WCAG 1.4.11); der Ring in derselben Farbe reicht kantengeglättet in die Ecken des Schriftrahmens und drückte die
+  Messung auf 1:1 (12 Artefakte). Echte Farben: #A65510 auf hell 4,74:1, #F6A85A auf dunkel 7,16:1.
+- `brain-r1-graph.mjs` Fund 4: Ring-Farbe aus dem Token statt fest grün.
+
+### Testgrenzen (wie v2.3)
+- Playwright-WebKit zeichnet `backdrop-filter` nicht: In WebKit-Bildern liegt Text hinter Glas scharf darunter (z. B.
+  Schublade hinter den Einstellungen am Handy). Chromium mit GPU zeigt die Unschärfe; echtes Safari/iPhone nicht
+  gesehen.
+- Echter Claude-Weg (Gespräch mit Brain-Kontext über die Anthropic-API) nicht geprüft – lokal ohne Schlüssel, Worker
+  unverändert.
+
 ## Offen
 
 1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
@@ -893,8 +1021,21 @@ Alle Werte aus `screenshots/design/messwerte.json` und `leistung.json` (finaler 
     ein iOS-Simulator ist nicht installiert. Die Kontraste halten auch ohne Unschärfe (gemessen). Am iPhone prüfen:
     Kopfzeile und Eingabe-Band beim Scrollen (Text dahinter unscharf, nichts ruckelt), Schublade, Dialoge. Die
     Leistung ist nur am Mac gemessen; auf älteren iPhones wären Kopfzeile + Band die einzigen Unschärfe-Ebenen.
-16. **Brain-Ansicht nicht umgebaut** (v2.3): `gabi-brain` liegt nicht in diesem Stand (eigener Branch). Beim
+16. ~~**Brain-Ansicht nicht umgebaut** (v2.3)~~ – erledigt in v2.4 (Brain auf den Tokens, Knotenfarben auf der Palette).
+    Damals: `gabi-brain` liegt nicht in diesem Stand (eigener Branch). Beim
     Zusammenführen bekommt das Brain die neuen Tokens; eigene Farben dort (Graph, Knoten) dann auf `--pw-*` umstellen.
 17. **v2.2 fehlt** (v2.3): Einen Branch `gabi-v2-2` („Bitte prüfen“/Notiz per Gespräch) gab es nicht, darum basiert
     `gabi-v2-3-design` auf `main`. Wird v2.2 später gebaut, sind beim Zusammenführen Konflikte in `style.css`,
     `index.html` und `VERSION` zu erwarten (Version dann 2.3.x oder höher wählen).
+18. **Glas über dem Graphen am iPhone ansehen** (v2.4): wie 15, dazu Legende, Zoom-Knöpfe, Minikarte, Detail-Blatt und
+    Mehr-Menü über dem Canvas. Unter 1024 px haben die kleinen Graph-Leisten bewusst keine Unschärfe (weniger
+    Ebenen am Handy), nur Tönung.
+19. **Label unter den Zoom-Knöpfen (Handy)** (v2.4, Sichtprüfung): Öffnet ein Knoten am linken Rand sein Detail, kann
+    das Label eines Nachbarn („Kontakt“) unter der Glas-Leiste der Zoom-Knöpfe liegen und schimmert durch. Vorher
+    verdeckte die deckende Leiste es ganz. Label-Regeln und Kamera bleiben laut Auftrag unverändert – wenn es stört:
+    Labels unter Leisten ausblenden (eigene kleine Änderung an `brain-graph.js`).
+20. **Ordner `http:/localhost:8794/` auf `gabi-brain`** (gefunden beim Merge v2.4): versehentlich eingecheckte
+    Screenshots eines älteren Testlaufs (Pfad als Ordner gelesen). Mit v2.4 mitgekommen, nicht gelöscht, weil nicht aus
+    diesem Auftrag – kann mit `git rm -r "http:"` weg.
+21. **Einstellungen „Folgt“** (v2.4): Benutzerkonto, Praxis-Einstellungen, Datenschutz sind nur Platzhalter ohne
+    Funktion. Neue Abschnitte: eine `<section class="einstellungen-abschnitt">` im Dialog, Werte in `einstellungenFuellen()`.
