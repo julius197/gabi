@@ -13,7 +13,7 @@ const [, , basis = "http://localhost:8788", ergebnisDatei = ""] = process.argv;
 const liste = (name, standard) => (process.env[name] || standard).split(",").map((s) => s.trim()).filter(Boolean);
 const BREITEN = liste("GABI_BREITEN", "390,1440").map(Number);
 const SCHEMEN = liste("GABI_SCHEMEN", "light,dark");
-const GRENZE = 33.4; // ms – zwei Bilder bei 60 Hz
+const GRENZE = 34; // ms – „über 33 ms“: länger als zwei Bilder bei 60 Hz (33,3 ms, Zeitstempel sind auf Bildwechsel gerundet)
 const CHROMIUM = process.env.GABI_CHROMIUM_SHELL === "1" ? {} : { channel: "chromium", args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] };
 
 const fehler = [];
@@ -100,7 +100,7 @@ async function scrollMessen(page, art) {
   }
   // Mausrad: der Compositor scrollt, die Seite misst nebenher jedes Bild
   await page.evaluate(() => {
-    window.__abstaende = []; window.__lang = [];
+    window.__abstaende = []; window.__lang = []; window.__stopp = false;
     try { window.__beob = new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lang.push(e.duration); }); window.__beob.observe({ type: "long-animation-frame" }); } catch { /* egal */ }
     let zuletzt = 0;
     const f = (t) => { if (zuletzt) window.__abstaende.push(t - zuletzt); zuletzt = t; if (!window.__stopp) requestAnimationFrame(f); };
@@ -116,7 +116,7 @@ async function scrollMessen(page, art) {
 function auswerten(m) {
   const a = [...m.abstaende].sort((x, y) => x - y);
   const q = (p) => a[Math.min(a.length - 1, Math.floor(a.length * p))];
-  return { bilder: a.length, max: r1(a[a.length - 1] || 0), p95: r1(q(0.95) || 0), median: r1(q(0.5) || 0), ueber33: a.filter((x) => x > GRENZE).length, lang: m.lang.length, langMax: r1(Math.max(0, ...m.lang)), hoehe: Math.round(m.hoehe) };
+  return { bilder: a.length, max: Math.round((a[a.length - 1] || 0) * 100) / 100, top3: a.slice(-3).map((x) => Math.round(x * 100) / 100), p95: r1(q(0.95) || 0), median: r1(q(0.5) || 0), ueber33: a.filter((x) => x > GRENZE).length, ausgelassen: a.filter((x) => x > 25).length, lang: m.lang.length, langMax: r1(Math.max(0, ...m.lang)), hoehe: Math.round(m.hoehe) };
 }
 
 for (const breite of BREITEN) for (const schema of SCHEMEN) {
@@ -134,7 +134,7 @@ for (const breite of BREITEN) for (const schema of SCHEMEN) {
     for (const art of ["skript", "mausrad"]) {
       const w = auswerten(await scrollMessen(page, art));
       ergebnisse.push({ name, glas, art, ...g, ...w });
-      const text = `${name}, ${glas ? "mit Glas" : "Vergleich ohne Unschärfe"}, ${art === "skript" ? "Bild für Bild" : "Mausrad"}: ${w.bilder} Bilder über ${w.hoehe} px, längstes ${w.max} ms (p95 ${w.p95}, Median ${w.median}), über 33 ms: ${w.ueber33}, lange Frames ≥ 50 ms: ${w.lang}`;
+      const text = `${name}, ${glas ? "mit Glas" : "Vergleich ohne Unschärfe"}, ${art === "skript" ? "Bild für Bild" : "Mausrad"}: ${w.bilder} Bilder über ${w.hoehe} px, längste ${w.top3.join(" / ")} ms (p95 ${w.p95}, Median ${w.median}), ein Bild ausgelassen (> 25 ms): ${w.ausgelassen}, über ${GRENZE} ms: ${w.ueber33}, lange Frames ≥ 50 ms: ${w.lang}`;
       if (glas) pruefe(w.ueber33 === 0 && w.bilder > 30, text);
       else console.log(`· ${text}`);
     }
