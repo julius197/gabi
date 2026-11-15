@@ -792,7 +792,11 @@
     // Gefragt ist eine Eigenschaft (Preis, Zeiten …), die kein Wissens-Eintrag beim Thema trägt: Dann genügt der eine Eintrag
     // zum Thema – weitere (das Team, die Trainingszeiten) lenken nur von dem ab, was fehlt („Was kostet Atemtherapie?“)
     if (eigenschaft.length && fakten.length > 1 && !fakten.some((b) => eigenschaft.some((s) => b.deckt.includes(s)))) {
-      const bleibt = fakten.includes(erster) ? erster : fakten[0];
+      // gleich stark: der Eintrag, der das Thema als Leistung führt (Tag „leistung“), nicht der, der es nur nebenbei nennt
+      // („Team: … (auch Atemtherapie)“) – so bleibt die Antwort dieselbe, ob ein Preis daneben steht oder nicht
+      const leistung = inhaltsStaemme("leistung");
+      const alsLeistung = fakten.find((b) => leistung.length > 0 && leistung.every((w) => b.kopf.includes(w)));
+      const bleibt = alsLeistung || (fakten.includes(erster) ? erster : fakten[0]);
       fakten.length = 0;
       fakten.push(bleibt);
     }

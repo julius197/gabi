@@ -164,6 +164,18 @@ describe("Fragenkatalog – offene Punkte statt geratener Antworten", () => {
     expect(kasse.antwort.text).toContain(`Noch offen im Brain: **${KASSE}**`);
   });
 
+  it("D12: Fragen nach dem Preis der Osteopathie nennen 85 € aus der einen Quelle „Osteopathie“ – genau ein Quellen-Chip", async () => {
+    for (const frage of ["Was kostet Osteopathie?", "Preis Osteopathie", "Was kostet eine Behandlung?", "Muss ich die Behandlung selbst zahlen?", "Sag mal, was kostet eigentlich Osteopathie bei uns?"]) {
+      const r = await frag(frage);
+      expect(r.quellen, frage).toEqual(["Osteopathie"]);
+      expect(r.antwort.text, frage).toContain("85 € pro Behandlungseinheit");
+    }
+    // der Sammel-Eintrag nennt keinen Preis mehr – nur den Verweis auf die Quelle
+    const sammel = await frag("Bietet ihr Lymphdrainage an?");
+    expect(sammel.antwort.text).toContain("Osteopathie (siehe Osteopathie)"); // [[…]] wird in der Antwort zum bloßen Titel
+    expect(sammel.antwort.text).not.toContain("85");
+  });
+
   it("fehlt die gefragte Eigenschaft, bleibt es bei dem einen Eintrag zum Thema – kein Team, keine Zeiten obendrauf", async () => {
     expect((await frag("Was kostet MTT?")).quellen).toEqual(["Medizinische Trainingstherapie (MTT)", PREISE]);
     expect((await frag("Was kostet Atemtherapie?")).quellen).toEqual(["Weitere Behandlungsmöglichkeiten", PREISE]);

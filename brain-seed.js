@@ -9,7 +9,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   return {
-    "version": "14c0f74ee3f6",
+    "version": "66396bbe9dde",
     "knoten": [
       {
         "id": "s-praxis",
@@ -244,7 +244,7 @@
         "seed": "leistung-weitere",
         "art": "praxiswissen",
         "titel": "Weitere Behandlungsmöglichkeiten",
-        "inhalt": "Weitere Behandlungsmöglichkeiten: Kiefergelenkstherapie (CMD), Lymphdrainage, Atemtherapie, Krankengymnastik nach Bobath, Krankengymnastik PNF, Osteopathie (soweit in der Physiotherapie erlaubt; Selbstzahlerleistung, 85 € pro Behandlungseinheit), Kinesio-Tape, Schröpfen, Wärme- und Kältetherapie, Elektrotherapie.",
+        "inhalt": "Weitere Behandlungsmöglichkeiten: Kiefergelenkstherapie (CMD), Lymphdrainage, Atemtherapie, Krankengymnastik nach Bobath, Krankengymnastik PNF, Osteopathie (siehe [[Osteopathie]]), Kinesio-Tape, Schröpfen, Wärme- und Kältetherapie, Elektrotherapie.",
         "tags": [
           "leistung"
         ],

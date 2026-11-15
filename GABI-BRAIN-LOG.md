@@ -35,7 +35,7 @@ habe ich selbst übernommen, Konflikte aufgelöst und neu getestet.
 
 **Stand:** Alle drei Prioritäten (1 Datenmodell/Speicher/Brain-Ansicht im Demo-Modus · 2 Gabi nutzt das Brain mit
 Kontext, Quellen-Chips, Lücken · 3 Fähigkeiten-Register und Roadmap) sind gebaut, geprüft und committet.
-**Nächster Schritt:** Julius prüft die Physik beim Ziehen von Hand; Freigabe-Entscheidungen (Staging, Seed). Nichts weiter bauen.
+**Nächster Schritt:** Julius prüft die Physik beim Ziehen von Hand; Freigabe-Entscheidungen (Staging). Nichts weiter bauen.
 
 Testserver während der Arbeit (nur eigene Ports): 8791 = `PORT=8791 GABI_BRAIN=1 node dev/lokal.mjs` (Brain an),
 8792 = `PORT=8792 node dev/lokal.mjs` (ohne Schalter, für `tests/v2.mjs`). 8788 gehört Julius' Vorschau.
@@ -218,7 +218,7 @@ keine Patienten/Notizen im Brain-Speicher, Kontext oder Export; Graph 60 Bilder/
 | D9 | kann | Zwei Tabs können denselben Titel anlegen – danach lässt sich keiner der beiden mehr ändern, bis einer umbenannt wird | bestätigt | später („kann“) |
 | D10 | kann | Papierkorb-Dialog: Rückmeldungen verschwinden sofort wieder, und er zeigt nach „Papierkorb leeren“ im anderen Tab weiter die alten Einträge | bestätigt | später („kann“) |
 | D11 | kann | Supabase-Entwurf: der serverseitige Abruf liefert einen anderen Kontext als der Browser | bestätigt | später („kann“) |
-| D12 | kann | Seed: der Osteopathie-Preis steht in zwei Knoten – nach einer Preisänderung nennt Gabi je nach Frage den alten | bestätigt | später („kann“) |
+| D12 | kann | Seed: der Osteopathie-Preis steht in zwei Knoten – nach einer Preisänderung nennt Gabi je nach Frage den alten | bestätigt | ✅ erledigt 15.11. – Preis nur noch im Knoten „Osteopathie“, der Sammelknoten verweist per [[Verknüpfung]] (siehe „Osteopathie-Preis nur an einer Stelle“) |
 
 ### Graph und Leistung
 
@@ -338,6 +338,36 @@ Nachschwingen, eine Überlagerung blieb, bei „Bewegung reduzieren“ kamen 3 B
 `tests/brain.mjs` 650/650, Label-Test 24/24, Gebiets-Tests 66/174/274/319/94, `tests/v2.mjs` ohne Schalter alle
 bestanden, `wrangler deploy --dry-run` beide Konfigurationen.
 
+## Osteopathie-Preis nur an einer Stelle (D12, 15.11.)
+
+**Vorher:** „85 € pro Behandlungseinheit“ stand in zwei Seed-Knoten: „Osteopathie“ (eigener Eintrag) und im Satz
+„Weitere Behandlungsmöglichkeiten: … Osteopathie (… 85 € …) …“ (Sammelknoten). Nach einer Preisänderung in einem
+von beiden konnte Gabi je nach Frage den alten nennen.
+**Quelle des Preises:** der Knoten „Osteopathie“ (`s-leistung-osteopathie`) – er trägt schon die Tags `preis`, `selbstzahler`
+und ist der Treffer jeder Preisfrage zur Osteopathie.
+**Umbau (Seed ist erzeugt, deshalb im Generator, nicht von Hand):** `knowledge/brain_zerlegung.mjs`: ein Auszug im Plan kann
+einen `verweis` tragen. Im Sammelknoten steht dann statt des Auszugs „Osteopathie (siehe [[Osteopathie]])“ – ohne
+Preis und ohne das Wort „Preis“ (sonst zöge der Sammelknoten bei Preisfragen als zweiter Quellen-Chip mit). Die Wissensdatei
+`knowledge/physioworks.md` bleibt unverändert, die Zerlegung prüft weiter, dass jeder Punkt vollständig und wörtlich
+irgendwo steht. Verbindungen: beide Knoten hängen weiter an „Leistungen“; „Osteopathie“ verweist weiter auf den Sammelknoten,
+der Sammelknoten jetzt auch auf „Osteopathie“ (Backlinks in beide Richtungen). Seed-Version `14c0f74ee3f6` → neu erzeugt.
+**Gabi:** „Was kostet Osteopathie?“, „Preis Osteopathie“, „Was kostet eine Behandlung?“, „Muss ich die Behandlung selbst zahlen?“
+→ der Preis aus der Quelle, **genau ein** Quellen-Chip „Osteopathie“ (vorher bei den beiden allgemeinen Fragen zwei).
+**Nebenwirkung, behoben:** Ohne Preis im Sammelknoten stand bei „Was kostet Atemtherapie?“ das Team vor „Weitere
+Behandlungsmöglichkeiten“ (Gleichstand, andere Reihenfolge). `brain-suche.js`: bei Gleichstand gewinnt der Eintrag, der das
+Thema als Leistung führt (Tag `leistung`) – Antwort wie vorher.
+**Weitere doppelte Preise im Seed:** keine. Der Seed enthält genau eine Euro-Angabe (85 €); die übrigen Preise sind laut
+Wissensdatei offen („Zu klären“). Es gibt aber noch ein zweites Dopplungs-Muster ohne Preis, das ich nicht angefasst habe:
+„Dazu gehören: …“ listet die Titel der Mitglieder (Absicht, Mitglieder-Liste) – kein Wert doppelt.
+**Angepasste Tests (bisher zwei Quellen erwartet bzw. „Punkt wörtlich in genau einem Knoten“):**
+- `brain-seed.test.js`: „jeder Punkt steht wörtlich in genau einem Knoten“ und „nichts hinzuerfunden“ kennen den Verweis
+  (Auszug ↔ Verweis, `imKnoten`/`ausDatei`); Osteopathie-Test prüft zusätzlich den Auszug im Quellknoten; **neu:** „D12: der
+  Osteopathie-Preis steht in genau einem Knoten …“ (Preis nur einmal im ganzen Seed, Verweis-Eintrag ohne Preis mit
+  `[[Osteopathie]]`, Kanten zu „Leistungen“, Rück-Verweis).
+- `brain-fragenkatalog.json`: „Was kostet eine Behandlung?“ und „Muss ich die Behandlung selbst zahlen?“ erwarten jetzt nur noch
+  „Osteopathie“ (vorher „Osteopathie · Weitere Behandlungsmöglichkeiten“).
+- `brain-fragen.test.js` **neu:** „D12: Fragen nach dem Preis …“ (5 Formulierungen: 85 €, genau ein Chip; Sammelknoten ohne 85).
+
 ## Vorkommnisse
 
 **Fehlalarm „Anfrage an den Live-Worker“ (10.11., ca. 15:50) – nachgeprüft, nichts passiert.**
@@ -407,9 +437,7 @@ angeben, nie auf die Standard-Adresse verlassen.
   weiter die alten Zeilen.
 - *Supabase-Entwurf (D11):* Der serverseitige Abruf bildet keine Kanten aus `[[Verweisen]]` und kürzt Persona/Regeln
   anders als der Browser (Entwurf hinter zwei Schaltern, beide AUS).
-- *Seed (D12):* Der Osteopathie-Preis steht in zwei Knoten (eigener Eintrag und Sammelpunkt) – nach einer
-  Preisänderung in einem der beiden nennt Gabi je nach Frage den alten. Die Doppelung ist im Zerlegungsplan Absicht
-  („jeder Punkt wörtlich“); der Umzug wäre eine bewusste Abkehr davon → Entscheidung für Julius/Philipp.
+- *Seed (D12):* erledigt am 15.11. (nicht mehr offen, siehe „Osteopathie-Preis nur an einer Stelle“).
 - *Graph (G8–G12):* `zerstoeren()` lässt einen Auflösungs-Horcher hängen (rund 12 MB je Abmelden, bis zum Neuladen) ·
   die Drossel der Pixeldichte kann im letzten Bild einer Bewegung die Fläche leer lassen · am Handy decken Labels
   kleine Knoten zu, eine Zoomstufe weiter gibt es keine Labels · nach einer Größenänderung des Fensters wird nicht neu

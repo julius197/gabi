@@ -18,6 +18,11 @@ const WISSEN_GLATT = glatt(WISSEN);
 const PUNKTE = lesen(WISSEN).abschnitte.flatMap((a) => a.punkte.map((p) => ({ ...p, abschnitt: a.titel })));
 const { knoten: KNOTEN, kanten: KANTEN, fehler: FEHLER } = zerlegen(WISSEN);
 const nach = (id) => KNOTEN.find((n) => n.id === id);
+// D12: Der Preis der Osteopathie steht nur im Knoten „Osteopathie“; der Sammelknoten „Weitere Behandlungsmöglichkeiten“ verweist darauf.
+const OSTEO_AUSZUG = "Osteopathie (soweit in der Physiotherapie erlaubt; Selbstzahlerleistung, 85 € pro Behandlungseinheit)";
+const OSTEO_VERWEIS = "Osteopathie (siehe [[Osteopathie]])";
+const imKnoten = (t) => String(t).split(OSTEO_AUSZUG).join(OSTEO_VERWEIS); // Wissensdatei-Text → so steht er im Sammelknoten
+const ausDatei = (t) => String(t).split(OSTEO_VERWEIS).join(OSTEO_AUSZUG); // Knoten-Text → so steht er in der Wissensdatei
 const mitInhalt = (stueck, arten) => KNOTEN.filter((n) => (!arten || arten.includes(n.art)) && glatt(n.inhalt).includes(stueck));
 const ohneTodo = (text) => glatt(text.split(`${TODO}.`).join(" "));
 /** Wissensdatei mit einer Änderung (muss wirklich etwas ändern – sonst prüft die Gegenprobe nichts). */
@@ -102,8 +107,8 @@ describe("Seed: Zerlegung der Wissensdatei", () => {
     expect(PUNKTE.length).toBeGreaterThan(30);
     for (const p of PUNKTE) {
       if (!p.text.includes(TODO)) {
-        expect(mitInhalt(p.text).map((n) => n.id), `Punkt Zeile ${p.zeile}: ${p.text}`).toHaveLength(1);
-        expect(mitInhalt(p.text)[0].art).toBe("praxiswissen");
+        expect(mitInhalt(imKnoten(p.text)).map((n) => n.id), `Punkt Zeile ${p.zeile}: ${p.text}`).toHaveLength(1);
+        expect(mitInhalt(imKnoten(p.text))[0].art).toBe("praxiswissen");
         continue;
       }
       // offener Punkt: genau ein Frage-Knoten trägt den Satz vor „TODO prüfen.“ …
@@ -161,10 +166,31 @@ describe("Seed: Zerlegung der Wissensdatei", () => {
         if (/^Dazu gehören: /.test(absatz)) continue; // Mitglieder eines Sammelknotens – eigener Test
         if (n.id === "s-quelle" && /im Brain als „Zu klären“ markiert/.test(absatz)) continue; // ersetzt den „TODO prüfen“-Satz der Einleitung
         for (const zeile of absatz.split("\n")) {
-          expect(WISSEN_GLATT.includes(glatt(zeile.replace(/^- /, ""))), `${n.id}: „${zeile}“ steht nicht in der Wissensdatei`).toBe(true);
+          expect(WISSEN_GLATT.includes(glatt(ausDatei(zeile.replace(/^- /, "")))), `${n.id}: „${zeile}“ steht nicht in der Wissensdatei`).toBe(true);
         }
       }
     }
+  });
+
+  it("D12: der Osteopathie-Preis steht in genau einem Knoten (Quelle „Osteopathie“), der Sammelknoten verweist per Verknüpfung darauf", () => {
+    // kein Preis zweimal: jede Euro-Angabe des Seeds steht in genau einem Knoten
+    const preise = (n) => (n.inhalt.match(/\d[\d.,]*\s*(€|Euro)/g) || []);
+    expect(KNOTEN.filter((n) => /85\s*€/.test(n.inhalt)).map((n) => n.id)).toEqual(["s-leistung-osteopathie"]);
+    const alle = KNOTEN.flatMap((n) => preise(n).map((p) => `${glatt(p)}`));
+    expect(new Set(alle).size, `doppelte Preise im Seed: ${alle.join(", ")}`).toBe(alle.length);
+    expect(JSON.stringify(SEED)).toMatch(/85 €/);
+    expect(JSON.stringify(SEED).match(/85 €/g)).toHaveLength(1);
+    // der Verweis-Eintrag: kein Preis, aber ein [[Osteopathie]]-Link auf die Quelle (Titel = Linkziel)
+    const sammel = nach("s-leistung-weitere");
+    expect(sammel.inhalt).not.toMatch(/€|Euro|\d+\s*(EUR)/);
+    expect(sammel.inhalt).toContain(OSTEO_VERWEIS);
+    expect(verweiseAus(sammel.inhalt)).toContain("Osteopathie");
+    expect(nach("s-leistung-osteopathie").titel).toBe("Osteopathie");
+    // Verbindungen bleiben: beide hängen an „Leistungen“, die Quelle verweist weiter zurück auf den Sammelknoten
+    for (const id of ["s-leistung-weitere", "s-leistung-osteopathie"]) {
+      expect(KANTEN.some((k) => k.von === id && k.nach === "s-leistungen" && k.art === "gehoert_zu"), id).toBe(true);
+    }
+    expect(verweiseAus(nach("s-leistung-osteopathie").inhalt)).toContain("Weitere Behandlungsmöglichkeiten");
   });
 
   it("Sammelknoten zählen genau ihre Mitglieder auf (Kanten gehoert_zu) und hängen am Praxis-Knoten", () => {
@@ -187,6 +213,7 @@ describe("Seed: Zerlegung der Wissensdatei", () => {
       expect(titel, t).toContain(t);
     }
     expect(nach("s-leistung-osteopathie").inhalt).toMatch(/Selbstzahlerleistung, 85 € pro Behandlungseinheit/);
+    expect(nach("s-leistung-osteopathie").inhalt).toContain(OSTEO_AUSZUG);
     expect(nach("s-geschichte").inhalt).toMatch(/Gegründet 2011/);
     expect(nach("s-praxis").inhalt).not.toMatch(/Gegründet/); // die Geschichte ist ein eigener Knoten
     for (const n of KNOTEN.filter((x) => x.art === "praxiswissen")) {

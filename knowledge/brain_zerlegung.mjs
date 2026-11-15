@@ -86,6 +86,8 @@ const EINLEITUNG = {
  * Jeder Aufzählungspunkt der Wissensdatei: Abschnitt + Anfang des Punkts → Knoten.
  * offen: der Satz vor „TODO prüfen.“ (wörtlich) und der Frage-Knoten dazu. Fehlt `knoten`, ist der ganze Punkt offen.
  * auszuege: wörtliche Ausschnitte desselben Punkts, die zusätzlich ein eigener Knoten werden.
+ *   Mit `verweis` (Text vor dem Verweis): im Punkt-Knoten steht statt des Ausschnitts nur „<verweis> [[Titel des Auszug-Knotens]]“ –
+ *   der Auszug-Knoten ist dann die EINZIGE Quelle dieser Angabe (so steht z. B. ein Preis nur einmal im Brain, D12).
  */
 const PUNKTE = [
   { abschnitt: "Praxis", anfang: "Name:", knoten: "praxis" },
@@ -119,7 +121,7 @@ const PUNKTE = [
   { abschnitt: "Leistungen", anfang: "Akupunktur:", knoten: "leistung-akupunktur",
     offen: { text: "Ob sie alle Behandlungen durchführt: nicht angegeben.", frage: "frage-akupunktur" } },
   { abschnitt: "Leistungen", anfang: "Weitere Behandlungsmöglichkeiten:", knoten: "leistung-weitere",
-    auszuege: [{ text: "Osteopathie (soweit in der Physiotherapie erlaubt; Selbstzahlerleistung, 85 € pro Behandlungseinheit)", knoten: "leistung-osteopathie" }] },
+    auszuege: [{ text: "Osteopathie (soweit in der Physiotherapie erlaubt; Selbstzahlerleistung, 85 € pro Behandlungseinheit)", knoten: "leistung-osteopathie", verweis: "Osteopathie (siehe" }] },
   { abschnitt: "Leistungen", anfang: "Preise der übrigen Leistungen",
     offen: { text: "Preise der übrigen Leistungen und ob ein Rezept nötig ist: nicht angegeben.", frage: "frage-preise-rezept" } },
 
@@ -330,9 +332,14 @@ export function zerlegen(markdown) {
         offene[plan.offen.frage] = plan.offen.text;
         rest = glatt(rest.replace(plan.offen.text, " "));
       }
+      // Auszüge mit Verweis: im Punkt-Knoten steht nur der Verweis, die Angabe selbst nur im Auszug-Knoten (eine Quelle)
+      let restKnoten = rest;
+      for (const auszug of plan.auszuege || []) {
+        if (auszug.verweis && anzahl(rest, auszug.text) === 1 && KNOTEN[auszug.knoten]) restKnoten = restKnoten.replace(auszug.text, `${auszug.verweis} [[${KNOTEN[auszug.knoten].titel}]])`);
+      }
       if (rest) {
         if (!plan.knoten || !stuecke[plan.knoten]) { fehler.push(`Zeile ${punkt.zeile}: Text ohne Knoten im Plan (Eintrag „${plan.anfang}“): „${rest}“.`); continue; }
-        stuecke[plan.knoten].push(rest);
+        stuecke[plan.knoten].push(restKnoten);
       } else if (plan.knoten) {
         fehler.push(`Zeile ${punkt.zeile}: Der Plan nennt den Knoten „${plan.knoten}“, vom Punkt bleibt aber nichts übrig: „${punkt.text}“.`);
       }
