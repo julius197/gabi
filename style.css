@@ -138,6 +138,7 @@
   --schatten-verwirft: 0 0 0 2px var(--text-3), 0 14px 34px -14px rgba(0, 0, 0, 0.3);
   --glanz-fuellung: inset 0 1px 0 rgba(255, 255, 255, 0.2); /* Lichtkante auf gefüllten Flächen: Knöpfe, Blase, Avatar, Senden */
   --auf-aufnahme: #ffffff;
+  --schalter-knopf: #ffffff; /* runder Knopf im Schalter „Glas-Effekt“ (Hell und Dunkel) */
   /* Abdunkeln hinter Dialogen und Schublade steht als fester Wert in ::backdrop (Abschnitt 10), weil ältere Safari dort
      keine Variablen erben: Hell rgba(7, 45, 83, 0.3), Dunkel rgba(1, 12, 26, 0.55) */
 
@@ -161,9 +162,12 @@
   --kopf-h: 60px;
   --spalte: 760px;
 }
+:root[data-thema="hell"] { color-scheme: light; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Dunkel: darstellung.js setzt data-thema="dunkel" vor dem ersten Bild – bei „System“ nach prefers-color-scheme, sonst
+   nach der Wahl in den Einstellungen. Ein Block für beide Wege (keine doppelten Tokens). */
+:root[data-thema="dunkel"] {
+    color-scheme: dark;
     --bg: var(--pw-marine);
     --bg-unten: #05213f;
     --licht-1-a: 0.26;
@@ -231,7 +235,6 @@
     --schatten-dialog: 0 0 0 1px var(--ring), 0 24px 64px -24px rgba(0, 0, 0, 0.75);
     --schatten-chip: 0 1px 2px rgba(0, 0, 0, 0.2);
     --schatten-toast: 0 0 0 1px var(--ring), 0 18px 44px -18px rgba(0, 0, 0, 0.6);
-  }
 }
 
 /* 2 Grundlagen ------------------------------------------------------------ */
@@ -954,9 +957,7 @@ dialog.schublade[open] { animation: schublade-rein var(--t-lang) var(--raus); }
 dialog.schublade.schliesst { animation: schublade-raus 180ms var(--rein) forwards; }
 dialog.schublade::backdrop { background: rgba(7, 45, 83, 0.3); animation: einblenden var(--t-lang) var(--raus); }
 dialog.schublade.schliesst::backdrop { animation: ausblenden 180ms var(--rein) forwards; }
-@media (prefers-color-scheme: dark) {
-  dialog.dialog::backdrop, dialog.schublade::backdrop { background: rgba(1, 12, 26, 0.55); } /* ::backdrop erbt die Tokens nicht überall */
-}
+html[data-thema="dunkel"] dialog.dialog::backdrop, html[data-thema="dunkel"] dialog.schublade::backdrop { background: rgba(1, 12, 26, 0.55); } /* ::backdrop erbt die Tokens nicht überall */
 html:has(dialog.schublade[open]) { overflow: hidden; }
 .schublade-innen {
   height: 100%; display: flex; flex-direction: column; gap: 12px;
@@ -966,6 +967,55 @@ html:has(dialog.schublade[open]) { overflow: hidden; }
 .schublade-kopf h2 { font-size: 18px; letter-spacing: -0.015em; }
 .schublade-neu { justify-content: flex-start; padding: 0 16px; }
 .schublade .gespraeche-liste { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 2px 4px 8px; }
+
+/* 10b Einstellungen (v2.4) ---------------------------------------------------- */
+/* Glas-Dialog wie die anderen (dialog.dialog), etwas breiter, scrollt in sich. Jeder Abschnitt ist eine
+   .einstellungen-abschnitt mit Überschrift – neue Abschnitte kommen einfach dazu. */
+dialog.einstellungen { width: min(520px, calc(100% - 24px)); overflow-y: auto; overscroll-behavior: contain; }
+.einstellungen-form { gap: 14px; }
+.einstellungen-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -6px -8px -2px 0; }
+.einstellungen-abschnitt { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--linie); }
+.einstellungen-hinweis { font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.einstellungen-zeile { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; min-height: 44px; }
+.einstellungen-zeile-text { flex: 1 1 200px; min-width: 0; display: grid; gap: 1px; line-height: 1.4; }
+.einstellungen-zeile-text strong { font-size: 14.5px; font-weight: 600; color: var(--text); }
+.einstellungen-zeile-text span { font-size: 13.5px; color: var(--text-2); }
+.einstellungen-zeile.aus .einstellungen-zeile-text strong { color: var(--text-3); font-weight: 500; }
+.einstellungen-spaeter { gap: 2px; }
+.einstellungen-spaeter .augenbraue { margin-bottom: 6px; }
+.einstellungen-spaeter .einstellungen-zeile { min-height: 36px; }
+/* Hell / Dunkel / System: echte Optionsfelder (Pfeiltasten, Screenreader), als Segment gezeichnet */
+.segment { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 0; padding: 3px; border: 0; border-radius: var(--rund); background: var(--fuell); min-width: 0; }
+.segment-wahl { position: relative; display: block; min-width: 0; }
+.segment-wahl input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.segment-wahl span {
+  display: grid; place-items: center; height: 40px; padding: 0 8px; border-radius: var(--rund);
+  font-size: 14.5px; font-weight: 500; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background-color var(--t-kurz), color var(--t-kurz);
+}
+.segment-wahl input:checked + span { background: var(--flaeche); color: var(--titel); font-weight: 600; box-shadow: var(--schatten); }
+.segment-wahl input:focus-visible + span { outline: 2px solid var(--fokus); outline-offset: 2px; }
+.segment-wahl:hover input:not(:checked) + span { color: var(--text); }
+/* Schalter „Glas-Effekt“: ein echtes Kontrollkästchen mit role="switch" */
+.schalter {
+  appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 48px; height: 28px; margin: 0; border: 0; border-radius: var(--rund);
+  background: var(--fuell-2); box-shadow: inset 0 0 0 1px var(--linie-2); cursor: pointer; transition: background-color var(--t-kurz) var(--raus);
+}
+.schalter::before {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--schalter-knopf); box-shadow: var(--schatten-chip), 0 0 0 1px var(--ring); transition: transform var(--t-kurz) var(--raus);
+}
+.schalter:checked { background: var(--akzent-knopf); box-shadow: none; }
+.schalter:checked::before { transform: translateX(20px); }
+.schalter:focus-visible { outline: 2px solid var(--fokus); outline-offset: 2px; }
+.schalter-zeile { cursor: pointer; }
+/* Einstiege: unten links in der Seitenleiste, unten in der Schublade */
+.einstellungen-knopf { justify-content: flex-start; color: var(--text-2); }
+.seiten-fuss .einstellungen-knopf { min-height: 40px; margin: 0 -12px; padding: 0 12px; font-size: 14.5px; }
+.einstellungen-knopf .symbol { width: 18px; height: 18px; }
+.schublade-fuss { flex: none; padding-top: 8px; border-top: 1px solid var(--linie); }
+.schublade-fuss .einstellungen-knopf { padding: 0 16px; }
+@media (pointer: coarse) { dialog.einstellungen .knopf.klein { min-height: 44px; } }
 
 /* 11 Handy / Laptop -------------------------------------------------------- */
 /* Handy: Unschärfe nur in Kopfzeile, Eingabe-Band und offenen Dialogen/Schublade/Toasts (höchstens 2–3 Ebenen
@@ -1104,12 +1154,15 @@ html:has(dialog.schublade[open]) { overflow: hidden; }
 /* 13 Glas deckend ---------------------------------------------------------- */
 /* Ohne backdrop-filter (ältere Browser), bei „Transparenz reduzieren“ und bei „Bewegung reduzieren“: jede Glasfläche
    deckend in denselben Farben, ohne Unschärfe. „Transparenz reduzieren“ nimmt dazu die Übergänge weg (wie „Bewegung
-   reduzieren“ in Abschnitt 12). */
+   reduzieren“ in Abschnitt 12). v2.4: dazu der Schalter „Glas-Effekt“ in den Einstellungen (data-glas="aus"). Die Selektoren
+   haben dieselbe Spezifität wie :root[data-thema="dunkel"] und stehen danach – deckend gewinnt also auch im Dunkelmodus.
+   Systemeinstellungen bleiben vorrangig: Glas „an“ hebt „Transparenz/Bewegung reduzieren“ nie auf. */
+:root[data-glas="aus"] { --glas: var(--glas-deckend); --glas-stark: var(--glas-deckend); --glas-kopf: var(--glas-kopf-deckend); --glas-feld: var(--glas-feld-deckend); --glas-filter: none; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root { --glas: var(--glas-deckend); --glas-stark: var(--glas-deckend); --glas-kopf: var(--glas-kopf-deckend); --glas-feld: var(--glas-feld-deckend); --glas-filter: none; }
+  :root[data-thema], :root:not([data-thema]) { --glas: var(--glas-deckend); --glas-stark: var(--glas-deckend); --glas-kopf: var(--glas-kopf-deckend); --glas-feld: var(--glas-feld-deckend); --glas-filter: none; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-reduced-motion: reduce) {
-  :root { --glas: var(--glas-deckend); --glas-stark: var(--glas-deckend); --glas-kopf: var(--glas-kopf-deckend); --glas-feld: var(--glas-feld-deckend); --glas-filter: none; }
+  :root[data-thema], :root:not([data-thema]) { --glas: var(--glas-deckend); --glas-stark: var(--glas-deckend); --glas-kopf: var(--glas-kopf-deckend); --glas-feld: var(--glas-feld-deckend); --glas-filter: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
   *, *::before, *::after { transition: none !important; }

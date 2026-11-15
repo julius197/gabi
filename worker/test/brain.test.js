@@ -2698,7 +2698,7 @@ describe("ZIP ohne Bibliothek", () => {
 describe("Farben der Arten (brain.css): Kontrast gerechnet", () => {
   const css = readFileSync(new URL("brain.css", WURZEL), "utf8");
   const hell = /:root\s*\{([^}]*)\}/.exec(css)[1];
-  const dunkel = /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([^}]*)\}/.exec(css)[1];
+  const dunkel = /:root\[data-thema="dunkel"\]\s*\{([^}]*)\}/.exec(css)[1]; // v2.4: Dunkel über data-thema (darstellung.js)
   const wert = (block, name) => (new RegExp(`${name}:\\s*([^;]+);`).exec(block) || [])[1];
   function rgb(farbe) {
     const hex = /^#([0-9a-f]{6})$/i.exec(farbe.trim());
@@ -2710,8 +2710,8 @@ describe("Farben der Arten (brain.css): Kontrast gerechnet", () => {
   const kontrast = (a, b) => { const [x, y] = [leuchtdichte(a), leuchtdichte(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
 
   it("jede Art hat in Hell und Dunkel eine eigene Farbe mit mindestens 3:1 zur Bühne des Graphen", () => {
-    expect(wert(hell, "--brain-g-hintergrund")).toBe("#ffffff");
-    expect(wert(dunkel, "--brain-g-hintergrund")).toBe("#141c1e");
+    expect(wert(hell, "--brain-g-hintergrund")).toBe("#f8fafd"); // v2.4: --pw-karte
+    expect(wert(dunkel, "--brain-g-hintergrund")).toBe("#051f3b"); // v2.4: tiefes Marine
     for (const [name, block] of [["hell", hell], ["dunkel", dunkel]]) {
       const buehne = wert(block, "--brain-g-hintergrund");
       const farben = B.ARTEN.map((a) => wert(block, `--brain-${a.id}`));

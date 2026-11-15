@@ -83,6 +83,10 @@
     dialogPatient: $("#dialog-patient"), patientForm: $("#patient-form"), patientKuerzel: $("#patient-kuerzel"), patientPseudonym: $("#patient-pseudonym"), patientFehler: $("#patient-fehler"), patientAbbrechen: $("#patient-abbrechen"), patientAnlegen: $("#patient-anlegen"),
     dialogInfo: $("#dialog-info"), infoTitel: $("#info-titel"), infoZuruecksetzen: $("#info-zuruecksetzen"), infoVerbinden: $("#info-verbinden"), infoAbmelden: $("#info-abmelden"),
     toasts: $("#toasts"),
+    einstellungen: $("#dialog-einstellungen"), seiteEinstellungen: $("#seite-einstellungen"), schubladeEinstellungen: $("#schublade-einstellungen"),
+    einstellungenGlas: $("#einstellungen-glas"), einstellungenGlasSystem: $("#einstellungen-glas-system"), einstellungenVersion: $("#einstellungen-version"),
+    einstellungenAlleLoeschen: $("#einstellungen-alle-loeschen"), einstellungenAbmelden: $("#einstellungen-abmelden"), einstellungenVerbinden: $("#einstellungen-verbinden"),
+    einstellungenAbmeldenText: $("#einstellungen-abmelden-text"),
   };
 
   const speicher = {
@@ -618,12 +622,18 @@
     else route();
     toast("Beispieldaten sind zurückgesetzt.", { art: "erfolg" });
   });
-  el.infoVerbinden.addEventListener("click", () => {
+  /** Demo verlassen und mit dem Server verbinden (Info-Dialog und Einstellungen) */
+  function mitServerVerbinden() {
     history.replaceState(null, "", `${location.pathname}#/`); // ohne ?demo=1
     location.reload();
-  });
+  }
+  el.infoVerbinden.addEventListener("click", mitServerVerbinden);
   el.infoAbmelden.addEventListener("click", async () => {
     ausInfoDialog();
+    await abmeldenFragen();
+  });
+  /** Rückfrage „Abmelden?“ mit den Häkchen „Gespräche/Brain auch löschen“ – aus dem Info-Dialog und aus den Einstellungen. */
+  async function abmeldenFragen() {
     await listeAuffrischen(); // Entwürfe auch aus Gesprächen, die ein anderer Tab eben angelegt hat
     const a = aufnahmen.size;
     // Entwürfe, die gerade gespeichert werden, gehen nicht verloren: Abmelden wartet auf sie
@@ -643,6 +653,48 @@
     // Brain: eigenes Häkchen, bewusst nicht vorbelegt – das Wissen liegt im lokalen Betrieb nur auf diesem Gerät
     if (!(await frage("Abmelden?", text, { ja: "Abmelden", gefahr: Boolean(a || e || (notiz && !notizSpeichert) || (BRAIN && BRAIN.ungespeichert())), haken: "Gespräche auf diesem Gerät auch löschen", haken2: BRAIN ? "Brain-Wissen auf diesem Gerät auch löschen" : "" }))) return;
     await abmelden({ loeschen: el.frageHaken.checked, brainLoeschen: Boolean(BRAIN && el.frageHaken2.checked) });
+  }
+
+  // ---------- Einstellungen (v2.4): Darstellung, Transparenz, Konto und Gerät ----------
+  // Nur Bestehendes erreichbar machen: Hell/Dunkel/System und Glas über darstellung.js (gespeichert nur im Browser), „Alle
+  // Gespräche löschen“ und „Abmelden“ mit denselben Rückfragen wie in der Gesprächsliste bzw. im Info-Dialog.
+  const DARSTELLUNG = window.GabiDarstellung || null;
+  const SYSTEM_DECKEND = window.matchMedia("(prefers-reduced-transparency: reduce), (prefers-reduced-motion: reduce)");
+  let einstellungenOeffner = null;
+  function einstellungenFuellen() {
+    const w = DARSTELLUNG ? DARSTELLUNG.wahl() : { thema: "system", glas: true };
+    for (const r of el.einstellungen.querySelectorAll('input[name="thema"]')) r.checked = r.value === w.thema;
+    el.einstellungenGlas.checked = w.glas;
+    el.einstellungenGlasSystem.hidden = !SYSTEM_DECKEND.matches;
+    el.einstellungenVersion.textContent = `Gabi ${VERSION}${modus.demo ? " · Demo" : ""}${BRAIN ? " · Brain an" : ""}`;
+    el.einstellungenAlleLoeschen.disabled = !verlauf.eintraege.length;
+    el.einstellungenAbmelden.hidden = modus.demo || !zugang;
+    el.einstellungenVerbinden.hidden = !modus.demo;
+    el.einstellungenAbmeldenText.textContent = modus.demo ? "Demo-Modus – kein Zugangscode gespeichert." : zugang ? "Der Zugangscode ist auf diesem Gerät gespeichert." : "Nicht angemeldet.";
+  }
+  function einstellungenOeffnen(knopf) {
+    einstellungenOeffner = knopf;
+    einstellungenFuellen();
+    if (!el.einstellungen.open) el.einstellungen.showModal();
+  }
+  /** Rückfragen aus den Einstellungen: erst zu, danach zurück auf den Knopf, der sie geöffnet hat */
+  const ausEinstellungen = () => { el.einstellungen.close(); zuletztBedient = { knopf: einstellungenOeffner, zeit: performance.now() }; };
+  el.seiteEinstellungen.addEventListener("click", () => einstellungenOeffnen(el.seiteEinstellungen));
+  el.schubladeEinstellungen.addEventListener("click", () => einstellungenOeffnen(el.schubladeEinstellungen));
+  el.einstellungen.addEventListener("change", (e) => {
+    const f = e.target;
+    if (!DARSTELLUNG || !(f instanceof HTMLInputElement)) return;
+    if (f.dataset.einstellung === "thema" && f.checked) DARSTELLUNG.setzen({ thema: f.value });
+    if (f.dataset.einstellung === "glas") DARSTELLUNG.setzen({ glas: f.checked });
+  });
+  window.addEventListener("gabi:darstellung", () => { if (el.einstellungen.open) einstellungenFuellen(); }); // anderer Tab, System
+  if (SYSTEM_DECKEND.addEventListener) SYSTEM_DECKEND.addEventListener("change", () => { el.einstellungenGlasSystem.hidden = !SYSTEM_DECKEND.matches; });
+  el.einstellungenAlleLoeschen.addEventListener("click", () => { ausEinstellungen(); alleGespraecheLoeschenFragen(einstellungenOeffner); });
+  el.einstellungenAbmelden.addEventListener("click", async () => { ausEinstellungen(); await abmeldenFragen(); });
+  el.einstellungenVerbinden.addEventListener("click", mitServerVerbinden);
+  el.einstellungen.addEventListener("close", () => {
+    // Safari fokussiert Knöpfe beim Tippen nicht: dann liegt der Fokus nach dem Schließen auf body – zurück auf den Öffner
+    if (fokusVerloren() && sichtbarBedienbar(einstellungenOeffner)) fokusSetzen(einstellungenOeffner);
   });
 
   /** Text unter dem Ladekreis (leer = keiner); der Ladekreis sagt dasselbe für Screenreader. */

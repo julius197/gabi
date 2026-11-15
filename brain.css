@@ -1,7 +1,8 @@
 /* ==========================================================================
    Gabi Brain – Stile (werden nur bei aktivem Brain-Schalter geladen)
-   Gleiche Sprache wie style.css: warmes Grau, weiße schwebende Karten, ein Akzent (Grün), runde Bedienelemente,
-   Inter, ruhige Bewegung. Mobile first, Hell und Dunkel nach System. Alle Klassen beginnen mit „brain-“.
+   Gleiche Sprache wie style.css (v2.4: PhysioWorks-Stil mit Glas): Farben aus den Tokens von style.css, Leisten und
+   Panels über dem Graphen aus Glas, Karten mit 10 px Ecken, Red Hat Display/DM Sans, ruhige Bewegung. Mobile first,
+   Hell und Dunkel über data-thema am <html> (darstellung.js). Alle Klassen beginnen mit „brain-“.
    1 Farben · 2 Rahmen und Kopf · 3 Leiste und Filter · 4 Bühne und Graph · 5 Liste, Lücken, Fähigkeiten
    6 Detail (Laptop: Spalte rechts, Handy: Blatt von unten) · 7 Formular · 8 Dialoge · 9 Im Gespräch · 10 Laptop
    11 Touch · 12 Bewegung
@@ -9,45 +10,45 @@
 
 /* 1 Farben ---------------------------------------------------------------- */
 :root {
-  /* Knoten nach Art – gedeckt, je ≥ 3:1 zur Bühne (ein Test rechnet nach) */
-  --brain-praxiswissen: #2f8a45;
-  --brain-frage: #a85a14;
-  --brain-regel: #4f6b8f;
-  --brain-persona: #7a5aa6;
-  --brain-vorlage: #a3567d;
-  --brain-patient: #2f7f86;
-  --brain-notiz: #647a82;
-  --brain-bericht: #8a6d2f;
-  /* Graph (Canvas liest diese Werte) */
-  --brain-g-hintergrund: #ffffff;
-  --brain-g-platte: rgba(255, 255, 255, 0.88);
-  --brain-g-text: #1f2a2c;
-  --brain-g-text-leise: #626e71;
-  --brain-g-kante: rgba(75, 88, 91, 0.34);
-  --brain-g-kante-stark: #3b484a;
-  --brain-g-akzent: #28773d;
-  --brain-g-warn: #a85a14;
+  /* Knoten nach Art – Bedeutung vor Markenfarbe: acht klar getrennte Töne, abgestimmt auf PhysioWorks (Praxiswissen im
+     Markenblau, Regeln Indigo, Persona Violett, Vorlagen Magenta, Test-Patienten Petrol, Fragen Orange, Berichte Ocker,
+     Notizen Schiefer) – je ≥ 3:1 zur Bühne (ein Test rechnet nach) */
+  --brain-praxiswissen: #1a6fd0;
+  --brain-frage: #b5600f;
+  --brain-regel: #3b4fa8;
+  --brain-persona: #7a4fb0;
+  --brain-vorlage: #a8487c;
+  --brain-patient: #13808a;
+  --brain-notiz: #5c6b7e;
+  --brain-bericht: #8a6a14;
+  /* Graph (Canvas liest diese Werte, bei jedem Wechsel von Hell/Dunkel neu) – Bühne ruhig und deckend: --pw-karte */
+  --brain-g-hintergrund: #f8fafd;
+  --brain-g-platte: rgba(255, 255, 255, 0.9);
+  --brain-g-text: #1b1e21;
+  --brain-g-text-leise: #4a586a;
+  --brain-g-kante: rgba(7, 45, 83, 0.28);
+  --brain-g-kante-stark: #072d53;
+  --brain-g-akzent: #1a6fd0;
+  --brain-g-warn: #a65510;
   --brain-detail-b: min(420px, 44%);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --brain-praxiswissen: #6cc471;
-    --brain-frage: #f0a35a;
-    --brain-regel: #8fb0dc;
-    --brain-persona: #b79be0;
-    --brain-vorlage: #dd94b8;
-    --brain-patient: #63c2c9;
-    --brain-notiz: #93a8ae;
-    --brain-bericht: #d1b266;
-    --brain-g-hintergrund: #141c1e;
-    --brain-g-platte: rgba(20, 28, 30, 0.88);
-    --brain-g-text: #e7eeef;
-    --brain-g-text-leise: #8d999b;
-    --brain-g-kante: rgba(179, 190, 192, 0.3);
-    --brain-g-kante-stark: #d5dfe0;
-    --brain-g-akzent: #6cc471;
-    --brain-g-warn: #f0a35a;
-  }
+:root[data-thema="dunkel"] {
+    --brain-praxiswissen: #5aa6f4;
+    --brain-frage: #f6a85a;
+    --brain-regel: #9aa8f0;
+    --brain-persona: #c19cf0;
+    --brain-vorlage: #f08cc0;
+    --brain-patient: #4fd0d6;
+    --brain-notiz: #a3b3c6;
+    --brain-bericht: #d9b65c;
+    --brain-g-hintergrund: #051f3b;
+    --brain-g-platte: rgba(8, 42, 78, 0.9);
+    --brain-g-text: #eaf2fb;
+    --brain-g-text-leise: #b0c3d9;
+    --brain-g-kante: rgba(195, 211, 230, 0.26);
+    --brain-g-kante-stark: #c3d3e6;
+    --brain-g-akzent: #5aa6f4;
+    --brain-g-warn: #f6a85a;
 }
 
 .brain-punkt { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--text-4); }
@@ -164,7 +165,7 @@
 .brain-filter-arten { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .brain-filter-mehr { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 12px; border-radius: var(--r-l); background: var(--flaeche); box-shadow: var(--schatten); }
 .brain .chip { min-height: 34px; padding: 0 12px; font-size: 13.5px; }
-.brain .chip[aria-pressed="true"] { background: var(--akzent); color: var(--akzent-auf); box-shadow: none; }
+.brain .chip[aria-pressed="true"] { background: var(--akzent-knopf); color: var(--akzent-auf); box-shadow: var(--glanz-fuellung); }
 .brain .chip[aria-pressed="true"] .stumm { color: inherit; opacity: 0.85; }
 .brain .chip[aria-pressed="true"] .brain-punkt { box-shadow: 0 0 0 1.5px var(--akzent-auf); }
 .brain-art-chip .stumm { font-size: 12.5px; }
@@ -181,14 +182,14 @@
 
 /* 4 Bühne und Graph ---------------------------------------------------------- */
 .brain-buehne { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.brain-skelett { flex: 1 1 auto; min-height: 380px; border-radius: var(--r-xl); }
+.brain-skelett { flex: 1 1 auto; min-height: 380px; border-radius: var(--r-karte); }
 .brain-zustand { flex: 1 1 auto; display: flex; flex-direction: column; }
 .brain-zustand .leer { margin: auto; }
 /* Die Zeichenfläche liegt absolut in der ganzen Karte. Was oben eingeblendet wird (Fokus-Leiste, Stand der Suche), steht
    im Fluss untereinander rechts neben den Zoom-Knöpfen – nie übereinander – und ändert die Größe der Fläche nicht. */
 .brain-graph {
-  position: relative; flex: 1 1 auto; min-height: 380px; border-radius: var(--r-xl); overflow: hidden;
-  background: var(--brain-g-hintergrund); box-shadow: var(--schatten);
+  position: relative; flex: 1 1 auto; min-height: 380px; border-radius: var(--r-karte); overflow: hidden;
+  background: var(--brain-g-hintergrund); box-shadow: inset 0 0 0 1px var(--glas-kante), var(--schatten);
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 10px 10px 60px;
 }
 .brain-graph-flaeche-rahmen { position: absolute; inset: 0; }
@@ -257,7 +258,7 @@
 .brain-liste-wahl .brain-auswahl select { width: 100%; padding-left: 12px; padding-right: 30px; }
 .brain-gruppe { display: grid; gap: 8px; }
 .brain-gruppe > h2.augenbraue { padding: 0 4px; }
-.brain-zeilen { list-style: none; display: grid; gap: 1px; border-radius: 20px; background: var(--flaeche); box-shadow: var(--schatten); overflow: hidden; }
+.brain-zeilen { list-style: none; display: grid; gap: 1px; border-radius: var(--r-karte); background: var(--flaeche); box-shadow: var(--schatten); overflow: hidden; }
 .brain-zeilen li + li { box-shadow: inset 0 1px 0 var(--linie); }
 .brain-zeile { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 9px 14px; color: var(--text); text-decoration: none; transition: background-color var(--t-kurz); }
 .brain-zeile:hover { background: var(--flaeche-2); }
@@ -274,7 +275,7 @@ button.brain-tag:hover { background: var(--akzent-hell-2); }
 .brain-abschnitt-kopf.mit-knopf { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .brain-abschnitt-kopf p { color: var(--text-2); font-size: 14.5px; max-width: 64ch; }
 .brain-karten { list-style: none; display: grid; gap: 10px; }
-.brain-karten .karte { padding: 16px 18px; border-radius: 20px; }
+.brain-karten .karte { padding: 16px 18px; border-radius: var(--r-karte); }
 .brain-luecke { display: grid; gap: 12px; }
 .brain-luecke-text { display: grid; gap: 2px; }
 .brain-luecke-text strong { font-weight: 550; font-size: 15.5px; overflow-wrap: anywhere; }
@@ -286,7 +287,7 @@ button.brain-tag:hover { background: var(--akzent-hell-2); }
 .brain-faehigkeit > p { color: var(--text-2); }
 .brain-faehigkeit-zeile { display: grid; gap: 1px; }
 .brain-faehigkeit-zeile span + span { color: var(--text-2); overflow-wrap: anywhere; }
-.brain-spur { list-style: none; display: grid; border-radius: 20px; background: var(--flaeche); box-shadow: var(--schatten); overflow: hidden; }
+.brain-spur { list-style: none; display: grid; border-radius: var(--r-karte); background: var(--flaeche); box-shadow: var(--schatten); overflow: hidden; }
 .brain-spur li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; font-size: 14px; }
 .brain-spur li + li { box-shadow: inset 0 1px 0 var(--linie); }
 .brain-spur .stumm { flex: none; font-size: 13px; }
@@ -435,7 +436,7 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border-radius: 6
 .brain-karte .brain-zeile { min-height: 48px; }
 .brain-karte .brain-gesundheit { min-height: 0; }
 .brain-karte .brain-kennzahl { box-shadow: inset 0 0 0 1px var(--linie); }
-.brain-start-hinweis { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding: 12px 14px; border-radius: 20px; background: var(--flaeche); box-shadow: var(--schatten); text-align: left; }
+.brain-start-hinweis { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding: 12px 14px; border-radius: var(--r-karte); background: var(--flaeche); box-shadow: var(--schatten); text-align: left; }
 .brain-start-hinweis .kachel { width: 40px; height: 40px; border-radius: 12px; }
 .brain-start-hinweis .kachel .symbol { width: 20px; height: 20px; }
 .brain-start-hinweis-text { flex: 1 1 180px; min-width: 0; display: grid; gap: 1px; font-size: 14px; }
@@ -560,3 +561,22 @@ kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border-radius: 6
    Blatt Platz zum Rollen schafft. Die Graphfläche änderte ihre Höhe sonst über mehrere Bilder (und die Seite könnte erst
    danach an ihre Stelle rücken). Der Abstand gilt sofort. */
 @media (prefers-reduced-motion: reduce) { .brain .brain-rahmen { transition-property: none !important; } }
+
+/* 13 Glas (v2.4) ---------------------------------------------------------------------------
+   Leisten und Panels aus Glas – mit denselben Tokens wie style.css. Deshalb deckend, wenn „Glas-Effekt“ aus ist, das
+   System Transparenz/Bewegung reduziert oder der Browser kein backdrop-filter kann. Unter 1024 px rechnen über dem
+   Graphen nur Blatt (Detail) und Kopfzeile Unschärfe: Zoom-Knöpfe, Legende, Minikarte, Fokus und Stand sind dort Glas
+   ohne backdrop-filter – der Graph darunter zeichnet beim Ziehen jedes Bild neu, und mehr als 2–3 Unschärfe-Ebenen
+   übereinander bremsen ein Handy. */
+.brain-graph-knoepfe, .brain-legende, .brain-fokus, .brain-graph-stand, .brain-graph-karte {
+  background: var(--glas-stark); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  box-shadow: inset 0 0 0 1px var(--glas-kante), var(--schatten-schwebe);
+}
+.brain-detail, .brain-menue {
+  background: var(--glas-stark); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  box-shadow: inset 0 0 0 1px var(--glas-kante), var(--schatten-dialog);
+}
+.brain-kennzahl, .brain-filter-mehr { background: var(--glas); box-shadow: inset 0 0 0 1px var(--glas-kante), var(--glas-schatten); }
+@media (max-width: 1023.98px) {
+  .brain-graph-knoepfe, .brain-legende, .brain-fokus, .brain-graph-stand, .brain-graph-karte { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

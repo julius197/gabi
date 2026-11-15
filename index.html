@@ -15,6 +15,8 @@
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="preload" href="assets/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/red-hat-display-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <!-- Hell/Dunkel/System und Glas aus den Einstellungen setzen, bevor etwas gezeichnet wird (kein Aufblitzen) -->
+  <script src="darstellung.js?v=2.4.0"></script>
   <link rel="stylesheet" href="style.css?v=2.4.0">
 </head>
 <body>
@@ -49,6 +51,7 @@
     <symbol id="i-zuruecksetzen" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/></symbol>
     <symbol id="i-uhr" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
     <symbol id="i-dokument" viewBox="0 0 24 24"><path d="M7.5 3h6.5l5 5v10.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 18.5v-13A2.5 2.5 0 0 1 7.5 3z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-zahnrad" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
     <symbol id="i-menue" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
     <symbol id="i-funke" viewBox="0 0 24 24"><path d="M12 3.5l1.7 4.8 4.8 1.7-4.8 1.7L12 16.5l-1.7-4.8L5.5 10l4.8-1.7z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
   </svg>
@@ -88,6 +91,7 @@
       </div>
       <div class="seiten-patienten" id="seiten-patienten" aria-label="Test-Patienten"></div>
       <div class="seiten-fuss" id="seiten-fuss">
+        <button class="knopf leise einstellungen-knopf" type="button" id="seite-einstellungen" aria-haspopup="dialog" aria-controls="dialog-einstellungen"><svg class="symbol"><use href="#i-zahnrad"/></svg>Einstellungen</button>
         <p id="seiten-fuss-text">Testversion · nur erfundene Testdaten, keine echten Patientendaten.</p>
       </div>
     </header>
@@ -217,6 +221,9 @@
       <button class="knopf sekundaer voll schublade-neu" type="button" data-gespraech-neu><svg class="symbol"><use href="#i-neu"/></svg>Neues Gespräch</button>
       <a class="knopf sekundaer voll schublade-brain" id="schublade-brain" href="#/brain" hidden><svg class="symbol"><use href="#i-graph"/></svg>Brain</a>
       <nav class="gespraeche-liste" id="schublade-liste" aria-labelledby="schublade-titel"></nav>
+      <div class="schublade-fuss">
+        <button class="knopf leise voll einstellungen-knopf" type="button" id="schublade-einstellungen" aria-haspopup="dialog" aria-controls="dialog-einstellungen"><svg class="symbol"><use href="#i-zahnrad"/></svg>Einstellungen</button>
+      </div>
     </div>
   </dialog>
 
@@ -269,6 +276,60 @@
         <button class="knopf leise" type="button" id="info-verbinden" hidden>Mit Server verbinden</button>
         <button class="knopf leise" type="button" id="info-abmelden" hidden>Abmelden</button>
         <button class="knopf primaer" value="ok" autofocus>Verstanden</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog einstellungen" id="dialog-einstellungen" aria-labelledby="einstellungen-titel">
+    <form class="dialog-form einstellungen-form" method="dialog">
+      <div class="einstellungen-kopf">
+        <h2 id="einstellungen-titel">Einstellungen</h2>
+        <button class="rund-knopf" value="zu" aria-label="Schließen" title="Schließen"><svg class="symbol"><use href="#i-x"/></svg></button>
+      </div>
+
+      <section class="einstellungen-abschnitt" aria-labelledby="einstellungen-darstellung">
+        <h3 class="augenbraue" id="einstellungen-darstellung">Darstellung</h3>
+        <fieldset class="segment" id="einstellungen-thema">
+          <legend class="unsichtbar">Farbschema</legend>
+          <label class="segment-wahl"><input type="radio" name="thema" value="hell" data-einstellung="thema"><span>Hell</span></label>
+          <label class="segment-wahl"><input type="radio" name="thema" value="dunkel" data-einstellung="thema"><span>Dunkel</span></label>
+          <label class="segment-wahl"><input type="radio" name="thema" value="system" data-einstellung="thema"><span>System</span></label>
+        </fieldset>
+        <p class="einstellungen-hinweis">„System“ folgt der Einstellung deines Geräts. Gilt nur in diesem Browser.</p>
+      </section>
+
+      <section class="einstellungen-abschnitt" aria-labelledby="einstellungen-transparenz">
+        <h3 class="augenbraue" id="einstellungen-transparenz">Transparenz</h3>
+        <label class="einstellungen-zeile schalter-zeile">
+          <span class="einstellungen-zeile-text"><strong>Glas-Effekt</strong><span id="einstellungen-glas-text">Durchscheinende, unscharfe Flächen. Aus: deckende Flächen.</span></span>
+          <input class="schalter" type="checkbox" role="switch" id="einstellungen-glas" data-einstellung="glas" aria-describedby="einstellungen-glas-text einstellungen-glas-system">
+        </label>
+        <p class="einstellungen-hinweis" id="einstellungen-glas-system" hidden>Dein Gerät hat „Transparenz reduzieren“ oder „Bewegung reduzieren“ an – Gabi zeigt darum deckende Flächen.</p>
+      </section>
+
+      <section class="einstellungen-abschnitt" aria-labelledby="einstellungen-konto">
+        <h3 class="augenbraue" id="einstellungen-konto">Konto und Gerät</h3>
+        <div class="einstellungen-zeile"><span class="einstellungen-zeile-text"><strong>Version</strong><span id="einstellungen-version"></span></span></div>
+        <div class="einstellungen-zeile">
+          <span class="einstellungen-zeile-text"><strong>Gespräche</strong><span>Gespräche werden nur auf diesem Gerät gespeichert.</span></span>
+          <button class="knopf gefahr klein" type="button" id="einstellungen-alle-loeschen"><svg class="symbol"><use href="#i-muell"/></svg>Alle Gespräche löschen</button>
+        </div>
+        <div class="einstellungen-zeile" id="einstellungen-abmelden-zeile">
+          <span class="einstellungen-zeile-text"><strong>Anmeldung</strong><span id="einstellungen-abmelden-text">Der Zugangscode ist auf diesem Gerät gespeichert.</span></span>
+          <button class="knopf sekundaer klein" type="button" id="einstellungen-abmelden">Abmelden</button>
+          <button class="knopf sekundaer klein" type="button" id="einstellungen-verbinden" hidden>Mit Server verbinden</button>
+        </div>
+      </section>
+
+      <section class="einstellungen-abschnitt einstellungen-spaeter" aria-labelledby="einstellungen-spaeter">
+        <h3 class="augenbraue" id="einstellungen-spaeter">Später</h3>
+        <div class="einstellungen-zeile aus" aria-disabled="true"><span class="einstellungen-zeile-text"><strong>Benutzerkonto</strong></span><span class="badge">Folgt</span></div>
+        <div class="einstellungen-zeile aus" aria-disabled="true"><span class="einstellungen-zeile-text"><strong>Praxis-Einstellungen</strong></span><span class="badge">Folgt</span></div>
+        <div class="einstellungen-zeile aus" aria-disabled="true"><span class="einstellungen-zeile-text"><strong>Datenschutz</strong></span><span class="badge">Folgt</span></div>
+      </section>
+
+      <div class="dialog-knoepfe">
+        <button class="knopf primaer" value="ok">Fertig</button>
       </div>
     </form>
   </dialog>

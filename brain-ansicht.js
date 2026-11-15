@@ -1785,9 +1785,10 @@
       }
     });
     if (schmal.addEventListener) schmal.addEventListener("change", () => zeichnenBald());
-    const dunkel = window.matchMedia("(prefers-color-scheme: dark)");
+    // Hell/Dunkel (v2.4): darstellung.js setzt data-thema am <html> – bei „System“ und bei einer Wahl in den Einstellungen –
+    // und meldet jeden Wechsel mit „gabi:darstellung“. Der Graph liest seine Canvas-Farben dann sofort neu.
     const farbwechsel = () => { if (z.graph) z.graph.farbenNeu(); };
-    if (dunkel.addEventListener) dunkel.addEventListener("change", farbwechsel);
+    window.addEventListener("gabi:darstellung", farbwechsel);
 
     // ==========================================================
     // 11 Für app.js: Adresse, Zeigen, Abmelden

@@ -1199,10 +1199,11 @@
   const ARTEN_REIHE = ["notiz", "bericht", "patient", "vorlage", "regel", "persona", "frage", "praxiswissen"]; // Zeichenreihenfolge: Wissen liegt oben
   const ART_NAMEN = { praxiswissen: "Praxiswissen", regel: "Regel", persona: "Persona", patient: "Test-Patient", notiz: "Notiz", bericht: "Bericht", frage: "Frage", vorlage: "Vorlage" };
   const STATUS_NAMEN = { bestaetigt: "bestätigt", entwurf: "Entwurf", zu_klaeren: "zu klären" };
+  // Ersatz, falls brain.css nicht lesbar ist – dieselbe Palette wie dort (Hell, v2.4 PhysioWorks)
   const FARBEN_STANDARD = {
-    hintergrund: "#f3f3f0", platte: "#ffffff", text: "#1f2a2c", textLeise: "#626e71",
-    kante: "rgba(75, 88, 91, 0.34)", kanteStark: "#3b484a", akzent: "#28773d", warn: "#a85a14",
-    arten: { praxiswissen: "#2f8a45", regel: "#4f6b8f", persona: "#7a5aa6", patient: "#2f7f86", notiz: "#6b7f86", bericht: "#8a6d2f", frage: "#a85a14", vorlage: "#a3567d" },
+    hintergrund: "#f8fafd", platte: "#ffffff", text: "#1b1e21", textLeise: "#4a586a",
+    kante: "rgba(7, 45, 83, 0.28)", kanteStark: "#072d53", akzent: "#1a6fd0", warn: "#a65510",
+    arten: { praxiswissen: "#1a6fd0", regel: "#3b4fa8", persona: "#7a4fb0", patient: "#13808a", notiz: "#5c6b7e", bericht: "#8a6a14", frage: "#b5600f", vorlage: "#a8487c" },
   };
   const R_MIN = 2.4;          // kleinster Knoten im Bild (px)
   const DIMM_HOVER = 0.16;    // Rest beim Zeigen auf einen Knoten
