@@ -176,7 +176,8 @@ const zustand = (page) => page.evaluate(() => {
     bearbeitet: Boolean(document.querySelector("#brain-detail form[data-brain-form='knoten']")),
   };
 });
-/** Auswahlring um einen Knoten: acht Punkte auf dem Ring prüfen (Akzentgrün, deckend). */
+/** Auswahlring um einen Knoten: acht Punkte auf dem Ring prüfen (Akzentfarbe des Graphen, deckend). v2.4: Farbe aus dem
+ *  Token --brain-g-akzent statt fest „grün“ – der Akzent ist seit dem PhysioWorks-Look blau. */
 const ringPunkte = (page, id) => page.evaluate((i) => {
   const a = window.GabiBrainAnsicht.aktuell;
   const c = document.querySelector("canvas.brain-graph-flaeche");
@@ -184,12 +185,14 @@ const ringPunkte = (page, id) => page.evaluate((i) => {
   const p = a.ort(i);
   const s = c.width / f.width;
   const g = c.getContext("2d");
+  const hex = getComputedStyle(document.documentElement).getPropertyValue("--brain-g-akzent").trim();
+  const ak = [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
   let treffer = 0;
   for (let w = 0; w < 8; w++) {
     const x = Math.round((p.x - f.left + Math.cos((w * Math.PI) / 4 + 0.3) * (p.r + 4.4)) * s);
     const y = Math.round((p.y - f.top + Math.sin((w * Math.PI) / 4 + 0.3) * (p.r + 4.4)) * s);
     const d = g.getImageData(x, y, 1, 1).data;
-    if (d[3] > 150 && d[1] > d[0] + 30 && d[1] > d[2] + 30) treffer++;
+    if (d[3] > 150 && Math.max(Math.abs(d[0] - ak[0]), Math.abs(d[1] - ak[1]), Math.abs(d[2] - ak[2])) <= 40) treffer++;
   }
   return treffer;
 }, id);

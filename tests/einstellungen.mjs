@@ -64,6 +64,14 @@ for (const motor of MOTOREN) {
     await page.goto(`${basis}/?demo=1#/`);
     await page.waitForSelector("#ansicht-chat:not([hidden]) .vorschlag");
     const wo = `${motor} ${breite} px`;
+    // Stand ohne Einstellungen (vor v2.4): sauber rot statt Absturz
+    const da = await page.evaluate(() => ({ seite: Boolean(document.querySelector("#seite-einstellungen")), schublade: Boolean(document.querySelector("#schublade-einstellungen")), dialog: Boolean(document.querySelector("#dialog-einstellungen")), darstellung: Boolean(window.GabiDarstellung), thema: document.documentElement.getAttribute("data-thema") }));
+    if (!da.seite || !da.schublade || !da.dialog || !da.darstellung || !da.thema) {
+      pruefe(false, `${wo}: Einstellungen und Darstellung fehlen (${JSON.stringify(da)}) – Stand vor v2.4?`);
+      await ctx.close(); await browser.close();
+      console.log(`\n${n - fehler.length} von ${n} Prüfungen grün – ${fehler.length} rot (Abbruch: nichts zu prüfen).`);
+      process.exit(1);
+    }
     if (breite < 1024) {
       await page.click("#kopf-menue");
       await page.waitForSelector("#schublade[open]");
