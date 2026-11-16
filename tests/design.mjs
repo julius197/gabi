@@ -2,7 +2,7 @@
 //  A  Hauptansichten in Chromium und WebKit, Hell und Dunkel, 390 und 1440 px: Zugang, Gespräch (Start, Entwurf,
 //     Gespeichert + Toast, Antwort + Quellen, Bericht, Glas über dem Verlauf), Schublade bzw. Seitenleiste,
 //     Info-Dialog, Notizordner (Patienten, Neuer Test-Patient, Suche, Nichts gefunden, Patient, Notiz, Rückfrage),
-//     Offline, Mikrofon-Hilfe, v2.4: Einstellungen. Je Ansicht:
+//     Offline, Mikrofon-Hilfe, v2.4: Einstellungen, v2.5: Änderungsvorschlag, Prüfliste abgehakt. Je Ansicht:
 //     · Screenshot nach <ordner>/<motor>-<hell|dunkel>-<breite>-<nr>-<ansicht>.jpg
 //     · Kontrast jeder sichtbaren Textstelle gegen ihren echten Hintergrund ≥ 4,5:1: Bild mit unsichtbarem Text,
 //       Pixel im Textrahmen gegen die Textfarbe (2-%-Perzentil, Deckkraft der Vorfahren eingerechnet). Zwei Durchgänge:
@@ -447,6 +447,11 @@ async function ansichten(motor, schema, breite, { bilder = true, kontrast = true
   await page.evaluate(() => { const k = document.querySelector(".karte-bericht"); window.scrollBy(0, k.getBoundingClientRect().top - (innerWidth < 1024 ? 76 : 24)); });
   await ansicht(page, "06", "bericht");
 
+  // v2.5 Änderungsvorschlag als Karte (Vorher/Nachher)
+  await fragen(page, "Ändere bei TP-01 die Beinpresse auf 35 kg", "Übernehmen");
+  await page.evaluate(() => { const k = [...document.querySelectorAll(".karte-aenderung")].pop(); window.scrollBy(0, k.getBoundingClientRect().top - (innerWidth < 1024 ? 76 : 24)); });
+  await ansicht(page, "06b", "aenderung");
+
   // Glas über dem Verlauf: mehr Text, dann in die Mitte scrollen – Text läuft unter Kopfzeile und Band
   await fragen(page, "Wo sind die Standorte?", "Kieslingstraße 82");
   await fragen(page, "Welche Übung empfiehlst du für TP-01?", "Diagnosen und Empfehlungen gebe ich nicht");
@@ -519,6 +524,13 @@ async function ansichten(motor, schema, breite, { bilder = true, kontrast = true
   await page.locator(".notiz-karte").first().click();
   await page.waitForSelector('[data-leser="pdf"]');
   await ansicht(page, "15", "notiz");
+  // v2.5 „Bitte prüfen“ abgehakt: durchgestrichen, Zähler, alles erledigt
+  if (await page.locator(".pruef-haken").count()) {
+    await page.locator(".pruef-haken").first().click();
+    await page.waitForSelector(".abschnitt.pruefen.alles-erledigt");
+    await page.evaluate(() => { const p = document.querySelector("[data-pruefliste]"); window.scrollBy(0, p.getBoundingClientRect().top - (innerWidth < 1024 ? 120 : 60)); document.activeElement.blur(); });
+    await ansicht(page, "15b", "pruefliste-erledigt");
+  } else pruefe(false, `${name}: Notiz ohne Prüfliste – erwartet war „Bitte prüfen“`);
   await page.click('[data-leser="loeschen"]');
   await page.waitForSelector("#dialog-frage[open]");
   await ansicht(page, "16", "dialog-rueckfrage");

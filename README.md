@@ -44,6 +44,8 @@ Adresse: **https://gabi.automatilabs.de** (Branch `main`, v2 seit 08.11.2026, v2
 ```
 index.html, style.css           Oberfläche (mobile first, Hell/Dunkel/System in den Einstellungen, Deutsch) – GitHub Pages; Look im
                                 PhysioWorks-Stil mit Glas, alle Farben als Tokens oben in style.css (Abschnitt 1)
+notizlogik.js                   v2.5: Prüfliste („Bitte prüfen“ abhaken, im Text korrigiert = erledigt) und Änderungsvorschläge –
+                                dieselbe Datei in Oberfläche, Demo und Worker (worker/src/notiz.js importiert sie)
 darstellung.js                  Hell/Dunkel/System und Glas-Effekt vor dem ersten Bild (data-thema, data-glas, theme-color)
 app.js                          Gespräch, Gesprächsverlauf, Karten (Entwurf, Bericht), Push-to-Talk, Notizordner, Start/Zugang/Demo
 gespraeche.js                   Gesprächsverlauf: Ablage nur im Browser (IndexedDB → localStorage), Titel, Gruppen, Limit 50
@@ -93,6 +95,8 @@ tests/eingabefelder.mjs         Eingabefelder ohne Anschnitt (Cursor, Text, Plat
 tests/design.mjs                Design v2.3/v2.4: Kontrast aller Textstellen (Pixel, auch auf Glas), Schriften, CSP/Fremd-Requests,
                                 Breite 320–1440, Glas-Unschärfe, deckend bei Bewegung/Transparenz reduzieren/Glas aus, Grund
                                 ohne Kante, Einstellungen, Brain-Ansichten (Teil H), Screenshots
+tests/v25.mjs                   v2.5: Prüfliste und Notiz per Gespräch ändern – Chromium + WebKit, 320/390/1440, Hell/Dunkel,
+                                Neuladen, zwei Tabs, gelöschte/geänderte Notiz, Abmelden während des Speicherns
 tests/einstellungen.mjs         v2.4 Einstellungen: öffnen, Hell/Dunkel/System sofort + gespeichert, kein Aufblitzen, Glas an/aus,
                                 Abmelden/Löschen, Tastatur/Fokus, Handy-Schublade, 320–1440 px
 tests/design-leistung.mjs       Scrollen mit Glas: 50 Nachrichten, Frame-Zeiten in Chromium (Ziel: kein Frame > 33 ms)
@@ -345,6 +349,8 @@ PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/eingabefelder.mjs [scr
 # Design (Chromium + WebKit, Hell/Dunkel; ~30 min; eingrenzen mit GABI_MOTOREN, GABI_SCHEMEN, GABI_BREITEN, GABI_TEILE=A,D,E,F,G,H;
 # Teil H braucht zusätzlich den Brain-Server: GABI_BRAIN_BASIS=http://localhost:8790):
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/design.mjs [screenshots/design] [http://localhost:8788]
+# v2.5 Prüfliste und Änderungsvorschlag (npm run lokal; legt eigene Test-Patienten „TV-1234“ an, nur im Arbeitsspeicher):
+PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/v25.mjs [http://localhost:8788] [screenshots/v25]
 # Einstellungen (gegen beide Server: ohne und mit Brain-Schalter):
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/einstellungen.mjs [http://localhost:8788]
 PLAYWRIGHT_MODUL=/pfad/zu/playwright/index.mjs node tests/design-leistung.mjs [http://localhost:8788] [ergebnis.json]
