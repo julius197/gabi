@@ -447,10 +447,6 @@ async function ansichten(motor, schema, breite, { bilder = true, kontrast = true
   await page.evaluate(() => { const k = document.querySelector(".karte-bericht"); window.scrollBy(0, k.getBoundingClientRect().top - (innerWidth < 1024 ? 76 : 24)); });
   await ansicht(page, "06", "bericht");
 
-  // v2.5 Änderungsvorschlag als Karte (Vorher/Nachher)
-  await fragen(page, "Ändere bei TP-01 die Beinpresse auf 35 kg", "Übernehmen");
-  await page.evaluate(() => { const k = [...document.querySelectorAll(".karte-aenderung")].pop(); window.scrollBy(0, k.getBoundingClientRect().top - (innerWidth < 1024 ? 76 : 24)); });
-  await ansicht(page, "06b", "aenderung");
 
   // Glas über dem Verlauf: mehr Text, dann in die Mitte scrollen – Text läuft unter Kopfzeile und Band
   await fragen(page, "Wo sind die Standorte?", "Kieslingstraße 82");
@@ -466,12 +462,19 @@ async function ansichten(motor, schema, breite, { bilder = true, kontrast = true
   await warte(300);
   if (TEILE.includes("E")) await glasProbe(page, name, dsf, motor);
   await ansicht(page, "07", "glas-ueber-verlauf");
+
   if (bilder) {
     const kopf = await page.locator(".kopf").boundingBox();
     const band = await page.evaluate(() => { const b = document.querySelector(".eingabe-bereich").getBoundingClientRect(); return { x: b.left, y: b.top - 22, width: b.width, height: b.height + 22 }; });
     if (mobil) await page.screenshot({ path: datei("07", "glas-kopf-ausschnitt").replace(".jpg", ".png"), clip: { x: 0, y: 0, width: breite, height: Math.min(kopf.height + 40, 140) }, caret: "initial" });
     await page.screenshot({ path: datei("07", "glas-band-ausschnitt").replace(".jpg", ".png"), clip: { x: Math.max(0, band.x), y: Math.max(0, band.y - 30), width: Math.min(band.width, breite), height: band.height + 30 }, caret: "initial" });
   }
+
+  // v2.5 Änderungsvorschlag als Karte (Vorher/Nachher) – nach der Glasprobe, damit deren Aufbau wie in v2.4 bleibt
+  // eindeutig: das Beispieldiktat oben hat für TP-01 schon eine zweite Notiz mit Beinpresse gespeichert
+  await fragen(page, "Ändere bei TP-01 in der letzten Notiz die Beinpresse auf 40 kg", "Übernehmen");
+  await page.evaluate(() => { const k = [...document.querySelectorAll(".karte-aenderung")].pop(); window.scrollBy(0, k.getBoundingClientRect().top - (innerWidth < 1024 ? 76 : 24)); });
+  await ansicht(page, "07b", "aenderung");
 
   // Schublade (Handy) bzw. Seitenleiste mit Zeigen (Laptop)
   if (breite < 1024) {
@@ -524,7 +527,9 @@ async function ansichten(motor, schema, breite, { bilder = true, kontrast = true
   await page.locator(".notiz-karte").first().click();
   await page.waitForSelector('[data-leser="pdf"]');
   await ansicht(page, "15", "notiz");
-  // v2.5 „Bitte prüfen“ abgehakt: durchgestrichen, Zähler, alles erledigt
+  // v2.5 „Bitte prüfen“ abgehakt: durchgestrichen, Zähler, alles erledigt – an der Notiz mit Prüfpunkt (Wandsitzen, TP-01)
+  await page.evaluate(() => { location.hash = "#/notizen/n/7e3c1a52-0102-4000-8000-000000000102"; });
+  await page.waitForSelector(".leser [data-pruefliste]", { timeout: 10000 }).catch(() => {});
   if (await page.locator(".pruef-haken").count()) {
     await page.locator(".pruef-haken").first().click();
     await page.waitForSelector(".abschnitt.pruefen.alles-erledigt");

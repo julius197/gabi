@@ -782,7 +782,6 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .pruefen-zaehler { font-size: 12.5px; font-weight: 600; color: var(--warn-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pruefliste { list-style: none; display: grid; gap: 2px; margin: 0 -6px; }
 .pruef-haken { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 6px; border-radius: var(--r-s); cursor: pointer; line-height: 1.5; }
-.pruef-haken:hover { background: var(--warn-bg); }
 .pruef-haken input { position: absolute; opacity: 0; width: 20px; height: 20px; margin: 0; pointer-events: none; }
 .pruef-kasten { flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 6px; display: grid; place-items: center; background: var(--feld); box-shadow: inset 0 0 0 1.5px var(--warn-text); color: transparent; transition: background var(--t-kurz) var(--raus), box-shadow var(--t-kurz) var(--raus); }
 .pruef-kasten svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -790,14 +789,18 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .pruef-haken input:focus-visible + .pruef-kasten { outline: 2px solid var(--fokus); outline-offset: 2px; }
 .pruef-haken input:disabled + .pruef-kasten { cursor: default; }
 .pruefpunkt.auto .pruef-haken { cursor: default; }
-.pruefpunkt.auto .pruef-haken:hover { background: transparent; }
 .pruef-text { min-width: 0; overflow-wrap: anywhere; color: var(--text); }
 .pruefpunkt.erledigt .pruef-text { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--text-3); text-decoration-thickness: 1px; }
 .pruefpunkt.erledigt mark.unklar { background: transparent; color: inherit; font-weight: inherit; padding: 0; }
 .pruef-auto { display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: var(--rund); font-size: 12px; font-weight: 600; line-height: 1.6; color: var(--akzent-text); background: var(--akzent-hell); text-decoration: none; vertical-align: 1px; }
 .abschnitt.pruefen.alles-erledigt { background: var(--akzent-hell); }
 .abschnitt.pruefen.alles-erledigt .augenbraue, .abschnitt.pruefen.alles-erledigt .pruefen-zaehler { color: var(--akzent-text); }
-.abschnitt.pruefen.alles-erledigt .pruef-haken:hover { background: var(--akzent-hell-2); }
+/* Hover nur mit echtem Zeiger – am Handy bliebe der Kasten nach dem Tippen stehen */
+@media (hover: hover) {
+  .pruef-haken:hover { background: var(--warn-bg); }
+  .pruefpunkt.auto .pruef-haken:hover { background: transparent; }
+  .abschnitt.pruefen.alles-erledigt .pruef-haken:hover { background: var(--akzent-hell-2); }
+}
 @media (pointer: coarse) { .pruef-haken { min-height: 44px; align-items: center; } .pruef-kasten { margin-top: 0; } }
 
 /* Änderungsvorschlag: nur die geänderten Zeilen hervorgehoben, unveränderte leise daneben */
@@ -811,7 +814,7 @@ mark.unklar { background: var(--warn-bg); color: var(--warn-text); border-radius
 .diff-zeile ins { color: var(--text); text-decoration: none; font-weight: 500; }
 mark.diff-teil { border-radius: 4px; padding: 0 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 del mark.diff-teil { background: var(--fehler-bg); color: var(--fehler); }
-ins mark.diff-teil { background: var(--flaeche); color: var(--akzent-text); box-shadow: inset 0 0 0 1px var(--akzent-rand); font-weight: 600; }
+ins mark.diff-teil { background: var(--flaeche); color: var(--akzent-text); font-weight: 600; } /* ohne Rand: er läge genau an der Schriftkante */
 @media (max-width: 399.98px) { .diff-zeile.geaendert, .diff-zeile.neu, .diff-zeile.weg { grid-template-columns: minmax(0, 1fr); gap: 2px; } .diff-marke + del, .diff-marke + ins { margin-bottom: 4px; } }
 .karte-hinweis { font-size: 13px; color: var(--text-3); }
 .karte-aenderung.erledigt .abschnitte, .karte-aenderung.erledigt .karte-hinweis, .karte-aenderung.erledigt .karte-fuss { display: none; }
