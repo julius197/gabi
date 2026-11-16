@@ -940,6 +940,192 @@ keine Live-Änderung, Worker unverändert, nur Test- und Demodaten. Brain bleibt
 - Echter Claude-Weg (Gespräch mit Brain-Kontext über die Anthropic-API) nicht geprüft – lokal ohne Schlüssel, Worker
   unverändert.
 
+## v2.5 – „Bitte prüfen“ erledigbar, Notiz per Gespräch ändern (15./16.11.2026, Branch `gabi-v2-5`, nicht live)
+
+Auftrag von Julius (15.11.2026): (A) Prüfliste abhakbar, (B) Notiz per Gespräch ändern, im Stand v2.4; vorher
+Aufräumen. Kein Push, kein Deploy, keine Live-Änderung, nur Testdaten; Worker-Deploy nur nach seiner Freigabe.
+Gearbeitet in einem eigenen Worktree mit eigenen Ports: 8795 (ohne Brain), 8796 (Brain AN), 8797 (Gegenprobe v2.4).
+
+**Aufräumen (eigener Commit 51f51ce):** Ordner `http:/localhost:8794/` (49 alte Brain-Screenshots eines Testlaufs mit
+falsch übergebenem Pfad) aus `gabi-v2-5` entfernt. Auf `gabi-brain` liegt er weiter – dort nicht angefasst.
+
+### Was neu ist
+- **(A) „Bitte prüfen“ zum Abhaken** – in der Entwurfskarte und in der Notiz-Ansicht:
+  - Häkchen je Punkt, Zähler „2 von 3 erledigt“, erledigte Punkte dezent durchgestrichen. Sind alle erledigt, wird der
+    Kasten blau, mit Häkchen statt Warnzeichen.
+  - **Automatisch erledigt:** Wird die „(unklar)“-Stelle im Text korrigiert (Markierung entfernt oder die Zeile
+    umgeschrieben), ist der zugehörige Punkt erledigt – mit dem Hinweis „im Text korrigiert“. Dieses Häkchen lässt sich
+    nicht abwählen. Steht die Stelle wieder mit „(unklar)“ da, ist der Punkt wieder offen.
+  - Korrekturmeldungen der Spracherkennung („„Isg“ als „ISG“ gelesen“) haben keine markierte Stelle: nur von Hand.
+  - Ein Häkchen in der Notiz wird sofort gespeichert. Ein Häkchen im Entwurf gehört zur Karte und wird beim
+    „Speichern“ mit der Notiz übernommen.
+  - Gabi selbst sieht nur noch die offenen Punkte als „unklar“, auch im Tagesüberblick und in Berichten. Erledigte
+    stehen getrennt als „unklar_erledigt“. Das PDF nennt erledigte Punkte mit „– erledigt“ und den Zähler.
+- **(B) Notiz per Gespräch ändern** – z. B. „Ändere bei TP-01 die Beinpresse auf 35 kg“:
+  - Gabi antwortet mit einer **Änderungskarte**. Die betroffenen Abschnitte stehen darin, unveränderte Zeilen leise,
+    die geänderte Zeile hervorgehoben (Vorher/Nachher, der geänderte Teil markiert). Darunter „Übernehmen“ und
+    „Verwerfen“ und der Satz „Das Original-Diktat bleibt unverändert“.
+  - Erst „Übernehmen“ speichert – über denselben Weg wie „Bearbeiten“ im Notizordner (PATCH /api/notizen/:id).
+  - Mehrdeutiges Ziel (zwei passende Notizen oder Zeilen): Gabi fragt mit Datum und Zeile nach.
+  - Vage Wünsche („mach es besser“): freundliche Absage mit Nachfrage, was genau geändert werden soll.
+  - Ohne Kürzel: Gabi fragt danach.
+  - Im Worker gibt es nur lesende Werkzeuge plus `notiz_aenderung_vorschlagen`, das Vorschläge anzeigt. Kein
+    Schreibwerkzeug. Das Werkzeug lehnt ab, was nicht wörtlich in der Notiz steht, „Bitte prüfen“ oder das Diktat
+    betrifft. Höchstens 5 Zeilen je Vorschlag, 3 Vorschläge je Nachricht.
+- **Demo:** Beides läuft ohne KI. Änderungswünsche beantwortet ein vorbereiteter Ablauf: nachfragen, ablehnen oder
+  Karte zeigen. Jede dieser Antworten endet mit „Vorbereitete Antwort ohne KI (Demo-Modus).“
+- **Gemeinsame Logik in `notizlogik.js`:** dieselbe Datei für Oberfläche, Demo und Worker. Der Worker importiert sie,
+  `wrangler deploy --dry-run` bündelt sie mit.
+- **Version 2.5.0:** `notizlogik.js` ist die 10. eigene Datei mit `?v=`.
+
+### Speicherung – keine Schemaänderung, keine Migration
+- Die Prüfliste stand schon in der Notiz: `notes.strukturiert.unklar` (JSONB, Liste von Texten).
+- Der Status kommt ins selbe JSONB-Feld: `strukturiert.pruefung = [{ punkt, erledigt, stelle? }]`. `punkt` ist der
+  Text des Prüfpunkts; `stelle` ist die markierte Stelle im Text (Abschnitt, Ausschnitt „bis zu drei Wörter +
+  (unklar)“, gemeinsame Schlüsselwörter).
+- Darum keine SQL-Migration nötig, `supabase/migrations` unverändert.
+- Alte Notizen ohne `pruefung` bleiben gültig: Alle Punkte sind offen, das Feld fehlt, bis es etwas zu merken gibt.
+- **Worker-Änderung nötig (nicht deployt):**
+  - `normalisieren()` warf unbekannte Felder weg und behält jetzt `pruefung`.
+  - Neue PATCH-Form `{ pruefpunkt: { punkt, erledigt } }`: setzt nur dieses Häkchen, auf dem gespeicherten Stand.
+    Inhalt, Diktat und „bearbeitet“ bleiben.
+  - Neue PATCH-Form `{ strukturiert, pruefung_basis }`: führt die Häkchen dreiseitig zusammen.
+  - Neues Werkzeug und neue Prompt-Regeln.
+  - **Reihenfolge beim Livegang:** zuerst der Worker, dann die Oberfläche. Der Worker allein ist rückwärtsverträglich:
+    Die v2.4-Oberfläche schickt weder `pruefung` noch `pruefung_basis`, die gespeicherten Häkchen bleiben dann.
+
+### Entscheidungen
+1. **Status im JSONB statt eigener Spalte oder Tabelle.**
+   - Die Prüfliste steht schon dort, also auch ihr Status.
+   - Keine Migration, alte Notizen bleiben gültig.
+   - Der Punkt wird über seinen Text erkannt, nicht über eine Nummer: So überlebt der Status Umsortieren und das
+     Zusammenführen.
+   - Wird der Text eines Prüfpunkts selbst geändert, ist es ein neuer Punkt (offen).
+2. **„Automatisch erledigt“ hängt an der Stelle, nicht am Prüfpunkt-Text.**
+   - Beim Entwurf und vor jeder Änderung wird jeder Punkt der markierten Stelle mit den meisten gemeinsamen Wörtern
+     zugeordnet und die Stelle festgehalten.
+   - Offen bleibt der Punkt, solange im Abschnitt eine Zeile mit „(unklar)“ steht, die den Ausschnitt oder alle
+     Schlüsselwörter enthält.
+   - Damit gilt: Markierung entfernt → erledigt. Zeile umgeschrieben → erledigt. Wieder mit „(unklar)“ versehen →
+     offen. Nur woanders in der Zeile etwas geändert, die Markierung steht noch → offen, denn die Stelle ist noch als
+     unklar markiert.
+   - Korrekturmeldungen („… als … gelesen“) haben keine markierte Stelle: Sie sind nur von Hand abzuhaken.
+3. **Häkchen von Hand und automatisch:** Ein Punkt ist erledigt, wenn eins von beiden zutrifft. Ein automatisch
+   erledigter Punkt lässt sich nicht von Hand „wieder öffnen“; dafür markiert man die Stelle wieder mit „(unklar)“.
+4. **Zwei Tabs:**
+   - Ein Häkchen speichert nur diesen einen Punkt, auf dem gespeicherten Stand des Servers.
+   - Beim Bearbeiten schickt die Oberfläche `pruefung_basis` mit (die Häkchen beim Laden). Der Server führt dreiseitig
+     zusammen: Was dieser Tab geändert hat, gilt; sonst das Gespeicherte.
+   - Notizinhalt bei zwei Tabs: wie bisher, der letzte Speichervorgang gewinnt (unverändert seit v2.0).
+5. **„Übernehmen“ wendet auf den frisch geladenen Stand an:**
+   - Steht die Vorher-Zeile dort nicht mehr (die Notiz wurde inzwischen geändert), wird nichts gespeichert. Die Karte
+     sagt „passt nicht mehr“.
+   - Dieselbe Karte in zwei Tabs: Sperre und Ablage-Abgleich wie beim Entwurf, die Änderung kommt genau einmal an.
+   - Gelöschte Notiz: Hinweis auf der Karte, nichts wird neu angelegt.
+6. **Kein Schreibwerkzeug.**
+   - `notiz_aenderung_vorschlagen` liest die Notiz und zeigt die Karte, es speichert nichts.
+   - Es nimmt nur Zeilen, die wörtlich in der Notiz stehen (sonst Fehler an Claude: „bitte zuerst lesen“).
+   - Gezählt werden nur angezeigte Vorschläge. Ein abgelehnter darf korrigiert wiederholt werden.
+   - Im Fähigkeiten-Register wurde „Notiz per Gespräch ändern“ von „geplant (Phase 4)“ zu „aktiv“, Stufe
+     „vorschlagen“, mit Knopf „Übernehmen“. Benutzerkonten, Änderungsprotokoll und „Rückgängig“, dort früher als
+     Voraussetzung genannt, gibt es noch nicht (siehe Offen).
+7. **Prompt bewusst erweitert:**
+   - Regeln zum Ändern: nur Gesagtes, mehrdeutig nachfragen, Vages ablehnen, Diktat und „Bitte prüfen“ nie.
+   - Regel 7 sagt jetzt auch „Du löschst auch nichts“.
+   - Bedienung um Änderungskarte und Prüfliste ergänzt.
+   - Die Fingerabdruck-Tests des Prompts („Ohne Brain bleibt alles wie in Worker 2.0.1“) sind auf den neuen Stand
+     gesetzt.
+   - Kernregel-Belege und Brain-Prompt passen weiter (Tests grün).
+8. **Brain unverändert:** keine Datei des Brain angefasst.
+   - `brain-seed.js` ist neu erzeugt, weil das Fähigkeiten-Register darin steht.
+   - Das neue Werkzeug steht auch in der Werkzeugliste mit Brain, so wie alle Gesprächswerkzeuge.
+   - Im Demo-Modus mit Brain greift der Änderungsablauf nur mit Kürzel. „Ändere die Telefonzeiten: …“ bleibt ein
+     Brain-Befehl.
+9. **Demo-Assistent:**
+   - Erkennt „ändere/korrigier/setz … die/den <Begriff> auf <Zahl> [Einheit]“, optional „in der Notiz vom TT.MM.“ oder
+     „in der letzten/ersten Notiz“.
+   - Ersetzt nur den ersten Wert hinter dem Begriff. Die Einheit der Zeile bleibt.
+   - Mehr kann die Demo nicht. Der echte Claude-Weg versteht freiere Formulierungen.
+
+### Tested
+All runs were sequential; the load was checked before every timing measurement. Every run below is on the final
+state.
+
+**Unit tests**
+- **Vitest:** 949 of 949 green (21 files).
+- **New file `worker/test/pruefliste-aenderung.test.js`** (29 tests):
+  - Status logic: open, assigning marked spots, done automatically, open again, manual tick, cleanup.
+  - Merging for two tabs.
+  - Change suggestion: checking, applying, conflict, before/after.
+  - Worker routes and tool.
+  - Claude path against the mocked API.
+  - Prompt rules: change only what was said, ask back, add nothing, no gender, don't save, don't delete.
+  - Demo answers, also with the Brain switch.
+  - History hint, end states of the card.
+- **Adjusted, intentionally:**
+  - Tool lists in `chat.test`, `brain-worker.test`, `faehigkeiten.test`: 7 instead of 6 tools.
+  - Prompt fingerprints.
+  - Capability register: "Notiz per Gespräch ändern" is active.
+  - Stamp test: 10 files, 2.5.0.
+
+**`tests/v25.mjs` (new, Chromium + WebKit): 134 of 134 green**
+- Matrix 320/390/1440 × light/dark: checklist, struck-through items, counter, touch target ≥ 44 px on the phone,
+  change card, Übernehmen, original dictation unchanged, no sideways scrolling.
+- Demo in depth:
+  - Keyboard (space bar), reload.
+  - Automatically done when the text is corrected, and open again.
+  - Tick in the draft survives reload and is saved with the note.
+  - Ambiguous target, vague request, Verwerfen, card state after reload.
+- Real local server:
+  - Two tabs (different ticks; editing with an old state; Übernehmen twice → exactly one change).
+  - Deleted note, note changed in the meantime.
+  - Logging out while saving: Übernehmen and tick. Logout waits about 2.5 s, the change and the tick are saved.
+
+**Counter-check against `gabi-v2-4`**
+- Own server 8797. `tests/v25.mjs` is red in both engines: 46 red, both features independently in every section.
+  Only the 16 "keine Skriptfehler" checks stay green.
+- The new unit file can't run on v2.4 (module missing). With the logic file copied in, 19 of 28 are red; only the
+  pure logic tests of the new module pass.
+
+**Existing suites, all green**
+
+| Suite | Result |
+|---|---|
+| `tests/v2.mjs` (without switch) | 564/564 in one run, including microphone and reload |
+| `tests/design.mjs` A–H | 607/607 |
+| `tests/einstellungen.mjs` (8795 and 8796) | 86/86 each |
+| `tests/brain.mjs` | 650/650 |
+| brain-r1-antwort / -daten / -graph / -handy / -sicherheit | 66 / 174 / 274 / 319 / 94 |
+| brain-labels-zoom | 24/24 |
+| brain-physik | 64/64 |
+| brain-thema | 20/20 |
+| brain-leistung | 60 frames/s with 500 nodes, laptop and phone, both engines |
+
+- design.mjs measured 220 views and 7,892 text spots, smallest contrast 4.68:1. New views 07b (change card) and 15b
+  (checklist ticked): at least 4.68 and 5.35.
+
+**Found and fixed during testing**
+- `design.mjs`: 4.56:1 on the marked "Nachher" value. The thin border sat right on the glyph edge; it's gone now
+  (4.97:1).
+- Phone: after a tap, the hover box stayed behind the ticked item. Hover now only with a real pointer.
+- `design.mjs`: the change view interfered with the glass probe (different content under the header). It is now 07b,
+  after the probe.
+- Demo with Brain:
+  - The new flow caught "Ändere die Telefonzeiten: TP 1 …" (`brain-r1-sicherheit` red, 4×).
+  - With Brain it now only takes concrete note changes; the command form and vague requests stay with the Brain, as
+    in v2.4. Unit test added.
+- `brain.mjs` expected 6 planned capabilities, there are 5 now.
+
+**Load-related**
+- In a first `design.mjs` run, part D (offline view at 320 px) timed out at load 32. The full run at load 4–7 was green.
+- `tests/v25.mjs` ran once more at load 15–26: 134/134.
+
+**Untested**
+- The **real Claude path** (no key locally). Tested only against the mocked Anthropic API: tool call, card event,
+  tool result.
+- Whether Claude follows the new rules in real conversations (change only what was said, ask back when ambiguous,
+  decline vague requests) is open → Offen 22.
+
 ## Offen
 
 1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
@@ -1034,8 +1220,24 @@ keine Live-Änderung, Worker unverändert, nur Test- und Demodaten. Brain bleibt
     das Label eines Nachbarn („Kontakt“) unter der Glas-Leiste der Zoom-Knöpfe liegen und schimmert durch. Vorher
     verdeckte die deckende Leiste es ganz. Label-Regeln und Kamera bleiben laut Auftrag unverändert – wenn es stört:
     Labels unter Leisten ausblenden (eigene kleine Änderung an `brain-graph.js`).
-20. **Ordner `http:/localhost:8794/` auf `gabi-brain`** (gefunden beim Merge v2.4): versehentlich eingecheckte
+20. **Ordner `http:/localhost:8794/` auf `gabi-brain`** (in v2.5 auf `gabi-v2-5` entfernt; auf `gabi-brain` noch da) (gefunden beim Merge v2.4): versehentlich eingecheckte
     Screenshots eines älteren Testlaufs (Pfad als Ordner gelesen). Mit v2.4 mitgekommen, nicht gelöscht, weil nicht aus
     diesem Auftrag – kann mit `git rm -r "http:"` weg.
 21. **Einstellungen „Folgt“** (v2.4): Benutzerkonto, Praxis-Einstellungen, Datenschutz sind nur Platzhalter ohne
     Funktion. Neue Abschnitte: eine `<section class="einstellungen-abschnitt">` im Dialog, Werte in `einstellungenFuellen()`.
+22. **Echter Claude-Weg für v2.5 ungetestet** (kein Schlüssel lokal): Ob Claude nur Gesagtes ändert, bei zwei
+    passenden Notizen nachfragt und Vages ablehnt, ist nur über Prompt-Regeln und die nachgebaute API geprüft. →
+    Julius: auf Staging oder live mit Code drei Fälle: „Ändere bei TP-01 die Beinpresse auf 35 kg“, „Ändere bei TP-01
+    die Flexion auf 110 Grad“ (zwei Notizen – muss nachfragen), „Mach die Notiz von TP-02 besser“ (muss ablehnen).
+23. **Worker-Deploy für v2.5 nötig – nur nach Julius' Freigabe.** Reihenfolge: erst Worker, dann Oberfläche (die
+    v2.5-Oberfläche gegen den alten Worker verliert Häkchen still: der alte Worker kennt `pruefpunkt` nicht). Der
+    Worker bringt gegenüber dem Live-Stand (main) auch den Brain-Code aus `gabi-brain` mit – ohne gesetzten Schalter
+    inaktiv (`wrangler.toml` setzt keinen BRAIN-Wert).
+24. **„Notiz per Gespräch ändern“ ohne Rückgängig und ohne Änderungsprotokoll.** Im Fähigkeiten-Register waren dafür
+    früher Benutzerkonten, ein Änderungsprotokoll und „Rückgängig“ als Voraussetzung genannt. Gebaut ist: Vorschlag,
+    Bestätigung, Konflikt-Erkennung. Eine übernommene Änderung lässt sich nur von Hand zurückändern („Bearbeiten“).
+25. **Gleichzeitiges Bearbeiten derselben Notiz in zwei Tabs:** Häkchen werden zusammengeführt, der Inhalt nicht –
+    wie seit v2.0 gewinnt das letzte Speichern. Nur „Übernehmen“ prüft, ob die Zeile noch dasteht.
+26. **„Bitte prüfen“ im Gespräch abhaken** (Register: weiter „geplant“): Abhaken geht in Notiz und Entwurf, nicht per
+    Sprache/Gespräch.
+
