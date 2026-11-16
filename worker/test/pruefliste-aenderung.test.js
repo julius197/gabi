@@ -374,6 +374,17 @@ describe("Demo-Modus: vorbereitete Antworten ohne KI", () => {
     expect((await frage(a, "Ändere bei TP-01 in der letzten Notiz die Flexion auf 110 Grad")).text).toMatch(/steht schon „Flexion Knie rechts bis 110°, Extension 0°“ – da ändere ich nichts/);
   });
 
+  it("mit Brain: „Ändere die Telefonzeiten: TP 1 …“ bleibt ein Brain-Befehl, vage Wünsche auch – konkrete Notiz-Änderungen nicht", async () => {
+    const a = api();
+    const brainKontext = { v: 1, knoten: [{ id: "s-telefon", art: "praxiswissen", status: "bestaetigt", titel: "Telefonzeiten", inhalt: "Mo–Fr 8–18 Uhr", tags: ["telefon"] }] };
+    const mit = async (text) => { const e = []; await a.chatten({ nachrichten: [{ rolle: "nutzer", text }], brainKontext }, (x) => e.push(x)); return { text: e.filter((x) => x.t === "text").map((x) => x.d).join(""), typen: e.map((x) => x.t) }; };
+    const befehl = await mit("Ändere die Telefonzeiten: TP 1 ruft immer freitags an");
+    expect(befehl.text).not.toMatch(/Das ändere ich so nicht/);
+    expect(befehl.typen).not.toContain("aenderung");
+    expect((await mit("Mach es besser")).text).not.toMatch(/Das ändere ich so nicht/);
+    expect((await mit("Ändere bei TP-01 die Beinpresse auf 35 kg")).typen).toContain("aenderung");
+  });
+
   it("keine Angaben zum Geschlecht in den vorbereiteten Antworten", async () => {
     const a = api();
     for (const t of ["Ändere bei TP-01 die Flexion auf 110 Grad.", "Ändere bei TP-01 die Beinpresse auf 35 kg", "Mach es besser"]) {

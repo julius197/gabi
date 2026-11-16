@@ -756,8 +756,10 @@
     const patienten = await werkzeuge.ausfuehren("patienten_auflisten", {}, {});
     const kuerzelListe = ((patienten.ergebnis && patienten.ergebnis.patienten) || []).map((p) => p.kuerzel);
     let a = absichtErkennen(letzte, kuerzelListe);
-    // v2.5: Notiz ändern – mit Brain nur, wenn ein Kürzel genannt ist (sonst ist „Ändere die Telefonzeiten: …“ ein Brain-Befehl)
-    if ((a.art === "aenderung" || a.art === "aenderung_vage") && (!brain || a.kuerzel)) return aenderungImGespraech(a, { sag, nutze, warte });
+    // v2.5: Notiz ändern. Mit Brain nur konkrete Änderungen an einer Notiz („… bei TP-01 die Flexion auf 110 Grad“) –
+    // „Ändere die Telefonzeiten: …“ (Befehlsform mit Doppelpunkt) und vage Wünsche bleiben beim Brain, wie in v2.4
+    const brainBefehl = /^\s*(?:bitte\s+)?(?:änder|aender)\p{L}*\s+[^:]{1,80}:/iu.test(String(letzte || ""));
+    if (a.art === "aenderung_vage" ? !brain : a.art === "aenderung" && (!brain || (a.kuerzel && !brainBefehl))) return aenderungImGespraech(a, { sag, nutze, warte });
 
     const suche = brain ? brainModul("GabiBrainSuche", "./brain-suche.js") : null;
     const antworten = brain ? brainAntwort || (suche && suche.antwortAusKontext) : null;

@@ -505,7 +505,8 @@ async function teil2(browser, motor, { geraet, schema, wenigBewegung = false, bi
   await reiter(page, "faehigkeiten");
   await page.waitForSelector(".brain-faehigkeit");
   const faeh = await page.evaluate(() => ({ alle: document.querySelectorAll(".brain-faehigkeit").length, geplant: document.querySelectorAll('.brain-faehigkeit[data-status="geplant"]').length, text: document.querySelector("#brain-faehigkeiten").innerText }));
-  pruefe(faeh.alle === 17 && faeh.geplant === 6 && /Was darf Gabi damit\?/i.test(faeh.text) && /Phase 3 – Gedächtnis \(Brain\)/.test(faeh.text) && /Telefon-Rezeptionistin/.test(faeh.text), `${name}: Fähigkeiten-Ansicht (${faeh.alle} Karten, ${faeh.geplant} geplant, mit Stufe, „Was darf Gabi damit?“ und Roadmap-Phase)`);
+  // v2.5: „Notiz per Gespräch ändern“ ist gebaut (vorher geplant) – darum 5 statt 6 geplante
+  pruefe(faeh.alle === 17 && faeh.geplant === 5 && /Was darf Gabi damit\?/i.test(faeh.text) && /Phase 3 – Gedächtnis \(Brain\)/.test(faeh.text) && /Telefon-Rezeptionistin/.test(faeh.text), `${name}: Fähigkeiten-Ansicht (${faeh.alle} Karten, ${faeh.geplant} geplant, mit Stufe, „Was darf Gabi damit?“ und Roadmap-Phase)`);
   pruefe(await breiteOk(page), `${name}: Fähigkeiten ohne seitliches Scrollen`);
   if (bilder) await bild(page, `${marke}-09-faehigkeiten`);
 
