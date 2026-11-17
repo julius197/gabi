@@ -940,7 +940,7 @@ keine Live-Änderung, Worker unverändert, nur Test- und Demodaten. Brain bleibt
 - Echter Claude-Weg (Gespräch mit Brain-Kontext über die Anthropic-API) nicht geprüft – lokal ohne Schlüssel, Worker
   unverändert.
 
-## v2.5 – „Bitte prüfen“ erledigbar, Notiz per Gespräch ändern (15./16.11.2026, Branch `gabi-v2-5`, nicht live)
+## v2.5 – „Bitte prüfen“ erledigbar, Notiz per Gespräch ändern (15./16.11.2026, Branch `gabi-v2-5`, live seit 17.11.2026)
 
 Auftrag von Julius (15.11.2026): (A) Prüfliste abhakbar, (B) Notiz per Gespräch ändern, im Stand v2.4; vorher
 Aufräumen. Kein Push, kein Deploy, keine Live-Änderung, nur Testdaten; Worker-Deploy nur nach seiner Freigabe.
@@ -1126,6 +1126,67 @@ state.
 - Whether Claude follows the new rules in real conversations (change only what was said, ask back when ambiguous,
   decline vague requests) is open → Offen 22.
 
+## Live-Gang v2.5 (17.11.2026, auf Julius' „Ja, live schalten: Worker + Oberfläche v2.5“)
+
+Damit gehen v2.3 (Design), v2.4 (Einstellungen, Brain-Code hinter dem Schalter) und v2.5 zusammen live – live war
+vorher die Oberfläche v2.1.2 mit Worker 2.0.1.
+
+**Vorher (Rückweg-Stand)**
+- Worker live: 2.0.1 = Version `4c13be8c-05a9-4dcf-96bf-9377c18b4abd` (10.11.). Die im Auftrag genannte
+  `c266d957-e455-4222-a145-06872b19da79` ist der ältere Stand 2.0.0 (08.11.). Ein Rollback dorthin nähme die
+  2.0.1-Korrekturen (Whisper-Fachwörter, Personenmerkmale) mit zurück. Rückweg ist darum `4c13be8c`.
+- Oberfläche: main = `b2a21d8` (v2.1.2).
+
+**Ablauf**
+1. Stichlauf auf `gabi-v2-5` (sauber, `5645bd2`): Unit 949/949, `tests/v25.mjs` 134/134 (Chromium + WebKit).
+   Geheimnis-Suche im ganzen Diff zu main: nichts gefunden.
+2. Worker deployt: Version **`45d73cfe-b5a2-4921-aa11-9befe6796ba8`**.
+   - `/api/status` meldet `"version": "2.1.0-brain"`. Das ist die Kennung des Codes aus `gabi-brain`; im Live-Betrieb
+     steht sie für „Worker zu v2.5“.
+   - `brain.speicher` = „geraet“: kein Brain-Speicher im Worker, `wrangler.toml` setzt keinen BRAIN-Wert.
+   - Keine Supabase-Änderung, keine Migration.
+3. Smoke-Test Worker ohne Code (zählt nicht für die IP-Sperre):
+   - Status ok, alle vier Dienste eingerichtet.
+   - CORS-Vorabfrage von gabi.automatilabs.de für PATCH: 204, Methoden GET/POST/PATCH/DELETE.
+   - Fremde Herkunft: 403.
+   - Die alte Oberfläche v2.1.2 lief mit dem neuen Worker weiter (Unit-Tests „Ohne Brain bleibt alles wie in Worker 2.0.1“).
+   - **Angemeldete Wege nicht live geprüft** (Login, Notiz speichern/laden, Häkchen, Änderungswerkzeug mit echtem
+     Claude): Der Zugangscode ist nur bei Julius, im eingebauten Browser war keiner gespeichert. Lokal sind diese Wege
+     gegen denselben Worker-Code grün (Unit, `tests/v25.mjs` Teil 3, nachgebaute Claude-API). → Offen 22.
+4. main per Fast-Forward `b2a21d8 → 5645bd2` (66 Commits), Push; GitHub Pages gebaut in 32 s.
+5. Abgleich live gegen main:
+   - 28/28 App-Dateien Byte für Byte gleich. `.gitignore` liefert Jekyll als Punktdatei ohnehin nicht aus.
+   - 438/438 interne Dateien 404 (Logs, README, knowledge, supabase, tests, worker, screenshots, `_config.yml`).
+6. Live-Test auf https://gabi.automatilabs.de (ohne Code, Worker-Anfragen außer `/api/status` im Testbrowser
+   gesperrt):
+   - Eigenes Prüfskript 57/57 (Chromium + WebKit, 390/1440, Hell/Dunkel):
+     - Zugangsseite: v2.5.0, `notizlogik.js` geladen, Schriften, kein seitliches Scrollen, Konsole ohne Fehler.
+     - **Brain-Menüpunkt unsichtbar, keine Brain-Datei geladen.**
+     - Einstellungen: Thema wechselt sofort.
+     - Demo: Häkchen bleibt nach Neuladen; Änderung per Gespräch, Übernehmen und Verwerfen.
+     - Nur 8 Worker-Anfragen, alle GET `/api/status` ohne Code.
+   - `GABI_LIVE=1 tests/v2.mjs`: **460/460** grün.
+7. Testdaten: Auf dem Live-Server ist nichts angelegt (ohne Code nicht möglich). Die Demo-Daten lebten nur in den
+   Testbrowsern. Lokaler Testserver gestoppt.
+
+**Ergebnis:** live, keine Fehler gefunden, kein Rollback nötig.
+
+**Rückweg (getestet in einem Wegwerf-Klon, nicht ausgeführt)** – Reihenfolge: erst die Oberfläche, dann der Worker.
+Die v2.5-Oberfläche mit dem alten Worker verliert Häkchen still.
+```bash
+# Oberfläche zurück auf v2.1.2 (ein „git revert“ über den Bereich scheitert am Merge-Commit darin)
+cd ~/Desktop/gabi && git checkout main && git rm -rq . && git checkout b2a21d8 -- . && git checkout HEAD -- GABI-V2-LOG.md
+git commit -m "Zurück zu v2.1.2 (Oberfläche)" && git push origin main
+# Worker zurück auf 2.0.1
+cd worker && npx wrangler rollback 4c13be8c-05a9-4dcf-96bf-9377c18b4abd
+```
+
+**Hinweis:** `?brain=1` an der Adresse schaltet die Brain-Ansicht im Browser auch live ein, so ist der
+Prototyp gebaut.
+- Daten bleiben dann im Browser; der Worker beantwortet Gespräche mit Brain-Kontext im Brain-Modus. Das gilt nur
+  mit Zugangscode.
+- Soll das live gesperrt sein, braucht es eine kleine Änderung (Schalter nur lokal) → Offen 27.
+
 ## Offen
 
 1. **Echte Claude-Antworten noch nicht live erprobt** (Gespräch mit Werkzeugen, Bericht, Diktat): lokal fehlt der
@@ -1225,7 +1286,7 @@ state.
     diesem Auftrag – kann mit `git rm -r "http:"` weg.
 21. **Einstellungen „Folgt“** (v2.4): Benutzerkonto, Praxis-Einstellungen, Datenschutz sind nur Platzhalter ohne
     Funktion. Neue Abschnitte: eine `<section class="einstellungen-abschnitt">` im Dialog, Werte in `einstellungenFuellen()`.
-22. **Echter Claude-Weg für v2.5 ungetestet** (kein Schlüssel lokal): Ob Claude nur Gesagtes ändert, bei zwei
+22. **Echter Claude-Weg und angemeldete Wege für v2.5 live ungetestet** (kein Schlüssel lokal): Ob Claude nur Gesagtes ändert, bei zwei
     passenden Notizen nachfragt und Vages ablehnt, ist nur über Prompt-Regeln und die nachgebaute API geprüft. →
     Julius: auf Staging oder live mit Code drei Fälle: „Ändere bei TP-01 die Beinpresse auf 35 kg“, „Ändere bei TP-01
     die Flexion auf 110 Grad“ (zwei Notizen – muss nachfragen), „Mach die Notiz von TP-02 besser“ (muss ablehnen).
@@ -1240,4 +1301,7 @@ state.
     wie seit v2.0 gewinnt das letzte Speichern. Nur „Übernehmen“ prüft, ob die Zeile noch dasteht.
 26. **„Bitte prüfen“ im Gespräch abhaken** (Register: weiter „geplant“): Abhaken geht in Notiz und Entwurf, nicht per
     Sprache/Gespräch.
+27. **`?brain=1` wirkt auch live** (Livegang v2.5): Die Brain-Prototyp-Ansicht lässt sich auf gabi.automatilabs.de mit
+    `?brain=1` einschalten (Daten nur im Browser). Ohne Parameter bleibt sie unsichtbar. Falls live gesperrt sein soll:
+    Schalter nur auf localhost/Staging auswerten – Entscheidung bei Julius.
 
